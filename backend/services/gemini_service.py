@@ -1,6 +1,6 @@
 import os
 import requests
-from models.schemas import QueryResultData
+from ..models.schemas import QueryResultData
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 

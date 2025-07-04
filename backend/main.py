@@ -1,6 +1,7 @@
+import uvicorn
 from fastapi import FastAPI
-from api.routes import db, query
 from fastapi.middleware.cors import CORSMiddleware
+from .routes import db, query
 
 app = FastAPI()
 
@@ -14,3 +15,6 @@ app.add_middleware(
 
 app.include_router(db.router, prefix="/db", tags=["Database"])
 app.include_router(query.router, prefix="/query", tags=["Query"])
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)

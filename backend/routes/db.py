@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from models.config import DATABASE_CONFIGS
-from services.mongo_service import connect_to_mongo
+from ..models.config import DATABASE_CONFIGS
+from ..services.mongo_service import connect_to_mongo
 
 router = APIRouter()
 

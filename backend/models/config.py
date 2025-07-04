@@ -1,4 +1,4 @@
-from models.schemas import DbConfig
+from .schemas import DbConfig
 
 DATABASE_CONFIGS = [
     DbConfig(name="Production-DB", connectionString="..."),

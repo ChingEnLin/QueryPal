@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from services.gemini_service import generate_query_from_prompt
-from services.mongo_service import execute_mongo_query
+from ..services.gemini_service import generate_query_from_prompt
+from ..services.mongo_service import execute_mongo_query
 
 router = APIRouter()
 
