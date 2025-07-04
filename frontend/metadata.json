@@ -1,0 +1,7 @@
+
+{
+  "name": "QueryPal",
+  "description": "QueryPal is an intelligent assistant that helps users perform MongoDB database operations using natural language. It generates executable MongoDB queries from plain English requests, providing a summary and a safety confirmation prompt.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
