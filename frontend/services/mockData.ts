@@ -1,18 +1,36 @@
-import { DbConfig, DbInfo, CollectionInfo, QueryResultData } from '../types';
+import { CosmosDBResource, DbInfo, CollectionInfo, QueryResultData } from '../types';
 
 // --- Helper to simulate network latency ---
 export const mockDelay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 
-// --- Mock Database & Collection Data ---
+// --- Mock Azure and Database Data ---
 
-export const mockDatabases: DbConfig[] = [
-  { name: 'Mock-ECommerce-DB', connectionString: 'mongodb://localhost:27017/ecommerce' },
-  { name: 'Mock-CMS-DB', connectionString: 'mongodb://localhost:27017/cms' },
+export const mockCosmosResources: CosmosDBResource[] = [
+  { 
+    id: '/subscriptions/mock-sub/resourceGroups/rg-prod/providers/Microsoft.DocumentDB/databaseAccounts/prod-ecommerce-db',
+    name: 'prod-ecommerce-db', 
+    databases: [
+        { name: 'ECommerce-DB' },
+        { name: 'Analytics-DB' }
+    ]
+  },
+  { 
+    id: '/subscriptions/mock-sub/resourceGroups/rg-staging/providers/Microsoft.DocumentDB/databaseAccounts/staging-cms-db',
+    name: 'staging-cms-db', 
+    databases: [
+        { name: 'CMS-Content-DB' }
+    ]
+  },
+  {
+    id: '/subscriptions/mock-sub/resourceGroups/rg-dev/providers/Microsoft.DocumentDB/databaseAccounts/dev-empty-db',
+    name: 'dev-empty-db',
+    databases: []
+  }
 ];
 
 export const mockECommerceDbInfo: DbInfo = {
-  name: 'Mock-ECommerce-DB',
+  name: 'ECommerce-DB',
   collections: ['users', 'products', 'orders'],
   totalDocuments: 15500,
   size: '256 MB',

@@ -1,7 +1,7 @@
-import { DbInfo, DbConfig, CollectionInfo } from '../types';
+import { DbInfo, CollectionInfo, CosmosDBResource, SelectedResource } from '../types';
 import { USE_MSAL_AUTH } from '../app.config';
 import { 
-    mockDatabases, 
+    mockCosmosResources, 
     mockECommerceDbInfo, 
     mockCollectionInfoMap, 
     mockUserFindResult,
@@ -14,23 +14,24 @@ import {
 const API_BASE_URL = '/api';
 
 /**
- * Fetches available database configurations from the backend.
- * @returns A promise that resolves with an array of database configurations.
+ * Fetches available Azure Cosmos DB resources from the backend.
+ * @returns A promise that resolves with an array of Cosmos DB resources.
  */
-export const getAvailableDatabases = async (): Promise<DbConfig[]> => {
+export const getAzureCosmosResources = async (): Promise<CosmosDBResource[]> => {
   // --- DEVELOPMENT MOCK ---
   if (!USE_MSAL_AUTH) {
-    console.log("DEV MODE: Returning mock databases.");
-    await mockDelay(500);
-    return Promise.resolve(mockDatabases);
+    console.log("DEV MODE: Returning mock Azure resources.");
+    await mockDelay(1200);
+    return Promise.resolve(mockCosmosResources);
   }
   // --- END DEVELOPMENT MOCK ---
   
-  console.log("Fetching available databases from backend...");
-  const response = await fetch(`${API_BASE_URL}/databases`);
+  console.log("Fetching Azure resources from backend...");
+  // In a real app, you would pass the MSAL access token here.
+  const response = await fetch(`${API_BASE_URL}/azure/resources`);
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: 'Could not load database list from server.' }));
+    const errorData = await response.json().catch(() => ({ message: 'Could not load Azure resource list from server.' }));
     throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
   }
   
@@ -39,28 +40,28 @@ export const getAvailableDatabases = async (): Promise<DbConfig[]> => {
 
 /**
  * Connects to a database via the backend and fetches its metadata.
- * @param dbName The name of the database to connect to.
+ * @param resource The account and database to connect to.
  * @returns A promise that resolves with basic database information.
  */
-export const connectToDatabase = async (dbName: string): Promise<DbInfo> => {
+export const connectToDatabase = async (resource: SelectedResource): Promise<DbInfo> => {
   // --- DEVELOPMENT MOCK ---
   if (!USE_MSAL_AUTH) {
-    console.log(`DEV MODE: Returning mock DB info for ${dbName}.`);
+    console.log(`DEV MODE: Returning mock DB info for ${resource.accountName}/${resource.databaseName}.`);
     await mockDelay(800);
-    if (dbName === 'Mock-ECommerce-DB') {
+    if (resource.databaseName === 'ECommerce-DB') {
         return Promise.resolve(mockECommerceDbInfo);
     }
     // Return a generic/empty one for other DBs if needed
-    const genericInfo: DbInfo = { name: dbName, collections: [], totalDocuments: 0, size: '0 MB' };
+    const genericInfo: DbInfo = { name: resource.databaseName, collections: ['items', 'logs'], totalDocuments: 100, size: '10 MB' };
     return Promise.resolve(genericInfo);
   }
   // --- END DEVELOPMENT MOCK ---
 
-  console.log(`Sending connection request for ${dbName} to backend...`);
+  console.log(`Sending connection request for ${resource.accountName}/${resource.databaseName} to backend...`);
   const response = await fetch(`${API_BASE_URL}/connect`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dbName }),
+    body: JSON.stringify(resource),
   });
 
   if (!response.ok) {
@@ -69,16 +70,17 @@ export const connectToDatabase = async (dbName: string): Promise<DbInfo> => {
   }
 
   const data: DbInfo = await response.json();
-  console.log(`Successfully connected to ${dbName}.`);
+  console.log(`Successfully connected to ${resource.databaseName}.`);
   return data;
 };
 
 /**
  * Fetches detailed information for a specific collection from the backend.
  * @param collectionName The name of the collection to fetch info for.
+ * @param resource The context of the database account and name.
  * @returns A promise that resolves with detailed collection information.
  */
-export const getCollectionInfo = async (collectionName: string): Promise<CollectionInfo> => {
+export const getCollectionInfo = async (collectionName: string, resource: SelectedResource): Promise<CollectionInfo> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
         console.log(`DEV MODE: Returning mock collection info for ${collectionName}.`);
@@ -92,7 +94,11 @@ export const getCollectionInfo = async (collectionName: string): Promise<Collect
     // --- END DEVELOPMENT MOCK ---
 
     console.log(`Fetching info for collection: ${collectionName} from backend...`);
-    const response = await fetch(`${API_BASE_URL}/collections/${collectionName}/info`);
+    const response = await fetch(`${API_BASE_URL}/collection-info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...resource, collectionName }),
+    });
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Failed to fetch collection details.' }));
@@ -105,13 +111,13 @@ export const getCollectionInfo = async (collectionName: string): Promise<Collect
 /**
  * Sends a query to the backend to be executed against the database.
  * @param query The MongoDB query string to execute.
- * @param dbName The database context.
+ * @param resource The context of the database account and name.
  * @returns A promise that resolves with the query result.
  */
-export const runMongoQuery = async (query: string, dbName: string): Promise<any> => {
+export const runMongoQuery = async (query: string, resource: SelectedResource): Promise<any> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
-        console.log(`DEV MODE: Returning mock execution result for query on ${dbName}.`);
+        console.log(`DEV MODE: Returning mock execution result for query on ${resource.databaseName}.`);
         await mockDelay(1000);
         const lowerQuery = query.toLowerCase();
 
@@ -125,11 +131,11 @@ export const runMongoQuery = async (query: string, dbName: string): Promise<any>
     }
     // --- END DEVELOPMENT MOCK ---
 
-    console.log(`Sending query for execution on ${dbName} to backend...`);
+    console.log(`Sending query for execution on ${resource.databaseName} to backend...`);
     const response = await fetch(`${API_BASE_URL}/run-query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, dbName }),
+        body: JSON.stringify({ query, ...resource }),
     });
 
     if (!response.ok) {

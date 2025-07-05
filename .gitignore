@@ -26,3 +26,7 @@ dist-ssr
 # Python files
 __pycache__/
 *.py[cod]
+
+# Environment variables and configuration
+.env
+.env.local

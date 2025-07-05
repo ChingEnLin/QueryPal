@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { generateMongoQuery } from '../services/geminiService';
-import { getAvailableDatabases, connectToDatabase, runMongoQuery, getCollectionInfo } from '../services/dbService';
-import { QueryResultData, DbInfo, DbConfig, CollectionInfo } from '../types';
+import { getAzureCosmosResources, connectToDatabase, runMongoQuery, getCollectionInfo } from '../services/dbService';
+import { QueryResultData, DbInfo, CollectionInfo, CosmosDBResource, SelectedResource } from '../types';
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
 import Loader from '../components/Loader';
@@ -66,10 +66,10 @@ const QueryGeneratorPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
-  // State for DB connection
-  const [availableDbs, setAvailableDbs] = useState<DbConfig[]>([]);
-  const [isLoadingDbs, setIsLoadingDbs] = useState<boolean>(true);
-  const [selectedDb, setSelectedDb] = useState<string>('');
+  // State for DB resources & connection
+  const [azureResources, setAzureResources] = useState<CosmosDBResource[]>([]);
+  const [isLoadingResources, setIsLoadingResources] = useState<boolean>(true);
+  const [selectedResource, setSelectedResource] = useState<SelectedResource | null>(null);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [connectedDbInfo, setConnectedDbInfo] = useState<DbInfo | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
@@ -90,21 +90,19 @@ const QueryGeneratorPage: React.FC = () => {
   const [collectionInfoError, setCollectionInfoError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchDbs = async () => {
-      setIsLoadingDbs(true);
+    const fetchResources = async () => {
+      setIsLoadingResources(true);
+      setDbError(null);
       try {
-        const dbs = await getAvailableDatabases();
-        setAvailableDbs(dbs);
-        if (dbs.length > 0) {
-          setSelectedDb(dbs[0].name);
-        }
+        const resources = await getAzureCosmosResources();
+        setAzureResources(resources);
       } catch (e) {
-        setDbError("Could not load database list from server.");
+        setDbError("Could not load Azure resources from server. Ensure the backend is running and you have permissions.");
       } finally {
-        setIsLoadingDbs(false);
+        setIsLoadingResources(false);
       }
     };
-    fetchDbs();
+    fetchResources();
   }, []);
 
   const clearQueryState = useCallback(() => {
@@ -115,13 +113,16 @@ const QueryGeneratorPage: React.FC = () => {
     setExecutionError(null);
   }, []);
 
-  const handleConnect = useCallback(async () => {
-    if (!selectedDb) return;
+  const handleConnect = useCallback(async (accountName: string, databaseName: string) => {
+    const resourceToConnect = { accountName, databaseName };
     setIsConnecting(true);
     setDbError(null);
+    setConnectedDbInfo(null);
+    setSelectedResource(null);
     try {
-      const info = await connectToDatabase(selectedDb);
+      const info = await connectToDatabase(resourceToConnect);
       setConnectedDbInfo(info);
+      setSelectedResource(resourceToConnect);
       clearQueryState();
     } catch (e) {
       if (e instanceof Error) setDbError(e.message);
@@ -129,10 +130,11 @@ const QueryGeneratorPage: React.FC = () => {
     } finally {
       setIsConnecting(false);
     }
-  }, [selectedDb, clearQueryState]);
+  }, [clearQueryState]);
 
   const handleDisconnect = useCallback(() => {
     setConnectedDbInfo(null);
+    setSelectedResource(null);
     clearQueryState();
     setUserInput('');
     setSelectedCollection(null);
@@ -165,13 +167,13 @@ const QueryGeneratorPage: React.FC = () => {
   const handleGenerateCollectionQuery = (collectionPrompt: string) => {
     if (!selectedCollection) return;
     const fullPrompt = `For the '${selectedCollection}' collection, ${collectionPrompt}`;
-    setUserInput(fullPrompt); // Optional: update main input as well
+    setUserInput(fullPrompt);
     handleGenerateQuery(fullPrompt);
   };
 
   const handleRunQuery = useCallback(async () => {
-    if (!editableCode.trim() || !connectedDbInfo) {
-      setExecutionError("Cannot run an empty query or without a database connection.");
+    if (!editableCode.trim() || !connectedDbInfo || !selectedResource) {
+      setExecutionError("Cannot run a query without a database connection.");
       return;
     }
     setIsExecuting(true);
@@ -179,7 +181,7 @@ const QueryGeneratorPage: React.FC = () => {
     setExecutionResult(null);
 
     try {
-      const result = await runMongoQuery(editableCode, connectedDbInfo.name);
+      const result = await runMongoQuery(editableCode, selectedResource);
       setExecutionResult(result);
     } catch (e) {
       if (e instanceof Error) setExecutionError(e.message);
@@ -187,11 +189,11 @@ const QueryGeneratorPage: React.FC = () => {
     } finally {
       setIsExecuting(false);
     }
-  }, [editableCode, connectedDbInfo]);
+  }, [editableCode, connectedDbInfo, selectedResource]);
 
   const handleCollectionClick = useCallback(async (collectionName: string) => {
+    if (!selectedResource) return;
     if (selectedCollection === collectionName) {
-        // Toggle off if clicking the same collection
         setSelectedCollection(null);
         setCollectionInfo(null);
         return;
@@ -201,7 +203,7 @@ const QueryGeneratorPage: React.FC = () => {
     setCollectionInfoError(null);
     setCollectionInfo(null);
     try {
-        const info = await getCollectionInfo(collectionName);
+        const info = await getCollectionInfo(collectionName, selectedResource);
         setCollectionInfo(info);
     } catch (e) {
         if (e instanceof Error) setCollectionInfoError(e.message);
@@ -209,7 +211,7 @@ const QueryGeneratorPage: React.FC = () => {
     } finally {
         setIsFetchingCollectionInfo(false);
     }
-  }, [selectedCollection]);
+  }, [selectedCollection, selectedResource]);
 
   const isQuerySectionDisabled = !connectedDbInfo;
 
@@ -222,12 +224,14 @@ const QueryGeneratorPage: React.FC = () => {
         <main className="space-y-8">
           {/* Connection Manager */}
           <div className="bg-white rounded-xl shadow-md p-6">
-            {connectedDbInfo ? (
+            {connectedDbInfo && selectedResource ? (
               <div className="animate-fade-in">
                 <div className="flex justify-between items-start">
                   <div>
                     <h2 className="text-xl font-bold text-slate-900">Database Information</h2>
-                    <p className="text-blue-600 font-mono text-sm">Connected to: {connectedDbInfo.name}</p>
+                    <p className="text-blue-600 font-mono text-sm">
+                      Connected to: {selectedResource.accountName} / <span className="font-bold">{connectedDbInfo.name}</span>
+                    </p>
                   </div>
                   <button
                     onClick={handleDisconnect}
@@ -278,29 +282,42 @@ const QueryGeneratorPage: React.FC = () => {
               </div>
             ) : (
               <div>
-                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2"><DatabaseIcon className="w-6 h-6 text-blue-500"/> Connect to a Database</h2>
-                <div className="mt-4 flex items-stretch gap-2">
-                  <select
-                    value={selectedDb}
-                    onChange={(e) => setSelectedDb(e.target.value)}
-                    disabled={isConnecting || isLoadingDbs || availableDbs.length === 0}
-                    className="flex-grow p-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
-                  >
-                    {isLoadingDbs ? (
-                      <option>Loading databases...</option>
-                    ) : availableDbs.length > 0 ? (
-                      availableDbs.map(db => (
-                        <option key={db.name} value={db.name}>{db.name}</option>
-                      ))
-                    ) : (
-                      <option>No databases found</option>
-                    )}
-                  </select>
-                  <button onClick={handleConnect} disabled={isConnecting || isLoadingDbs || !selectedDb} className="px-5 py-2 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                    {isConnecting ? 'Connecting...' : 'Connect'}
-                  </button>
-                </div>
-                {dbError && <p className="text-red-600 text-sm mt-2">{dbError}</p>}
+                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2"><DatabaseIcon className="w-6 h-6 text-blue-500"/> Select a Database to Connect</h2>
+                {isLoadingResources ? (
+                    <div className="text-center p-8 text-slate-500">Loading your Azure resources...</div>
+                ) : dbError ? (
+                     <p className="text-red-600 text-sm mt-2">{dbError}</p>
+                ) : azureResources.length === 0 ? (
+                    <div className="text-center p-8 text-slate-500 border-2 border-dashed rounded-lg mt-4">
+                        No accessible Cosmos DB accounts found.
+                        <br/>
+                        <span className="text-xs">Ensure your account has Reader permissions on the resources.</span>
+                    </div>
+                ) : (
+                    <div className="mt-4 space-y-4">
+                        {azureResources.map(account => (
+                            <div key={account.id} className="bg-slate-50 p-4 rounded-lg border">
+                               <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                    <ServerIcon className="w-5 h-5 text-slate-500" />
+                                    {account.name}
+                               </h3>
+                               <div className="mt-3 flex flex-wrap gap-2">
+                                   {account.databases.map(db => (
+                                       <button 
+                                        key={db.name}
+                                        onClick={() => handleConnect(account.name, db.name)}
+                                        disabled={isConnecting}
+                                        className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-wait focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 focus:ring-blue-500 transition-colors"
+                                       >
+                                           {isConnecting && selectedResource?.databaseName === db.name ? 'Connecting...' : db.name}
+                                       </button>
+                                   ))}
+                                    {account.databases.length === 0 && <p className="text-xs text-slate-500">No databases found in this account.</p>}
+                               </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
               </div>
             )}
           </div>

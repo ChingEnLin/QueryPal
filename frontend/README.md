@@ -1,121 +1,64 @@
-# QueryPal
+# QueryPal - Secure Edition
 
-QueryPal is an intelligent, AI-powered assistant that helps users perform MongoDB database operations using natural language. It generates executable MongoDB queries from plain English requests, provides a summary for verification, and allows direct execution against a connected database.
+QueryPal is an intelligent, AI-powered assistant that helps users perform database operations using natural language. This version is designed with a secure, enterprise-ready architecture that dynamically discovers and connects to databases the authenticated user has access to.
 
-This application is powered by the **Google Gemini API** for its natural language processing capabilities and uses **Azure Entra ID (Azure AD)** for user authentication.
+The application uses **Google Gemini API** for its natural language processing and **Azure Entra ID** for user authentication, communicating with a **secure backend service** that handles all sensitive operations.
 
-## Features
+## Secure Architecture: Backend-for-Frontend (BFF)
 
-- **Secure Authentication**: User sign-in is handled through Microsoft's identity platform (Azure Entra ID).
-- **Natural Language to MongoDB Query**: Convert commands like "find all active users from Canada" into executable MongoDB queries.
-- **Database & Collection Explorer**: Connect to different databases and browse their collections.
-- **Inferred Schema Viewer**: Click on a collection to view an automatically generated schema from a sample document, showing field names and data types (including `ObjectId`, `Date`, etc.).
-- **Editable & Executable Queries**: Edit the AI-generated code directly in the browser and run it against the connected database.
-- **Safe & Interactive Workflow**: The AI provides an intent summary and a confirmation prompt, ensuring you understand the operation before running it.
-- **Responsive Design**: A clean, modern UI that works on various screen sizes.
+This application follows a Backend-for-Frontend (BFF) pattern. The React frontend **never** handles database credentials or makes direct calls to cloud management APIs. All sensitive operations are delegated to a backend API that you create.
 
-## Tech Stack
+### Authentication Flow
 
-- **Frontend**: React, TypeScript, Tailwind CSS
-- **Authentication**: Microsoft Authentication Library (MSAL) for React (`@azure/msal-react`)
-- **AI**: Google Gemini API
-- **State Management**: React Context API
-- **Module Loading**: ES Modules with `importmap`
+1.  **Frontend Login**: The user signs into the React app using MSAL, authenticating against Azure Entra ID. The frontend receives an **access token** scoped for your backend API.
+2.  **API Calls**: For any operation (like listing databases or running a query), the frontend calls your backend API, including the user's access token in the `Authorization` header.
+3.  **Backend Verification**: Your backend validates the access token to ensure the request is from an authenticated user.
+4.  **On-Behalf-Of Flow (OBO)**: To interact with Azure (e.g., to find the user's Cosmos DB resources), the backend uses the **On-Behalf-Of flow**. It exchanges the user's access token for a new token that allows the backend to call the Azure Resource Manager (ARM) API *on behalf of the user*. This ensures your backend can only see resources the user is permitted to see.
+5.  **Secure Operations**: The backend uses its own secure identity (e.g., a Service Principal or Managed Identity) with appropriate permissions to connect to databases and execute queries. **Connection strings are never exposed to the frontend.**
+
+This pattern is critical for security and compliance, preventing exposure of sensitive credentials to the browser.
 
 ## Getting Started
 
 ### Prerequisites
 
-- An **Azure account** with an active subscription.
-- [Node.js](https://nodejs.org/) (LTS version recommended)
-- A package manager like `npm` or `yarn`
-- A local development server. We recommend `http-server`.
+- An **Azure account** with an active subscription and permissions to register applications.
+- A **backend service** built to conform to the API Contract defined below. This backend will handle the OBO flow and database interactions.
 
-### Installation & Setup
+### Frontend Setup
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    cd querypal
-    ```
-
-2.  **Authentication Setup (Azure Entra ID)**:
-    You must register an application in your Azure tenant to get a `clientId` and `tenantId`.
-
-    -   Navigate to the **Azure Portal** and open the **Microsoft Entra ID** service.
-    -   Go to **App registrations** and select **New registration**.
-    -   Give your application a name (e.g., `QueryPalApp`).
-    -   For "Supported account types," choose the option that fits your needs (e.g., "Accounts in this organizational directory only").
-    -   Under "Redirect URI", select **Single-page application (SPA)** and enter the URL where your app will run. For local development, this is typically `http://localhost:8080`.
-    -   Click **Register**.
-    -   Once created, copy the **Application (client) ID** and **Directory (tenant) ID** from the app's overview page.
-    -   Open the `authConfig.ts` file in the project's root directory.
-    -   Replace the placeholder values for `clientId` and `tenantId` with the ones you copied.
-
-    ```ts
-    // In authConfig.ts
-    export const msalConfig: Configuration = {
-        auth: {
-            clientId: "PASTE_YOUR_CLIENT_ID_HERE",
-            authority: "https://login.microsoftonline.com/PASTE_YOUR_TENANT_ID_HERE",
-            // ...
-        },
-        // ...
-    };
-    ```
-
-3.  **Install a simple server:**
-    ```bash
-    npm install -g http-server
-    ```
-
-4.  **Backend Setup:**
-    This frontend application is designed to communicate with a backend server that handles database connections and secure calls to the Google Gemini API. **You will need to create this backend.** For secure endpoints, your backend should validate the ID token sent by the frontend after successful authentication.
-
-5.  **Running the Frontend:**
-    Start the local development server from the project's root directory.
-    ```bash
-    http-server -c-1
-    ```
-    The `-c-1` flag disables caching, which is useful for development. Open your browser and navigate to the redirect URI you configured (e.g., `http://localhost:8080`).
+1.  **Clone the repository.**
+2.  **Configure Authentication (`authConfig.ts`)**:
+    -   In the Azure Portal, create an **App registration** for your frontend.
+    -   Under "Redirect URI", add a **Single-page application (SPA)** entry for `http://localhost:8080`.
+    -   Copy the **Application (client) ID** and **Directory (tenant) ID**.
+    -   Paste them into the `clientId` and `authority` fields in `authConfig.ts`.
+    -   In your App Registration, go to **API permissions**. You must grant consent to an API scope exposed by your backend service.
+3.  **Run the application** using a local server like `http-server`.
 
 ## API Contract
 
-The frontend expects the following API endpoints to be available on the backend. Your backend should protect these endpoints and validate the user's identity using the token from Azure AD.
+Your backend service must implement the following endpoints. All endpoints should be protected and require a valid Bearer token from the authenticated user.
 
 ---
 
-### `POST /api/generate-query`
+### `GET /api/azure/resources`
 
-Generates a MongoDB query using the Gemini API.
+Discovers Cosmos DB accounts and databases the user has access to.
 
--   **Request Body:**
-    ```json
-    {
-      "userInput": "A natural language prompt from the user.",
-      "dbContext": { ...DbInfo } // Optional: context of the connected database
-    }
-    ```
--   **Success Response (200):**
-    ```json
-    {
-      "intent_summary": "Summary of what the user wants to do.",
-      "generated_code": "db.collection...",
-      "confirmation_prompt": "A question to confirm the action."
-    }
-    ```
-
----
-
-### `GET /api/databases`
-
-Fetches the list of available database configurations.
-
--   **Success Response (200):**
+-   **Success Response (200):** An array of discovered resources.
     ```json
     [
-      { "name": "Production-DB", "connectionString": "..." },
-      { "name": "Staging-DB", "connectionString": "..." }
+      {
+        "id": "/subscriptions/sub-id/...",
+        "name": "prod-account",
+        "databases": [{ "name": "main_db" }, { "name": "audit_db" }]
+      },
+      {
+        "id": "/subscriptions/sub-id/...",
+        "name": "staging-account",
+        "databases": [{ "name": "test_db" }]
+      }
     ]
     ```
 
@@ -123,16 +66,19 @@ Fetches the list of available database configurations.
 
 ### `POST /api/connect`
 
-Connects to a specific database and returns its metadata.
+Establishes a connection context on the backend and returns database metadata.
 
 -   **Request Body:**
     ```json
-    { "dbName": "Production-DB" }
+    {
+      "accountName": "prod-account",
+      "databaseName": "main_db"
+    }
     ```
 -   **Success Response (200):**
     ```json
     {
-      "name": "Production-DB",
+      "name": "main_db",
       "collections": ["users", "products", "orders"],
       "totalDocuments": 125000,
       "size": "15.7 GB"
@@ -141,10 +87,18 @@ Connects to a specific database and returns its metadata.
 
 ---
 
-### `GET /api/collections/:name/info`
+### `POST /api/collection-info`
 
-Fetches detailed information for a specific collection, including a sample document. The sample document should use EJSON format for special types.
+Fetches detailed information for a specific collection.
 
+-   **Request Body:**
+    ```json
+    {
+        "accountName": "prod-account",
+        "databaseName": "main_db",
+        "collectionName": "users"
+    }
+    ```
 -   **Success Response (200):**
     ```json
     {
@@ -154,30 +108,42 @@ Fetches detailed information for a specific collection, including a sample docum
       "indexes": ["_id_", "email_1"],
       "sampleDocument": {
         "_id": { "$oid": "6c5babe1a3f5a5d5c5d5e1f3" },
-        "lastLogin": { "$date": "2024-05-20T10:00:00Z" },
-        "name": "John Doe"
+        "lastLogin": { "$date": "2024-05-20T10:00:00Z" }
       }
     }
     ```
+---
+
+### `POST /api/generate-query`
+
+Generates a query using the Gemini API, providing database schema for context.
+
+-   **Request Body:**
+    ```json
+    {
+      "userInput": "A natural language prompt from the user.",
+      "dbContext": { ...DbInfo } // Optional: context of the connected database
+    }
+    ```
+-   **Success Response (200):** `QueryResultData` object.
 
 ---
 
 ### `POST /api/run-query`
 
-Executes a MongoDB query string.
+Executes a query against the specified database.
 
 -   **Request Body:**
     ```json
     {
-      "query": "db.collection('users').find({})",
-      "dbName": "Production-DB"
+      "accountName": "prod-account",
+      "databaseName": "main_db",
+      "query": "db.collection('users').find({})"
     }
     ```
--   **Success Response (200):**
-    An array of documents or a result object from the database driver.
-
+-   **Success Response (200):** Query result from the database.
 ---
 
 ## Disclaimer
 
-This is a demonstration application. Do not use it with production databases or sensitive data without a thorough security review.
+This is a demonstration application. Do not use it with production databases or sensitive data without a thorough security review of both the frontend and your backend implementation.
