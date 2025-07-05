@@ -1,12 +1,12 @@
-
 # QueryPal
 
 QueryPal is an intelligent, AI-powered assistant that helps users perform MongoDB database operations using natural language. It generates executable MongoDB queries from plain English requests, provides a summary for verification, and allows direct execution against a connected database.
 
-This application is powered by the **Google Gemini API** for its natural language processing capabilities.
+This application is powered by the **Google Gemini API** for its natural language processing capabilities and uses **Azure Entra ID (Azure AD)** for user authentication.
 
 ## Features
 
+- **Secure Authentication**: User sign-in is handled through Microsoft's identity platform (Azure Entra ID).
 - **Natural Language to MongoDB Query**: Convert commands like "find all active users from Canada" into executable MongoDB queries.
 - **Database & Collection Explorer**: Connect to different databases and browse their collections.
 - **Inferred Schema Viewer**: Click on a collection to view an automatically generated schema from a sample document, showing field names and data types (including `ObjectId`, `Date`, etc.).
@@ -17,6 +17,7 @@ This application is powered by the **Google Gemini API** for its natural languag
 ## Tech Stack
 
 - **Frontend**: React, TypeScript, Tailwind CSS
+- **Authentication**: Microsoft Authentication Library (MSAL) for React (`@azure/msal-react`)
 - **AI**: Google Gemini API
 - **State Management**: React Context API
 - **Module Loading**: ES Modules with `importmap`
@@ -25,9 +26,10 @@ This application is powered by the **Google Gemini API** for its natural languag
 
 ### Prerequisites
 
+- An **Azure account** with an active subscription.
 - [Node.js](https://nodejs.org/) (LTS version recommended)
 - A package manager like `npm` or `yarn`
-- A local development server capable of serving static files. We recommend `http-server`.
+- A local development server. We recommend `http-server`.
 
 ### Installation & Setup
 
@@ -37,32 +39,49 @@ This application is powered by the **Google Gemini API** for its natural languag
     cd querypal
     ```
 
-2.  **Install a simple server:**
-    This project uses modern web features and does not require a complex build setup for development.
+2.  **Authentication Setup (Azure Entra ID)**:
+    You must register an application in your Azure tenant to get a `clientId` and `tenantId`.
+
+    -   Navigate to the **Azure Portal** and open the **Microsoft Entra ID** service.
+    -   Go to **App registrations** and select **New registration**.
+    -   Give your application a name (e.g., `QueryPalApp`).
+    -   For "Supported account types," choose the option that fits your needs (e.g., "Accounts in this organizational directory only").
+    -   Under "Redirect URI", select **Single-page application (SPA)** and enter the URL where your app will run. For local development, this is typically `http://localhost:8080`.
+    -   Click **Register**.
+    -   Once created, copy the **Application (client) ID** and **Directory (tenant) ID** from the app's overview page.
+    -   Open the `authConfig.ts` file in the project's root directory.
+    -   Replace the placeholder values for `clientId` and `tenantId` with the ones you copied.
+
+    ```ts
+    // In authConfig.ts
+    export const msalConfig: Configuration = {
+        auth: {
+            clientId: "PASTE_YOUR_CLIENT_ID_HERE",
+            authority: "https://login.microsoftonline.com/PASTE_YOUR_TENANT_ID_HERE",
+            // ...
+        },
+        // ...
+    };
+    ```
+
+3.  **Install a simple server:**
     ```bash
     npm install -g http-server
     ```
 
-3.  **Backend Setup (Required for functionality):**
-    This frontend application is designed to communicate with a backend server that handles database connections and secure calls to the Google Gemini API. You will need to create this backend.
+4.  **Backend Setup:**
+    This frontend application is designed to communicate with a backend server that handles database connections and secure calls to the Google Gemini API. **You will need to create this backend.** For secure endpoints, your backend should validate the ID token sent by the frontend after successful authentication.
 
-    -   Create a `.env` file in your backend's root directory.
-    -   Add your Google Gemini API key to the `.env` file:
-        ```
-        API_KEY=your_google_gemini_api_key
-        ```
-    -   Your backend should expose the API endpoints listed below.
-
-4.  **Running the Frontend:**
+5.  **Running the Frontend:**
     Start the local development server from the project's root directory.
     ```bash
     http-server -c-1
     ```
-    The `-c-1` flag disables caching, which is useful for development. Open your browser and navigate to `http://localhost:8080`.
+    The `-c-1` flag disables caching, which is useful for development. Open your browser and navigate to the redirect URI you configured (e.g., `http://localhost:8080`).
 
 ## API Contract
 
-The frontend expects the following API endpoints to be available on the backend:
+The frontend expects the following API endpoints to be available on the backend. Your backend should protect these endpoints and validate the user's identity using the token from Azure AD.
 
 ---
 

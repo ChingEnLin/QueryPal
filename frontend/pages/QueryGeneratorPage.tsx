@@ -9,8 +9,58 @@ import MongoIcon from '../components/icons/MongoIcon';
 import DatabaseIcon from '../components/icons/DatabaseIcon';
 import ServerIcon from '../components/icons/ServerIcon';
 import CollectionActionPanel from '../components/CollectionActionPanel';
+import { useMsal } from "@azure/msal-react";
 import { useAuth } from '../contexts/AuthContext';
+import { USE_MSAL_AUTH } from '../app.config';
 
+// --- Header Components ---
+interface HeaderUIProps {
+  name?: string;
+  onLogout: () => void;
+}
+
+const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout }) => (
+  <header className="flex items-center justify-between mb-8">
+      <div className="flex items-center space-x-4">
+          <MongoIcon className="w-12 h-12 text-blue-500" />
+          <div>
+              <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">QueryPal</h1>
+              <p className="text-slate-500 text-sm sm:text-base">Your AI-powered database assistant.</p>
+          </div>
+      </div>
+      <div className="flex items-center gap-4">
+        {name && <span className="text-slate-600 text-sm hidden sm:block">Welcome, {name}</span>}
+        <button
+            onClick={onLogout}
+            className="px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
+        >
+            Sign Out
+        </button>
+      </div>
+  </header>
+);
+
+const MsalHeader: React.FC = () => {
+    const { instance, accounts } = useMsal();
+    const name = accounts[0]?.name;
+    const handleLogout = () => {
+        instance.logoutRedirect({ postLogoutRedirectUri: "/" });
+    };
+    return <HeaderUI name={name} onLogout={handleLogout} />;
+};
+
+const BypassHeader: React.FC = () => {
+    const { user, logout } = useAuth();
+    const name = user?.name;
+    return <HeaderUI name={name} onLogout={logout} />;
+};
+
+const PageHeader: React.FC = () => {
+    return USE_MSAL_AUTH ? <MsalHeader /> : <BypassHeader />;
+};
+
+
+// --- Main Page Component ---
 const QueryGeneratorPage: React.FC = () => {
   const [userInput, setUserInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -38,9 +88,6 @@ const QueryGeneratorPage: React.FC = () => {
   const [collectionInfo, setCollectionInfo] = useState<CollectionInfo | null>(null);
   const [isFetchingCollectionInfo, setIsFetchingCollectionInfo] = useState<boolean>(false);
   const [collectionInfoError, setCollectionInfoError] = useState<string | null>(null);
-
-
-  const { logout } = useAuth();
 
   useEffect(() => {
     const fetchDbs = async () => {
@@ -170,21 +217,7 @@ const QueryGeneratorPage: React.FC = () => {
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
         
-        <header className="flex items-center justify-between mb-8">
-            <div className="flex items-center space-x-4">
-                <MongoIcon className="w-12 h-12 text-blue-500" />
-                <div>
-                    <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">QueryPal</h1>
-                    <p className="text-slate-500 text-sm sm:text-base">Your AI-powered database assistant.</p>
-                </div>
-            </div>
-            <button
-                onClick={logout}
-                className="px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
-            >
-                Sign Out
-            </button>
-        </header>
+        <PageHeader />
 
         <main className="space-y-8">
           {/* Connection Manager */}
