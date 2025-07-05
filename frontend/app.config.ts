@@ -6,4 +6,4 @@
  * The bypass allows developers to work on features without needing to
  * configure or sign into an Azure account.
  */
-export const USE_MSAL_AUTH = true;
+export const USE_MSAL_AUTH = false;

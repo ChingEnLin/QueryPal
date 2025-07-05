@@ -1,4 +1,6 @@
 import { QueryResultData, DbInfo } from '../types';
+import { USE_MSAL_AUTH } from '../app.config';
+import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery } from './mockData';
 
 const API_BASE_URL = '/api';
 
@@ -10,6 +12,22 @@ const API_BASE_URL = '/api';
  * @returns A promise that resolves with the structured query data.
  */
 export const generateMongoQuery = async (userInput: string, dbInfo?: DbInfo): Promise<QueryResultData> => {
+    // --- DEVELOPMENT MOCK ---
+    if (!USE_MSAL_AUTH) {
+        console.log("DEV MODE: Returning mock AI-generated query.");
+        await mockDelay(1500); // Simulate AI thinking time
+        
+        const lowerInput = userInput.toLowerCase();
+        if (lowerInput.includes('user')) {
+            return Promise.resolve(mockFindUsersQuery);
+        }
+        if (lowerInput.includes('price') || lowerInput.includes('product')) {
+            return Promise.resolve(mockUpdateProductsQuery);
+        }
+        return Promise.resolve(mockDefaultQuery);
+    }
+    // --- END DEVELOPMENT MOCK ---
+    
     console.log("Sending prompt to backend for query generation:", userInput);
 
     const response = await fetch(`${API_BASE_URL}/generate-query`, {
