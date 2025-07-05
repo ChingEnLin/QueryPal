@@ -1,8 +1,8 @@
-import os
+from os import environ as env
 import requests
 from ..models.schemas import QueryResultData
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = env.get("GEMINI_API_KEY")
 
 PROMPT_TEMPLATE = """
 You are an assistant that converts user requests into MongoDB query code.
