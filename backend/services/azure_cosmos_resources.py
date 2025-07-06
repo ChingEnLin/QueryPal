@@ -1,16 +1,8 @@
 import requests
 import pymongo
+import bson
 
 def list_cosmos_resources(access_token: str):
-    """
-    Lists all Azure Cosmos DB accounts across all subscriptions using the provided access token.
-    Args:
-        access_token (str): The Azure access token.
-    Returns:
-        list: A list of dictionaries containing Cosmos DB account names and IDs.
-    Raises:
-        requests.HTTPError: If the request to fetch subscriptions or accounts fails.
-    """
     url = "https://management.azure.com/subscriptions?api-version=2020-01-01"
     headers = {"Authorization": f"Bearer {access_token}"}
     subs = requests.get(url, headers=headers).json()
@@ -57,3 +49,45 @@ def get_cosmosdb_info_from_conn_str(connection_string: str):
         })
 
     return all_info
+
+def get_collection_info_with_conn_str(connection_string: str, db_name: str, collection_name: str):
+    client = pymongo.MongoClient(connection_string)
+    db = client[db_name]
+    collection = db[collection_name]
+
+    # Get stats (collstats not supported in Cosmos DB Mongo API)
+    document_count = collection.estimated_document_count()
+    avg_obj_size = None  # Not available in Cosmos DB Mongo API
+
+    # Get indexes
+    indexes = [index["name"] for index in collection.list_indexes()]
+
+    # Get a sample document
+    sample_doc = collection.aggregate([{"$sample": {"size": 1}}])
+    try:
+        sample = next(sample_doc)
+    except StopIteration:
+        sample = {}
+
+    # Helper to convert binary types to Extended JSON (e.g. ObjectId, datetime)
+    def convert_bson(value):
+        if isinstance(value, bson.ObjectId):
+            return {"$oid": str(value)}
+        elif isinstance(value, (bson.Timestamp, bson.datetime.datetime)):
+            return {"$date": value.isoformat() + "Z"}
+        elif isinstance(value, dict):
+            return {k: convert_bson(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [convert_bson(v) for v in value]
+        else:
+            return value
+
+    sample = convert_bson(sample)
+
+    return {
+        "name": collection_name,
+        "documentCount": document_count,
+        "averageDocumentSize": f"{round(avg_obj_size / 1024, 2)} KB" if avg_obj_size else "N/A",
+        "indexes": indexes,
+        "sampleDocument": sample,
+    }

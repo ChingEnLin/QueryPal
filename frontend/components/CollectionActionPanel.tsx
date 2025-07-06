@@ -1,112 +1,123 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { CollectionInfo } from '../types';
 import XIcon from './icons/XIcon';
 import InfoIcon from './icons/InfoIcon';
 import IndexIcon from './icons/IndexIcon';
 import FileJsonIcon from './icons/FileJsonIcon';
-import ClipboardIcon from './icons/ClipboardIcon';
-import CheckIcon from './icons/CheckIcon';
 
-// --- Schema Inference and Display Logic ---
+// --- New Schema Viewer Components ---
 
-// 1. Schema Inference Helpers
-const inferType = (value: any): any => {
-    if (value === null) return '<Null>';
-    if (Array.isArray(value)) {
-        // Future improvement: infer type of array elements, e.g., '<Array<String>>'
-        return '<Array>';
-    }
-
-    const type = typeof value;
-    if (type === 'object') {
-        // EJSON / BSON Extended JSON format detection
-        if (value.$oid && typeof value.$oid === 'string' && Object.keys(value).length === 1) return 'ObjectId';
-        if (value.$date && Object.keys(value).length === 1) return 'Date';
-        
-        // It's a regular document object, so we recurse to generate its schema
-        return generateSchemaFromObject(value);
-    }
-    
-    switch(type) {
-        case 'string': return '<String>';
-        case 'number': return '<Number>';
-        case 'boolean': return '<Boolean>';
-        default: return '<Unknown>';
-    }
+/**
+ * Creates a signature for an object based on its keys to detect duplicates.
+ * @param obj The object to create a signature for.
+ * @returns A string representing the object's structure.
+ */
+const getObjectSignature = (obj: any): string => {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return '';
+  const keys = Object.keys(obj).sort();
+  return keys.join('|');
 };
 
-const generateSchemaFromObject = (doc: Record<string, any>): Record<string, any> => {
-    // This function should only be called with objects that are not special EJSON types.
-    if (doc === null || typeof doc !== 'object' || Array.isArray(doc)) {
-        return inferType(doc); // Safety net
+/**
+ * Infers the displayable type of a given value, detecting BSON types.
+ * @param value The value to infer the type from.
+ * @returns A string representing the type.
+ */
+const getType = (value: any): string => {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) {
+    if (value.length > 0) {
+      // Show the type of elements within the array
+      return `Array<${getType(value[0])}>`;
     }
-
-    const schema: Record<string, any> = {};
-    for (const key in doc) {
-        if (Object.prototype.hasOwnProperty.call(doc, key)) {
-            schema[key] = inferType(doc[key]);
-        }
-    }
-    return schema;
-};
-
-
-// 2. SchemaDisplay Component and Helpers
-const formatValue = (value: any, indent: number): string => {
-  if (typeof value === 'object' && value !== null) {
-    return formatSchema(value, indent);
+    return 'Array<any>';
   }
-  // This will now render the inferred type string, e.g., 'ObjectId', '<String>'
-  return String(value);
+  if (value && typeof value === 'object') {
+    if (value.$oid && Object.keys(value).length === 1) return 'ObjectId';
+    if (value.$date && Object.keys(value).length === 1) return 'Date';
+    return 'Object';
+  }
+  const type = typeof value;
+  // Capitalize the first letter for display (e.g., 'string' -> 'String')
+  return type.charAt(0).toUpperCase() + type.slice(1);
 };
 
-const formatSchema = (schema: Record<string, any>, indent: number = 0): string => {
-  const indentation = ' '.repeat(indent + 2);
-  const closingIndentation = ' '.repeat(indent);
-  let str = '{\n';
-  const keys = Object.keys(schema);
-  keys.forEach((key, index) => {
-    const value = schema[key];
-    str += `${indentation}'${key}': ${formatValue(value, indent + 2)}`;
-    if (index < keys.length - 1) {
-      str += ',';
-    }
-    str += '\n';
-  });
-  str += `${closingIndentation}}`;
-  return str;
-};
-
-interface SchemaDisplayProps {
-  schema: Record<string, any>;
+interface SchemaRendererProps {
+  data: Record<string, any>;
+  indent?: number;
+  seen?: Set<string>;
 }
 
-const SchemaDisplay: React.FC<SchemaDisplayProps> = ({ schema }) => {
-  const [copied, setCopied] = useState(false);
-  
-  const schemaString = useMemo(() => formatSchema(schema), [schema]);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(schemaString).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(err => {
-        console.error("Failed to copy schema:", err);
-    });
-  };
+/**
+ * A recursive React component that renders a document schema into an HTML tree.
+ */
+const SchemaRenderer: React.FC<SchemaRendererProps> = ({ data, indent = 0, seen = new Set() }) => {
+  const padStyle = { paddingLeft: `${indent * 24}px` };
 
   return (
-    <div className="bg-slate-100 rounded-md relative group ring-1 ring-slate-200">
-      <pre className="text-sm text-slate-800 p-4 overflow-x-auto">
-        <code>{schemaString}</code>
-      </pre>
-      <button
-        onClick={handleCopy}
-        className="absolute top-2 right-2 p-2 bg-slate-200/80 rounded-md text-slate-500 hover:bg-slate-300 hover:text-slate-800 transition-all duration-200 opacity-0 group-hover:opacity-100 focus:opacity-100"
-        aria-label="Copy schema"
-      >
-        {copied ? <CheckIcon className="w-4 h-4 text-blue-500" /> : <ClipboardIcon className="w-4 h-4" />}
-      </button>
+    <div>
+      {Object.entries(data).map(([key, value]) => {
+        const type = getType(value);
+        
+        // Case 1: Value is a nested object.
+        if (type === 'Object') {
+          const sig = getObjectSignature(value);
+          const isSeen = seen.has(sig);
+          if (!isSeen) {
+            seen.add(sig);
+          }
+          
+          return (
+            <div key={key}>
+              <div style={padStyle}>
+                <strong>{key}</strong>: <span>Object</span>
+              </div>
+              {!isSeen ? (
+                <SchemaRenderer data={value} indent={indent + 1} seen={new Set(seen)} />
+              ) : (
+                <div style={{ paddingLeft: `${(indent + 1) * 24}px` }}>
+                  <em>... (structure repeated)</em>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // Case 2: Value is an array.
+        if (type.startsWith('Array<')) {
+          const firstElement = value[0];
+          const firstElementType = getType(firstElement);
+          const isObjectArray = firstElementType === 'Object';
+          const sig = isObjectArray ? getObjectSignature(firstElement) : '';
+          const isSeen = isObjectArray && seen.has(sig);
+          if (isObjectArray && !isSeen) {
+            seen.add(sig);
+          }
+
+          return (
+            <div key={key}>
+              <div style={padStyle}>
+                <strong>{key}</strong>: <span>{type}</span>
+              </div>
+              {isObjectArray && !isSeen && firstElement && (
+                 <SchemaRenderer data={firstElement} indent={indent + 1} seen={new Set(seen)} />
+              )}
+              {isObjectArray && isSeen && (
+                 <div style={{ paddingLeft: `${(indent + 1) * 24}px` }}>
+                   <em>... (structure repeated)</em>
+                 </div>
+              )}
+            </div>
+          );
+        }
+
+        // Case 3: Value is a primitive type (String, Number, ObjectId, etc.).
+        return (
+          <div key={key} style={padStyle}>
+            <strong>{key}</strong>: <code>{type}</code>
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -124,16 +135,12 @@ interface CollectionActionPanelProps {
 const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onGenerate, onClose, isLoading }) => {
   const [prompt, setPrompt] = useState('');
   
-  const schema = useMemo(() => {
-    if (!info.sampleDocument) return {};
-    // Start the schema generation from the root sample document
-    return generateSchemaFromObject(info.sampleDocument);
-  }, [info.sampleDocument]);
-
   const handleGenerateClick = () => {
     if (!prompt.trim()) return;
     onGenerate(prompt);
   };
+
+  const sampleDocument = info.sampleDocument || {};
 
   return (
     <div className="bg-slate-100 rounded-lg p-4 mt-4 border border-slate-200 animate-fade-in space-y-6">
@@ -177,8 +184,16 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
       </div>
       
        <div className="space-y-2">
-        <p className="text-slate-600 flex items-center gap-2 font-semibold"><FileJsonIcon className="w-5 h-5" /> Inferred Schema (from a sample document)</p>
-        <SchemaDisplay schema={schema} />
+        <p className="text-slate-600 flex items-center gap-2 font-semibold"><FileJsonIcon className="w-5 h-5" /> Inferred Schema (from sample)</p>
+        <div className="bg-white p-4 rounded-md text-sm text-slate-800 ring-1 ring-slate-200 overflow-x-auto">
+            {Object.keys(sampleDocument).length > 0 ? (
+                <div className="font-mono schema-tree">
+                    <SchemaRenderer data={sampleDocument} />
+                </div>
+            ) : (
+                <p className="font-sans text-slate-500">No sample document available to infer a schema.</p>
+            )}
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -201,7 +216,22 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
           {isLoading ? 'Generating...' : 'Generate Query for Collection'}
         </button>
       </div>
-
+      <style>{`
+        .schema-tree code {
+            color: #0b5394;
+            font-weight: bold;
+            background-color: #eef6ff;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        .schema-tree em {
+            color: #999;
+            font-style: italic;
+        }
+        .schema-tree strong {
+            color: #3e3e3e;
+        }
+      `}</style>
     </div>
   );
 };

@@ -38,7 +38,7 @@ export const getAzureCosmosAccounts = async (): Promise<CosmosDBAccount[]> => {
   const accessToken = response.accessToken;
   
   console.log("Fetching Azure cosmosdb accounts from backend...");
-  const responseApi = await fetch(`${API_BASE_URL}/azure/cosmos-accounts`, {
+  const responseApi = await fetch(`${API_BASE_URL}/azure/cosmos_accounts`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -86,7 +86,7 @@ export const getDatabasesForAccount = async (accountId: string): Promise<DbInfo[
 
   const accessToken = tokenResponse.accessToken;
 
-  const response = await fetch(`${API_BASE_URL}/azure/account-details`, {
+  const response = await fetch(`${API_BASE_URL}/azure/account_details`, {
       method: 'POST',
       headers: { 
           'Content-Type': 'application/json',
@@ -122,12 +122,31 @@ export const getCollectionInfo = async (collectionName: string, resource: Select
         return Promise.reject(new Error(`Mock collection info not found for ${collectionName}`));
     }
     // --- END DEVELOPMENT MOCK ---
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+        throw new Error("No signed-in user found.");
+    }
+
+    // acquire token for backend API (must be set in loginRequest.scopes)
+    const tokenResponse = await msalInstance.acquireTokenSilent({
+        ...loginRequest,
+        account: accounts[0],
+    });
+
+    const accessToken = tokenResponse.accessToken;
 
     console.log(`Fetching info for collection: ${collectionName} from backend...`);
-    const response = await fetch(`${API_BASE_URL}/collection-info`, {
+    const response = await fetch(`${API_BASE_URL}/azure/collection_info`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...resource, collectionName }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+          },
+        body: JSON.stringify({ 
+            account_id: resource.accountId,
+            database_name: resource.databaseName,
+            collection_name: collectionName 
+        }),
     });
 
     if (!response.ok) {

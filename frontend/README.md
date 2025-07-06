@@ -42,7 +42,7 @@ Your backend service must implement the following endpoints. All endpoints shoul
 
 ---
 
-### `GET /api/azure/accounts`
+### `GET /api/azure/azure_accounts`
 
 Discovers the Cosmos DB accounts the user has access to.
 
@@ -62,7 +62,7 @@ Discovers the Cosmos DB accounts the user has access to.
 
 ---
 
-### `POST /api/account-details`
+### `POST /api/account_details`
 
 Fetches detailed information for all databases within a specific account.
 
@@ -99,16 +99,16 @@ Fetches detailed information for all databases within a specific account.
 
 ---
 
-### `POST /api/collection-info`
+### `POST /api/collection_info`
 
 Fetches detailed information for a specific collection.
 
 -   **Request Body:**
     ```json
     {
-        "accountId": "/subscriptions/sub-id/resourceGroups/rg-prod/...",
-        "databaseName": "ECommerce-DB",
-        "collectionName": "users"
+        "account_id": "/subscriptions/sub-id/resourceGroups/rg-prod/...",
+        "database_name": "ECommerce-DB",
+        "collection_name": "users"
     }
     ```
 -   **Success Response (200):** A `CollectionInfo` object.
