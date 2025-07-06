@@ -77,13 +77,20 @@ Fetches detailed information for all databases within a specific account.
     [
       {
         "name": "ECommerce-DB",
-        "collections": ["users", "products", "orders"],
+        "collections": [
+          { "name": "users", "count": 5000 },
+          { "name": "products", "count": 10000 },
+          { "name": "orders", "count": 500 }
+        ],
         "totalDocuments": 15500,
         "size": "256 MB"
       },
       {
         "name": "Analytics-DB",
-        "collections": ["pageViews", "userEvents"],
+        "collections": [
+          { "name": "pageViews", "count": 400000 },
+          { "name": "userEvents", "count": 100000 }
+        ],
         "totalDocuments": 500000,
         "size": "1.2 GB"
       }

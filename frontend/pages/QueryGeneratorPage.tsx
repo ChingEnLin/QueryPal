@@ -283,18 +283,18 @@ const QueryGeneratorPage: React.FC = () => {
                   </div>
                   <div className="bg-slate-100 p-3 rounded-lg">
                     <p className="text-slate-500">Database Size</p>
-                    <p className="text-slate-900 font-semibold text-lg">{connectedDbInfo.size}</p>
+                    <p className="text-slate-900 font-semibold text-lg">{connectedDbInfo.size ?? 'N/A'}</p>
                   </div>
                   <div className="bg-slate-100 p-3 rounded-lg col-span-1 md:col-span-3">
                      <p className="text-slate-600 mb-2 flex items-center gap-2 font-medium"><ServerIcon className="w-4 h-4" /> Collections</p>
                      <div className="flex flex-wrap gap-2">
                        {connectedDbInfo.collections.map(col => (
                          <button 
-                            key={col} 
-                            onClick={() => handleCollectionClick(col)}
-                            className={`text-xs font-mono px-3 py-1 rounded-full transition-all duration-200 ${selectedCollection === col ? 'bg-blue-500 text-white font-bold ring-2 ring-blue-300' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                            key={col.name} 
+                            onClick={() => handleCollectionClick(col.name)}
+                            className={`text-xs font-mono px-3 py-1 rounded-full transition-all duration-200 ${selectedCollection === col.name ? 'bg-blue-500 text-white font-bold ring-2 ring-blue-300' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
                         >
-                            {col}
+                            {col.name}
                          </button>
                        ))}
                      </div>

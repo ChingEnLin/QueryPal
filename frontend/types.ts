@@ -1,6 +1,14 @@
 
 
 /**
+ * Represents a summarized view of a collection within a database.
+ */
+export interface CollectionSummary {
+    name: string;
+    count: number;
+}
+
+/**
  * Represents a database connection configuration, primarily for display and selection.
  */
 export interface DbConfig {
@@ -35,9 +43,9 @@ export type SelectedResource = {
  */
 export interface DbInfo {
   name:string;
-  collections: string[];
+  collections: CollectionSummary[];
   totalDocuments: number;
-  size: string;
+  size: string | null;
 }
 
 /**

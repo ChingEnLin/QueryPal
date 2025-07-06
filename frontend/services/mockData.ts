@@ -23,23 +23,34 @@ export const mockCosmosAccounts: CosmosDBAccount[] = [
 
 export const mockECommerceDbInfo: DbInfo = {
   name: 'ECommerce-DB',
-  collections: ['users', 'products', 'orders'],
+  collections: [
+    { name: 'users', count: 5000 },
+    { name: 'products', count: 10000 },
+    { name: 'orders', count: 500 },
+  ],
   totalDocuments: 15500,
   size: '256 MB',
 };
 
 const mockAnalyticsDbInfo: DbInfo = {
     name: 'Analytics-DB',
-    collections: ['pageViews', 'userEvents'],
+    collections: [
+        { name: 'pageViews', count: 400000 },
+        { name: 'userEvents', count: 100000 },
+    ],
     totalDocuments: 500000,
     size: '1.2 GB'
 };
 
 const mockCmsContentDbInfo: DbInfo = {
     name: 'CMS-Content-DB',
-    collections: ['articles', 'authors', 'media'],
+    collections: [
+        { name: 'articles', count: 1800 },
+        { name: 'authors', count: 200 },
+        { name: 'media', count: 500 },
+    ],
     totalDocuments: 2500,
-    size: '80 MB'
+    size: null,
 };
 
 export const mockDatabasesByAccountId: Map<string, DbInfo[]> = new Map([
