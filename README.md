@@ -1,73 +1,133 @@
-# 🧠 QueryPal
-### The Natural Language MongoDB Query App
+# QueryPal
+### MongoDB AI Assistant for Azure Cosmos DB
 
-This full-stack application allows users to interact with MongoDB using **natural language** — powered by **Google Gemini** for language understanding and **FastAPI** for backend processing.
-
-Users can simply type queries like:
-
-> “Find all patients older than 65.”  
-> “Insert a new user named Alice into the `users` collection.”  
-
-The app intelligently translates that into valid MongoDB operations, confirms with the user, and then executes the query securely.
+This project is an intelligent database exploration tool tailored for developers and analysts working with **Azure Cosmos DB (MongoDB API)**. It allows users to inspect their NoSQL database schema and execute queries via **natural language** prompts using **Google Gemini AI**. Authentication and access control are managed securely with **Microsoft Entra ID (formerly Azure AD)**, and all Cosmos DB access happens through secure **On-Behalf-Of (OBO)** token exchange—**no connection strings are stored** in the codebase.
 
 ---
 
-## 🔧 Key Features
+## 🚀 Motivation
 
-- 🧠 **AI-Powered Query Generation**  
-  Uses Google Gemini to convert natural language into MongoDB query code.
+Azure Cosmos DB (especially MongoDB API) lacks a friendly interface to inspect actual data schemas. The Azure Portal is often limited, buggy, and doesn't easily infer NoSQL structures. This tool provides:
 
-- ⚙️ **MongoDB Integration**  
-  Runs generated queries directly against selected MongoDB databases.
-
-- ✅ **User Confirmation Flow**  
-  Every AI-generated operation is shown to the user for review before execution.
-
-- 🖥️ **Full-Stack Architecture**  
-  - Frontend: React + TypeScript
-  - Backend: FastAPI (Python) with modular design
-
-- 🔐 **Secure Backend Logic**  
-  Gemini API key and MongoDB operations are handled only in the backend to protect credentials and data.
+- An intuitive interface to browse schema structure, document samples, and index info.
+- A natural language interface using **Gemini API** to ask questions and generate MongoDB queries.
+- Secure access architecture using **Microsoft Entra ID** and **OBO flow**, following best practices for enterprise apps.
+- A privacy-conscious architecture: no credentials or database connection strings are exposed to the frontend.
 
 ---
 
-## 📦 Tech Stack
+## 🧱 Tech Stack
 
-| Layer     | Technology            |
-|-----------|------------------------|
-| Frontend  | React, TypeScript, Vite |
-| Backend   | FastAPI, Pydantic, Uvicorn |
-| AI Engine | Google Gemini (via API) |
-| Database  | MongoDB (Atlas / CosmosDB compatible) |
-
----
-
-## 🏁 Getting Started
-
-To run the app locally, set up the frontend and backend independently using the provided `README.md` files in each directory.
-
-Typical flow:
-1. Start the backend server.
-2. Run the frontend dev server.
-3. Use the app in your browser to connect to a database and perform natural language queries.
+| Layer             | Technology                                                                 |
+|------------------|-----------------------------------------------------------------------------|
+| Frontend         | React, TypeScript, Tailwind CSS                                             |
+| Authentication   | Microsoft Entra ID + MSAL (On-Behalf-Of Flow)                              |
+| AI Query Engine  | Google Gemini Pro API                                                       |
+| Backend          | FastAPI (Python)                                                            |
+| Database Access  | Azure Cosmos DB (MongoDB API)                                               |
+| Cloud APIs       | Azure Resource Manager (ARM), MS Graph (optional in future)                |
+| Auth Libraries   | MSAL (Python, JS)                                                           |
 
 ---
 
-## 🌐 Example Use Cases
+## 🛠️ Architecture Overview
 
-- Quickly retrieve records without writing query syntax
-- Allow non-technical users to interact with databases
-- Teach MongoDB query structures via natural language examples
+```
+    ┌────────────────────┐      Login        ┌────────────────────┐
+    │     Frontend       ├──────────────────►│   Microsoft Entra  │
+    │ React + MSAL (SPA) │◄──────────────────┤     (Auth Server)  │
+    └────────────────────┘   ID Token + OBO  └────────────────────┘
+           │
+           ▼ access_token
+ ┌────────────────────────┐
+ │    FastAPI Backend     │
+ │   OBO Token Exchange   │◄──────────────┐
+ │   Query Execution +    │               │
+ │   Gemini AI Request    │               │
+ └────────────────────────┘               │
+           │                              │
+           ▼                              │
+ ┌────────────────────────┐               │
+ │  Azure Cosmos DB API   │◄──────────────┘
+ │ (MongoDB - ARM + conn) │
+ └────────────────────────┘
+```
+
+- ✅ Authentication is handled using MSAL.
+- 🔁 On-Behalf-Of (OBO) flow securely exchanges the frontend token to access Azure APIs.
+- 🧠 Gemini API helps convert user questions into MongoDB queries.
+- 🔍 The backend connects to Cosmos DB using runtime connection strings acquired via ARM API.
 
 ---
 
-## 🚧 Status
+## ⚙️ Setup Instructions
 
-This is a working prototype and developer tool — additional hardening and sandboxing may be needed before use in production.
+### 1. Register Azure Entra ID Application
+
+- Go to [Azure Portal – App registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps)
+- Register two applications:
+  - **Frontend SPA**
+    - Platform: Single-page application (SPA)
+    - Redirect URI: `http://localhost:3000` (or your frontend URL)
+    - Expose an API scope: `api://<backend-client-id>/access_as_user`
+  - **Backend App**
+    - Client type: Confidential client
+    - Add a client secret
+    - Add the frontend SPA as an authorized client for the exposed scope
+
+- Add API permissions:
+  - Microsoft Graph → `User.Read`
+  - Azure Service Management → `user_impersonation`
+
+- Grant Admin Consent.
+
+- In Azure → Cosmos DB → IAM, give the backend app `Cosmos DB Account Reader Role`.
+
+### 2. Environment Variables
+
+Create a `.env` file for the backend:
+
+```env
+# Google Gemini API Key
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Azure Entra Auth
+AZURE_TENANT_ID=xxxx-tenant-id
+AZURE_CLIENT_ID=xxxx-backend-app-id
+AZURE_CLIENT_SECRET=xxxx-client-secret
+ARM_SCOPE=https://management.azure.com/.default
+```
+
+### 3. Frontend Config
+
+Edit `authConfig.ts`:
+
+```ts
+export const msalConfig = {
+  auth: {
+    clientId: "<frontend-app-id>",
+    authority: "https://login.microsoftonline.com/<tenant-id>",
+    redirectUri: "http://localhost:3000"
+  },
+};
+
+export const loginRequest = {
+  scopes: ["User.Read", "api://<backend-client-id>/access_as_user"]
+};
+```
 
 ---
 
-## 🙌 Credits
+## ✨ Features
 
-Developed with ❤️ using FastAPI, MongoDB, and Google Gemini.
+- 🔐 Authenticated access via Microsoft Entra ID
+- 📦 View document schemas with recursive tree view
+- 🔍 Sample document + index info
+- 🧠 Natural language to query conversion (via Gemini AI)
+- 🛡️ No connection strings stored; secure backend access only
+
+---
+
+## 📄 License
+
+MIT
