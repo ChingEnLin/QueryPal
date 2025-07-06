@@ -4,7 +4,7 @@ from ..services.azure_cosmos_resources import list_cosmos_resources
 
 router = APIRouter()
 
-@router.get("/cosmos-resources")
+@router.get("/cosmos-accounts")
 def get_cosmos_resources(authorization: str = Header(...)):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")

@@ -42,47 +42,52 @@ Your backend service must implement the following endpoints. All endpoints shoul
 
 ---
 
-### `GET /api/azure/resources`
+### `GET /api/azure/accounts`
 
-Discovers Cosmos DB accounts and databases the user has access to.
+Discovers the Cosmos DB accounts the user has access to.
 
--   **Success Response (200):** An array of discovered resources.
+-   **Success Response (200):** An array of discovered accounts.
     ```json
     [
       {
-        "id": "/subscriptions/sub-id/...",
-        "name": "prod-account",
-        "databases": [{ "name": "main_db" }, { "name": "audit_db" }]
+        "id": "/subscriptions/sub-id/resourceGroups/rg-prod/...",
+        "name": "prod-ecommerce-db"
       },
       {
-        "id": "/subscriptions/sub-id/...",
-        "name": "staging-account",
-        "databases": [{ "name": "test_db" }]
+        "id": "/subscriptions/sub-id/resourceGroups/rg-staging/...",
+        "name": "staging-cms-db"
       }
     ]
     ```
 
 ---
 
-### `POST /api/connect`
+### `POST /api/account-details`
 
-Establishes a connection context on the backend and returns database metadata.
+Fetches detailed information for all databases within a specific account.
 
 -   **Request Body:**
     ```json
     {
-      "accountName": "prod-account",
-      "databaseName": "main_db"
+      "accountName": "prod-ecommerce-db"
     }
     ```
--   **Success Response (200):**
+-   **Success Response (200):** An array of database details (`DbInfo` objects).
     ```json
-    {
-      "name": "main_db",
-      "collections": ["users", "products", "orders"],
-      "totalDocuments": 125000,
-      "size": "15.7 GB"
-    }
+    [
+      {
+        "name": "ECommerce-DB",
+        "collections": ["users", "products", "orders"],
+        "totalDocuments": 15500,
+        "size": "256 MB"
+      },
+      {
+        "name": "Analytics-DB",
+        "collections": ["pageViews", "userEvents"],
+        "totalDocuments": 500000,
+        "size": "1.2 GB"
+      }
+    ]
     ```
 
 ---
@@ -94,22 +99,19 @@ Fetches detailed information for a specific collection.
 -   **Request Body:**
     ```json
     {
-        "accountName": "prod-account",
-        "databaseName": "main_db",
+        "accountName": "prod-ecommerce-db",
+        "databaseName": "ECommerce-DB",
         "collectionName": "users"
     }
     ```
--   **Success Response (200):**
+-   **Success Response (200):** A `CollectionInfo` object.
     ```json
     {
       "name": "users",
-      "documentCount": 50000,
-      "averageDocumentSize": "2.1 KB",
+      "documentCount": 5000,
+      "averageDocumentSize": "1.2 KB",
       "indexes": ["_id_", "email_1"],
-      "sampleDocument": {
-        "_id": { "$oid": "6c5babe1a3f5a5d5c5d5e1f3" },
-        "lastLogin": { "$date": "2024-05-20T10:00:00Z" }
-      }
+      "sampleDocument": { ... }
     }
     ```
 ---
@@ -136,8 +138,8 @@ Executes a query against the specified database.
 -   **Request Body:**
     ```json
     {
-      "accountName": "prod-account",
-      "databaseName": "main_db",
+      "accountName": "prod-ecommerce-db",
+      "databaseName": "ECommerce-DB",
       "query": "db.collection('users').find({})"
     }
     ```

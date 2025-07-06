@@ -1,9 +1,9 @@
-import { DbInfo, CollectionInfo, CosmosDBResource, SelectedResource } from '../types';
+import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource } from '../types';
 import { msalInstance, loginRequest } from '@/authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { 
-    mockCosmosResources, 
-    mockECommerceDbInfo, 
+    mockCosmosAccounts, 
+    mockDatabasesByAccount, 
     mockCollectionInfoMap, 
     mockUserFindResult,
     mockProductUpdateResult,
@@ -15,12 +15,12 @@ import {
  * Fetches available Azure Cosmos DB resources from the backend.
  * @returns A promise that resolves with an array of Cosmos DB resources.
  */
-export const getAzureCosmosResources = async (): Promise<CosmosDBResource[]> => {
+export const getAzureCosmosAccounts = async (): Promise<CosmosDBAccount[]> => {
   // --- DEVELOPMENT MOCK ---
   if (!USE_MSAL_AUTH) {
     console.log("DEV MODE: Returning mock Azure resources.");
     await mockDelay(1200);
-    return Promise.resolve(mockCosmosResources);
+    return Promise.resolve(mockCosmosAccounts);
   }
   // --- END DEVELOPMENT MOCK ---
 
@@ -37,8 +37,8 @@ export const getAzureCosmosResources = async (): Promise<CosmosDBResource[]> => 
 
   const accessToken = response.accessToken;
   
-  console.log("Fetching Azure resources from backend...");
-  const responseApi = await fetch(`${API_BASE_URL}/azure/cosmos-resources`, {
+  console.log("Fetching Azure cosmosdb accounts from backend...");
+  const responseApi = await fetch(`${API_BASE_URL}/azure/cosmos-accounts`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -53,41 +53,40 @@ export const getAzureCosmosResources = async (): Promise<CosmosDBResource[]> => 
   return responseApi.json();
 };
 
+
 /**
- * Connects to a database via the backend and fetches its metadata.
- * @param resource The account and database to connect to.
- * @returns A promise that resolves with basic database information.
+ * Fetches the detailed information for all databases within a specific account.
+ * @param accountName The name of the account to fetch databases for.
+ * @returns A promise that resolves with an array of detailed database information.
  */
-export const connectToDatabase = async (resource: SelectedResource): Promise<DbInfo> => {
+export const getDatabasesForAccount = async (accountName: string): Promise<DbInfo[]> => {
   // --- DEVELOPMENT MOCK ---
   if (!USE_MSAL_AUTH) {
-    console.log(`DEV MODE: Returning mock DB info for ${resource.accountName}/${resource.databaseName}.`);
-    await mockDelay(800);
-    if (resource.databaseName === 'ECommerce-DB') {
-        return Promise.resolve(mockECommerceDbInfo);
-    }
-    // Return a generic/empty one for other DBs if needed
-    const genericInfo: DbInfo = { name: resource.databaseName, collections: ['items', 'logs'], totalDocuments: 100, size: '10 MB' };
-    return Promise.resolve(genericInfo);
+      console.log(`DEV MODE: Returning mock databases for account ${accountName}.`);
+      await mockDelay(1000);
+      const dbs = mockDatabasesByAccount.get(accountName);
+      if (dbs) {
+          return Promise.resolve(dbs);
+      }
+      return Promise.reject(new Error(`Mock databases not found for account ${accountName}`));
   }
   // --- END DEVELOPMENT MOCK ---
 
-  console.log(`Sending connection request for ${resource.accountName}/${resource.databaseName} to backend...`);
-  const response = await fetch(`${API_BASE_URL}/connect`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(resource),
+  console.log(`Fetching databases for account ${accountName} from backend...`);
+  const response = await fetch(`${API_BASE_URL}/account-details`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountName }),
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: 'Failed to connect to the database.' }));
-    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      const errorData = await response.json().catch(() => ({ message: `Failed to fetch databases for ${accountName}.` }));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
   }
 
-  const data: DbInfo = await response.json();
-  console.log(`Successfully connected to ${resource.databaseName}.`);
-  return data;
+  return response.json();
 };
+
 
 /**
  * Fetches detailed information for a specific collection from the backend.

@@ -15,19 +15,11 @@ export interface QueryResultData {
 }
 
 /**
- * Represents a database within a Cosmos DB account, used for selection.
+ * Represents a discoverable Azure Cosmos DB account.
  */
-export interface DatabaseResource {
-    name: string;
-}
-
-/**
- * Represents a discoverable Azure Cosmos DB account and its nested databases.
- */
-export interface CosmosDBResource {
+export interface CosmosDBAccount {
     id: string;
     name: string;
-    databases: DatabaseResource[];
 }
 
 /**

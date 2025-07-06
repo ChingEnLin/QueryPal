@@ -1,4 +1,4 @@
-import { CosmosDBResource, DbInfo, CollectionInfo, QueryResultData } from '../types';
+import { CosmosDBAccount, DbInfo, CollectionInfo, QueryResultData } from '../types';
 
 // --- Helper to simulate network latency ---
 export const mockDelay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -6,26 +6,18 @@ export const mockDelay = (ms: number) => new Promise(resolve => setTimeout(resol
 
 // --- Mock Azure and Database Data ---
 
-export const mockCosmosResources: CosmosDBResource[] = [
+export const mockCosmosAccounts: CosmosDBAccount[] = [
   { 
     id: '/subscriptions/mock-sub/resourceGroups/rg-prod/providers/Microsoft.DocumentDB/databaseAccounts/prod-ecommerce-db',
     name: 'prod-ecommerce-db', 
-    databases: [
-        { name: 'ECommerce-DB' },
-        { name: 'Analytics-DB' }
-    ]
   },
   { 
     id: '/subscriptions/mock-sub/resourceGroups/rg-staging/providers/Microsoft.DocumentDB/databaseAccounts/staging-cms-db',
     name: 'staging-cms-db', 
-    databases: [
-        { name: 'CMS-Content-DB' }
-    ]
   },
   {
     id: '/subscriptions/mock-sub/resourceGroups/rg-dev/providers/Microsoft.DocumentDB/databaseAccounts/dev-empty-db',
     name: 'dev-empty-db',
-    databases: []
   }
 ];
 
@@ -35,6 +27,27 @@ export const mockECommerceDbInfo: DbInfo = {
   totalDocuments: 15500,
   size: '256 MB',
 };
+
+const mockAnalyticsDbInfo: DbInfo = {
+    name: 'Analytics-DB',
+    collections: ['pageViews', 'userEvents'],
+    totalDocuments: 500000,
+    size: '1.2 GB'
+};
+
+const mockCmsContentDbInfo: DbInfo = {
+    name: 'CMS-Content-DB',
+    collections: ['articles', 'authors', 'media'],
+    totalDocuments: 2500,
+    size: '80 MB'
+};
+
+export const mockDatabasesByAccount: Map<string, DbInfo[]> = new Map([
+    ['prod-ecommerce-db', [mockECommerceDbInfo, mockAnalyticsDbInfo]],
+    ['staging-cms-db', [mockCmsContentDbInfo]],
+    ['dev-empty-db', []]
+]);
+
 
 const mockUsersCollectionInfo: CollectionInfo = {
   name: 'users',

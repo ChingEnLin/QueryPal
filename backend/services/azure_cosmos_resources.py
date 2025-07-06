@@ -13,8 +13,6 @@ def list_cosmos_resources(access_token: str):
         for acct in accounts.get("value", []):
             results.append({
                 "name": acct["name"],
-                "id": acct["id"],
-                "location": acct.get("location"),
-                "subscriptionId": sub_id
+                "id": acct["id"]
             })
     return results
