@@ -42,10 +42,10 @@ const mockCmsContentDbInfo: DbInfo = {
     size: '80 MB'
 };
 
-export const mockDatabasesByAccount: Map<string, DbInfo[]> = new Map([
-    ['prod-ecommerce-db', [mockECommerceDbInfo, mockAnalyticsDbInfo]],
-    ['staging-cms-db', [mockCmsContentDbInfo]],
-    ['dev-empty-db', []]
+export const mockDatabasesByAccountId: Map<string, DbInfo[]> = new Map([
+    ['/subscriptions/mock-sub/resourceGroups/rg-prod/providers/Microsoft.DocumentDB/databaseAccounts/prod-ecommerce-db', [mockECommerceDbInfo, mockAnalyticsDbInfo]],
+    ['/subscriptions/mock-sub/resourceGroups/rg-staging/providers/Microsoft.DocumentDB/databaseAccounts/staging-cms-db', [mockCmsContentDbInfo]],
+    ['/subscriptions/mock-sub/resourceGroups/rg-dev/providers/Microsoft.DocumentDB/databaseAccounts/dev-empty-db', []]
 ]);
 
 

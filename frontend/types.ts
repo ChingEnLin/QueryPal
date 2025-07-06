@@ -3,6 +3,10 @@
 /**
  * Represents a database connection configuration, primarily for display and selection.
  */
+export interface DbConfig {
+    name: string;
+    connectionString: string;
+}
 
 export interface QueryResultData {
   intent_summary: string;
@@ -22,7 +26,7 @@ export interface CosmosDBAccount {
  * A type representing the selected resource for API calls.
  */
 export type SelectedResource = {
-    accountName: string;
+    accountId: string;
     databaseName: string;
 };
 

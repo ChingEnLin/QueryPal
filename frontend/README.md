@@ -69,7 +69,7 @@ Fetches detailed information for all databases within a specific account.
 -   **Request Body:**
     ```json
     {
-      "accountName": "prod-ecommerce-db"
+      "accountId": "/subscriptions/sub-id/resourceGroups/rg-prod/..."
     }
     ```
 -   **Success Response (200):** An array of database details (`DbInfo` objects).
@@ -99,7 +99,7 @@ Fetches detailed information for a specific collection.
 -   **Request Body:**
     ```json
     {
-        "accountName": "prod-ecommerce-db",
+        "accountId": "/subscriptions/sub-id/resourceGroups/rg-prod/...",
         "databaseName": "ECommerce-DB",
         "collectionName": "users"
     }
@@ -138,7 +138,7 @@ Executes a query against the specified database.
 -   **Request Body:**
     ```json
     {
-      "accountName": "prod-ecommerce-db",
+      "accountId": "/subscriptions/sub-id/resourceGroups/rg-prod/...",
       "databaseName": "ECommerce-DB",
       "query": "db.collection('users').find({})"
     }

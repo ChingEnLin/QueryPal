@@ -3,7 +3,7 @@ import { msalInstance, loginRequest } from '@/authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { 
     mockCosmosAccounts, 
-    mockDatabasesByAccount, 
+    mockDatabasesByAccountId, 
     mockCollectionInfoMap, 
     mockUserFindResult,
     mockProductUpdateResult,
@@ -56,31 +56,47 @@ export const getAzureCosmosAccounts = async (): Promise<CosmosDBAccount[]> => {
 
 /**
  * Fetches the detailed information for all databases within a specific account.
- * @param accountName The name of the account to fetch databases for.
+ * @param accountId The resource ID of the account to fetch databases for.
  * @returns A promise that resolves with an array of detailed database information.
  */
-export const getDatabasesForAccount = async (accountName: string): Promise<DbInfo[]> => {
+export const getDatabasesForAccount = async (accountId: string): Promise<DbInfo[]> => {
   // --- DEVELOPMENT MOCK ---
   if (!USE_MSAL_AUTH) {
-      console.log(`DEV MODE: Returning mock databases for account ${accountName}.`);
+      console.log(`DEV MODE: Returning mock databases for account ID ${accountId}.`);
       await mockDelay(1000);
-      const dbs = mockDatabasesByAccount.get(accountName);
+      const dbs = mockDatabasesByAccountId.get(accountId);
       if (dbs) {
           return Promise.resolve(dbs);
       }
-      return Promise.reject(new Error(`Mock databases not found for account ${accountName}`));
+      return Promise.reject(new Error(`Mock databases not found for account ID ${accountId}`));
   }
   // --- END DEVELOPMENT MOCK ---
 
-  console.log(`Fetching databases for account ${accountName} from backend...`);
-  const response = await fetch(`${API_BASE_URL}/account-details`, {
+  console.log(`Fetching databases for account ID ${accountId} from backend...`);
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) {
+      throw new Error("No signed-in user found.");
+  }
+
+  // acquire token for backend API (must be set in loginRequest.scopes)
+  const tokenResponse = await msalInstance.acquireTokenSilent({
+      ...loginRequest,
+      account: accounts[0],
+  });
+
+  const accessToken = tokenResponse.accessToken;
+
+  const response = await fetch(`${API_BASE_URL}/azure/account-details`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accountName }),
+      headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ account_id: accountId }),
   });
 
   if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: `Failed to fetch databases for ${accountName}.` }));
+      const errorData = await response.json().catch(() => ({ message: `Failed to fetch databases for account ID ${accountId}.` }));
       throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
   }
 

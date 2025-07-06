@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { generateMongoQuery } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo } from '../services/dbService';
 import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource } from '../types';
@@ -69,7 +69,7 @@ const QueryGeneratorPage: React.FC = () => {
   // State for DB resources & connection
   const [azureAccounts, setAzureAccounts] = useState<CosmosDBAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState<boolean>(true);
-  const [selectedAccountName, setSelectedAccountName] = useState<string | null>(null);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [accountDatabases, setAccountDatabases] = useState<DbInfo[]>([]);
   const [isLoadingDatabases, setIsLoadingDatabases] = useState<boolean>(false);
   const [connectedResource, setConnectedResource] = useState<SelectedResource | null>(null);
@@ -90,6 +90,11 @@ const QueryGeneratorPage: React.FC = () => {
   const [collectionInfo, setCollectionInfo] = useState<CollectionInfo | null>(null);
   const [isFetchingCollectionInfo, setIsFetchingCollectionInfo] = useState<boolean>(false);
   const [collectionInfoError, setCollectionInfoError] = useState<string | null>(null);
+
+  const connectedAccountName = useMemo(() => {
+    if (!connectedResource) return '';
+    return azureAccounts.find(acc => acc.id === connectedResource.accountId)?.name ?? 'Unknown Account';
+  }, [connectedResource, azureAccounts]);
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -115,44 +120,6 @@ const QueryGeneratorPage: React.FC = () => {
     setExecutionError(null);
   }, []);
   
-  const handleSelectAccount = useCallback(async (accountName: string) => {
-    if (selectedAccountName === accountName) {
-        // Deselect if clicking the same account again
-        setSelectedAccountName(null);
-        setAccountDatabases([]);
-        return;
-    }
-
-    setSelectedAccountName(accountName);
-    setIsLoadingDatabases(true);
-    setDbError(null);
-    setAccountDatabases([]);
-    // If an old database was connected from another account, disconnect it
-    if(connectedResource?.accountName !== accountName) {
-        handleDisconnect();
-    }
-    
-    try {
-        const dbs = await getDatabasesForAccount(accountName);
-        setAccountDatabases(dbs);
-    } catch(e) {
-        if(e instanceof Error) setDbError(e.message);
-        else setDbError("Could not load databases for this account.");
-    } finally {
-        setIsLoadingDatabases(false);
-    }
-  }, [selectedAccountName, connectedResource]);
-
-  const handleConnectDatabase = useCallback((dbInfo: DbInfo) => {
-    if (!selectedAccountName) return;
-    setConnectedResource({
-        accountName: selectedAccountName,
-        databaseName: dbInfo.name,
-    });
-    setConnectedDbInfo(dbInfo);
-    clearQueryState();
-  }, [selectedAccountName, clearQueryState]);
-
   const handleDisconnect = useCallback(() => {
     setConnectedDbInfo(null);
     setConnectedResource(null);
@@ -161,6 +128,54 @@ const QueryGeneratorPage: React.FC = () => {
     setSelectedCollection(null);
     setCollectionInfo(null);
   }, [clearQueryState]);
+  
+  const handleSelectAccount = useCallback(async (accountId: string) => {
+    if (selectedAccountId === accountId) {
+        // Deselect if clicking the same account again
+        setSelectedAccountId(null);
+        setAccountDatabases([]);
+        return;
+    }
+
+    setSelectedAccountId(accountId);
+    setIsLoadingDatabases(true);
+    setDbError(null);
+    setAccountDatabases([]);
+
+    const account = azureAccounts.find(acc => acc.id === accountId);
+    if (!account) {
+        setDbError("An error occurred: Could not find the selected account details.");
+        setIsLoadingDatabases(false);
+        return;
+    }
+    
+    // If an old database was connected from another account, disconnect it
+    if(connectedResource?.accountId !== account.id) {
+        handleDisconnect();
+    }
+    
+    try {
+        const dbs = await getDatabasesForAccount(account.id);
+        setAccountDatabases(dbs);
+    } catch(e) {
+        if(e instanceof Error) setDbError(e.message);
+        else setDbError("Could not load databases for this account.");
+    } finally {
+        setIsLoadingDatabases(false);
+    }
+  }, [selectedAccountId, connectedResource, azureAccounts, handleDisconnect]);
+
+  const handleConnectDatabase = useCallback((dbInfo: DbInfo) => {
+    const account = azureAccounts.find(acc => acc.id === selectedAccountId);
+    if (!account) return;
+
+    setConnectedResource({
+        accountId: account.id,
+        databaseName: dbInfo.name,
+    });
+    setConnectedDbInfo(dbInfo);
+    clearQueryState();
+  }, [selectedAccountId, azureAccounts, clearQueryState]);
 
   const handleGenerateQuery = useCallback(async (prompt: string) => {
     if (!prompt.trim()) {
@@ -251,7 +266,7 @@ const QueryGeneratorPage: React.FC = () => {
                   <div>
                     <h2 className="text-xl font-bold text-slate-900">Database Information</h2>
                     <p className="text-blue-600 font-mono text-sm">
-                      Connected to: {connectedResource.accountName} / <span className="font-bold">{connectedDbInfo.name}</span>
+                      Connected to: {connectedAccountName} / <span className="font-bold">{connectedDbInfo.name}</span>
                     </p>
                   </div>
                   <button
@@ -319,14 +334,14 @@ const QueryGeneratorPage: React.FC = () => {
                         {azureAccounts.map(account => (
                             <div key={account.id} className="bg-slate-50 p-4 rounded-lg border">
                                <button 
-                                    onClick={() => handleSelectAccount(account.name)}
+                                    onClick={() => handleSelectAccount(account.id)}
                                     disabled={isLoadingDatabases}
                                     className="w-full text-left font-bold text-slate-800 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                     <ServerIcon className="w-5 h-5 text-slate-500" />
                                     {account.name}
                                </button>
-                               {selectedAccountName === account.name && (
+                               {selectedAccountId === account.id && (
                                    <div className="mt-3 pl-7 animate-fade-in">
                                         {isLoadingDatabases ? (
                                              <div className="text-sm text-slate-500 py-2">Loading databases...</div>
