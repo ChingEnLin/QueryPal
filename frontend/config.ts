@@ -16,7 +16,7 @@ export const databaseConnections: DbConfig[] = [
   },
   {
     name: 'Development-DB',
-    connectionString: 'mongodb://v-patients-saas-development2:PxzKGO1LYkUTRcviQJnUFdv3dxhibkEsalaXkRxSnpMvhsPA0pj5H36u4nuAvm9YEoAR61jYLFvcEj6cCqTHrA==@v-patients-saas-development2.mongo.cosmos.azure.com:10255/?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@v-patients-saas-development2@',
+    connectionString: 'mongodb+srv://user:****@dev.mongodb.net/dev_db',
   },
 ];
 
