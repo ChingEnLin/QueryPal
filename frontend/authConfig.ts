@@ -25,7 +25,7 @@ export const msalConfig: Configuration = {
  * https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-permissions-and-consent#openid-connect-scopes
  */
 export const loginRequest = {
-    scopes: ["User.Read"]
+  scopes: ["api://6a136cee-b760-41a0-a039-b92ee63f1320/access_as_user"]
 };
 
 /**

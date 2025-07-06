@@ -1,8 +1,6 @@
 import { QueryResultData, DbInfo } from '../types';
-import { USE_MSAL_AUTH } from '../app.config';
+import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery } from './mockData';
-
-const API_BASE_URL = '/api';
 
 /**
  * Sends the user's natural language prompt to the backend for processing by the Gemini API.

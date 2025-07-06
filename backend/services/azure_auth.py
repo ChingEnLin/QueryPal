@@ -4,7 +4,7 @@ import msal
 TENANT_ID = env.get("AZURE_TENANT_ID")
 CLIENT_ID = env.get("AZURE_CLIENT_ID")
 CLIENT_SECRET = env.get("AZURE_CLIENT_SECRET")
-ARM_SCOPE = env.get("ARM_SCOPE", "https://management.azure.com/.default")
+ARM_SCOPE = env.get("ARM_SCOPE")
 
 app = msal.ConfidentialClientApplication(
     client_id=CLIENT_ID,

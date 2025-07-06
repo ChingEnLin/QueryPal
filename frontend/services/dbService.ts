@@ -1,5 +1,6 @@
 import { DbInfo, CollectionInfo, CosmosDBResource, SelectedResource } from '../types';
-import { USE_MSAL_AUTH } from '../app.config';
+import { msalInstance, loginRequest } from '@/authConfig';
+import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { 
     mockCosmosResources, 
     mockECommerceDbInfo, 
@@ -9,9 +10,6 @@ import {
     mockGenericExecutionResult,
     mockDelay
 } from './mockData';
-
-
-const API_BASE_URL = '/api';
 
 /**
  * Fetches available Azure Cosmos DB resources from the backend.
@@ -25,17 +23,34 @@ export const getAzureCosmosResources = async (): Promise<CosmosDBResource[]> => 
     return Promise.resolve(mockCosmosResources);
   }
   // --- END DEVELOPMENT MOCK ---
+
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) {
+    throw new Error("No signed-in user found.");
+  }
+
+  // acquire token for backend API (must be set in loginRequest.scopes)
+  const response = await msalInstance.acquireTokenSilent({
+    ...loginRequest,
+    account: accounts[0],
+  });
+
+  const accessToken = response.accessToken;
   
   console.log("Fetching Azure resources from backend...");
-  // In a real app, you would pass the MSAL access token here.
-  const response = await fetch(`${API_BASE_URL}/azure/resources`);
+  const responseApi = await fetch(`${API_BASE_URL}/azure/cosmos-resources`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: 'Could not load Azure resource list from server.' }));
-    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+  if (!responseApi.ok) {
+    const errorData = await responseApi.json().catch(() => ({ message: 'Could not load Azure resource list from server.' }));
+    throw new Error(errorData.message || `HTTP error! status: ${responseApi.status}`);
   }
   
-  return response.json();
+  return responseApi.json();
 };
 
 /**
