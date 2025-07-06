@@ -430,7 +430,7 @@ const QueryGeneratorPage: React.FC = () => {
         </main>
         
         <footer className="text-center mt-8 text-slate-500 text-sm">
-          <p>Powered by Google Gemini. For demonstration purposes only.</p>
+          <p>Powered by Google Gemini.</p>
         </footer>
       </div>
        <style>{`
