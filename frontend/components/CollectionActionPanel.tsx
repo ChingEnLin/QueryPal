@@ -1,22 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CollectionInfo } from '../types';
 import XIcon from './icons/XIcon';
 import InfoIcon from './icons/InfoIcon';
 import IndexIcon from './icons/IndexIcon';
 import FileJsonIcon from './icons/FileJsonIcon';
+import ChevronDownIcon from './icons/ChevronDownIcon';
 
 // --- New Schema Viewer Components ---
-
-/**
- * Creates a signature for an object based on its keys to detect duplicates.
- * @param obj The object to create a signature for.
- * @returns A string representing the object's structure.
- */
-const getObjectSignature = (obj: any): string => {
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return '';
-  const keys = Object.keys(obj).sort();
-  return keys.join('|');
-};
 
 /**
  * Infers the displayable type of a given value, detecting BSON types.
@@ -45,73 +35,44 @@ const getType = (value: any): string => {
 interface SchemaRendererProps {
   data: Record<string, any>;
   indent?: number;
-  seen?: Set<string>;
 }
 
 /**
  * A recursive React component that renders a document schema into an HTML tree.
  */
-const SchemaRenderer: React.FC<SchemaRendererProps> = ({ data, indent = 0, seen = new Set() }) => {
+export const SchemaRenderer: React.FC<SchemaRendererProps> = ({ data, indent = 0 }) => {
   const padStyle = { paddingLeft: `${indent * 24}px` };
 
   return (
     <div>
       {Object.entries(data).map(([key, value]) => {
         const type = getType(value);
-        
-        // Case 1: Value is a nested object.
+
+        // Nested object
         if (type === 'Object') {
-          const sig = getObjectSignature(value);
-          const isSeen = seen.has(sig);
-          if (!isSeen) {
-            seen.add(sig);
-          }
-          
           return (
             <div key={key}>
               <div style={padStyle}>
                 <strong>{key}</strong>: <span>Object</span>
               </div>
-              {!isSeen ? (
-                <SchemaRenderer data={value} indent={indent + 1} seen={new Set(seen)} />
-              ) : (
-                <div style={{ paddingLeft: `${(indent + 1) * 24}px` }}>
-                  <em>... (structure repeated)</em>
-                </div>
-              )}
+              <SchemaRenderer data={value} indent={indent + 1} />
             </div>
           );
         }
 
-        // Case 2: Value is an array.
-        if (type.startsWith('Array<')) {
-          const firstElement = value[0];
-          const firstElementType = getType(firstElement);
-          const isObjectArray = firstElementType === 'Object';
-          const sig = isObjectArray ? getObjectSignature(firstElement) : '';
-          const isSeen = isObjectArray && seen.has(sig);
-          if (isObjectArray && !isSeen) {
-            seen.add(sig);
-          }
-
+        // Array of objects
+        if (type === 'Array<Object>' && value.length > 0) {
           return (
             <div key={key}>
               <div style={padStyle}>
                 <strong>{key}</strong>: <span>{type}</span>
               </div>
-              {isObjectArray && !isSeen && firstElement && (
-                 <SchemaRenderer data={firstElement} indent={indent + 1} seen={new Set(seen)} />
-              )}
-              {isObjectArray && isSeen && (
-                 <div style={{ paddingLeft: `${(indent + 1) * 24}px` }}>
-                   <em>... (structure repeated)</em>
-                 </div>
-              )}
+              <SchemaRenderer data={value[0]} indent={indent + 1} />
             </div>
           );
         }
 
-        // Case 3: Value is a primitive type (String, Number, ObjectId, etc.).
+        // Primitive or array
         return (
           <div key={key} style={padStyle}>
             <strong>{key}</strong>: <code>{type}</code>
@@ -134,6 +95,12 @@ interface CollectionActionPanelProps {
 
 const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onGenerate, onClose, isLoading }) => {
   const [prompt, setPrompt] = useState('');
+  const [isSchemaOpen, setIsSchemaOpen] = useState(true);
+
+  useEffect(() => {
+    // Whenever a new collection is selected, default the schema view to open.
+    setIsSchemaOpen(true);
+  }, [info.name]);
   
   const handleGenerateClick = () => {
     if (!prompt.trim()) return;
@@ -184,16 +151,31 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
       </div>
       
        <div className="space-y-2">
-        <p className="text-slate-600 flex items-center gap-2 font-semibold"><FileJsonIcon className="w-5 h-5" /> Inferred Schema (from sample)</p>
-        <div className="bg-white p-4 rounded-md text-sm text-slate-800 ring-1 ring-slate-200 overflow-x-auto">
+        <button
+          onClick={() => setIsSchemaOpen(!isSchemaOpen)}
+          className="w-full flex items-center gap-2 text-left text-slate-600 font-semibold p-1 -ml-1 rounded-md hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          aria-expanded={isSchemaOpen}
+          aria-controls={`schema-content-${info.name}`}
+        >
+          <FileJsonIcon className="w-5 h-5" />
+          <span>Inferred Schema (from sample)</span>
+          <ChevronDownIcon className={`w-5 h-5 ml-auto transition-transform duration-300 ${isSchemaOpen ? 'rotate-180' : 'rotate-0'}`} />
+        </button>
+
+        {isSchemaOpen && (
+          <div
+            id={`schema-content-${info.name}`}
+            className="bg-white p-4 rounded-md text-sm text-slate-800 ring-1 ring-slate-200 overflow-x-auto animate-fade-in-short"
+          >
             {Object.keys(sampleDocument).length > 0 ? (
-                <div className="font-mono schema-tree">
-                    <SchemaRenderer data={sampleDocument} />
-                </div>
+              <div className="font-mono schema-tree">
+                <SchemaRenderer data={sampleDocument} />
+              </div>
             ) : (
-                <p className="font-sans text-slate-500">No sample document available to infer a schema.</p>
+              <p className="font-sans text-slate-500">No sample document available to infer a schema.</p>
             )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -230,6 +212,13 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
         }
         .schema-tree strong {
             color: #3e3e3e;
+        }
+        @keyframes fade-in-short {
+          from { opacity: 0; transform: translateY(-5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-short {
+          animation: fade-in-short 0.3s ease-out forwards;
         }
       `}</style>
     </div>
