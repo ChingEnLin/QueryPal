@@ -3,10 +3,6 @@
 /**
  * Represents a database connection configuration, primarily for display and selection.
  */
-export interface DbConfig {
-    name: string;
-    connectionString: string;
-}
 
 export interface QueryResultData {
   intent_summary: string;
