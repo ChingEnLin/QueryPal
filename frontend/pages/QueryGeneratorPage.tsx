@@ -406,8 +406,6 @@ const QueryGeneratorPage: React.FC = () => {
               {!isLoading && !error && queryResult && (
                 <div className="space-y-8">
                     <QueryDisplay
-                        intentSummary={queryResult.intent_summary}
-                        confirmationPrompt={queryResult.confirmation_prompt}
                         code={editableCode}
                         onCodeChange={setEditableCode}
                         onRunQuery={handleRunQuery}

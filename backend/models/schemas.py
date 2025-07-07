@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+
 class AccountDetailsRequest(BaseModel):
     account_id: str
 
@@ -7,7 +8,18 @@ class CollectionInfoRequest(BaseModel):
     database_name: str
     collection_name: str
 
+
+class Collection(BaseModel):
+    name: str
+    count: int
+
+class DBContext(BaseModel):
+    name: str
+    collections: list[Collection]
+
+class QueryPrompt(BaseModel):
+    user_input: str
+    db_context: DBContext
+
 class QueryResultData(BaseModel):
-    intent_summary: str
     generated_code: str
-    confirmation_prompt: str

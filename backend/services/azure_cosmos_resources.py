@@ -1,7 +1,12 @@
+from cachetools import TTLCache, cached
 import requests
 import pymongo
 import bson
 
+# Cache with max 100 entries and 10-minute TTL
+cosmos_list_cache = TTLCache(maxsize=100, ttl=600)
+
+@cached(cache=cosmos_list_cache)
 def list_cosmos_resources(access_token: str):
     url = "https://management.azure.com/subscriptions?api-version=2020-01-01"
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -19,6 +24,7 @@ def list_cosmos_resources(access_token: str):
             })
     return results
 
+@cached(cache=cosmos_list_cache)
 def get_connection_string(account_id: str, access_token: str) -> str:
     url = f"https://management.azure.com/{account_id}/listConnectionStrings?api-version=2023-03-15"
     headers = {"Authorization": f"Bearer {access_token}"}

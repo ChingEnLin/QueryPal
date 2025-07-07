@@ -28,14 +28,14 @@ export const generateMongoQuery = async (userInput: string, dbInfo?: DbInfo): Pr
     
     console.log("Sending prompt to backend for query generation:", userInput);
 
-    const response = await fetch(`${API_BASE_URL}/generate-query`, {
+    const response = await fetch(`${API_BASE_URL}/query/nl2query`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            userInput: userInput,
-            dbContext: dbInfo, // Send DB context to the backend for more accurate queries
+            user_input: userInput,
+            db_context: dbInfo, // Send DB context to the backend for more accurate queries
         }),
     });
 

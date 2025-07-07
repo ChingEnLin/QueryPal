@@ -17,9 +17,7 @@ export interface DbConfig {
 }
 
 export interface QueryResultData {
-  intent_summary: string;
   generated_code: string;
-  confirmation_prompt: string;
 }
 
 /**

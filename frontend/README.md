@@ -123,7 +123,7 @@ Fetches detailed information for a specific collection.
     ```
 ---
 
-### `POST /api/generate-query`
+### `POST /api/nl2query`
 
 Generates a query using the Gemini API, providing database schema for context.
 
@@ -134,7 +134,12 @@ Generates a query using the Gemini API, providing database schema for context.
       "dbContext": { ...DbInfo } // Optional: context of the connected database
     }
     ```
--   **Success Response (200):** `QueryResultData` object.
+-   **Success Response (200):** An object containing the generated code string.
+    ```json
+    {
+      "generated_code": "db.collection('users').find({ status: 'active' })"
+    }
+    ```
 
 ---
 

@@ -116,21 +116,15 @@ export const mockCollectionInfoMap: Map<string, CollectionInfo> = new Map([
 // --- Mock AI-Generated Queries ---
 
 export const mockFindUsersQuery: QueryResultData = {
-  intent_summary: 'The user wants to find all active users from Canada.',
   generated_code: 'db.collection(\'users\').find({\n  country: "Canada",\n  status: "active"\n})',
-  confirmation_prompt: 'This will find all documents in the \'users\' collection where the country is Canada and the status is active. Do you want to proceed?',
 };
 
 export const mockUpdateProductsQuery: QueryResultData = {
-    intent_summary: 'The user wants to increase the price of all electronic products by 10%.',
     generated_code: 'db.collection(\'products\').updateMany(\n  { category: "Electronics" },\n  { $mul: { price: 1.1 } }\n)',
-    confirmation_prompt: 'This will update multiple documents in the \'products\' collection, increasing the price for all items in the "Electronics" category by 10%. This is a potentially destructive operation. Do you want to proceed?',
 };
 
 export const mockDefaultQuery: QueryResultData = {
-    intent_summary: 'The user has made a request that could not be mapped to a specific mock.',
     generated_code: 'db.collection(\'your_collection\').find({})',
-    confirmation_prompt: 'The AI has generated a query based on your request. Please review it carefully before execution.'
 };
 
 

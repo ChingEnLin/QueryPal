@@ -1,4 +1,6 @@
+cachetools
 fastapi
+google-genai
 uvicorn
 pydantic
 python-dotenv

@@ -5,15 +5,13 @@ import CheckIcon from './icons/CheckIcon';
 import PlayIcon from './icons/PlayIcon';
 
 interface QueryDisplayProps {
-  intentSummary: string;
-  confirmationPrompt: string;
   code: string;
   onCodeChange: (newCode: string) => void;
   onRunQuery: () => void;
   isExecuting: boolean;
 }
 
-const QueryDisplay: React.FC<QueryDisplayProps> = ({ intentSummary, confirmationPrompt, code, onCodeChange, onRunQuery, isExecuting }) => {
+const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQuery, isExecuting }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -26,23 +24,23 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ intentSummary, confirmation
   };
 
   return (
-    <div className="bg-white rounded-lg p-6 space-y-6 animate-fade-in border border-slate-200">
-      <div>
-        <h3 className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Intent</h3>
-        <p className="text-slate-600 mt-2">{intentSummary}</p>
-      </div>
-      
+    <div className="bg-white rounded-lg p-6 space-y-4 animate-fade-in border border-slate-200">
       <div className="space-y-2">
         <div className="flex justify-between items-center">
             <h3 className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Generated & Editable Code</h3>
-            <button
-                onClick={onRunQuery}
-                disabled={isExecuting}
-                className="flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-blue-500 transition-colors"
-            >
-                <PlayIcon className="w-4 h-4" />
-                {isExecuting ? 'Running...' : 'Run Query'}
-            </button>
+            <div className="flex items-center gap-3">
+                 <div className="text-xs text-yellow-800 bg-yellow-100 border border-yellow-200 px-2 py-1 rounded-md">
+                    <strong>Warning:</strong> Review code before execution.
+                </div>
+                <button
+                    onClick={onRunQuery}
+                    disabled={isExecuting}
+                    className="flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-blue-500 transition-colors"
+                >
+                    <PlayIcon className="w-4 h-4" />
+                    {isExecuting ? 'Running...' : 'Run Query'}
+                </button>
+            </div>
         </div>
         <div className="bg-slate-800 rounded-md relative group">
           <textarea
@@ -59,11 +57,6 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ intentSummary, confirmation
             {copied ? <CheckIcon className="w-4 h-4 text-blue-400" /> : <ClipboardIcon className="w-4 h-4" />}
           </button>
         </div>
-      </div>
-      
-      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
-        <h3 className="text-sm font-semibold text-yellow-800 uppercase tracking-wider">Confirmation</h3>
-        <p className="text-yellow-700 mt-2">{confirmationPrompt}</p>
       </div>
     </div>
   );
