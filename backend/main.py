@@ -1,7 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import db, query, azure
+from .routes import query, azure
 
 app = FastAPI()
 
@@ -13,7 +13,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(db.router, prefix="/db", tags=["Database"])
 app.include_router(query.router, prefix="/query", tags=["Query"])
 app.include_router(azure.router, prefix="/azure", tags=["Azure"])
 
