@@ -9,6 +9,8 @@ import ChevronDownIcon from './icons/ChevronDownIcon';
 import GraphIcon from './icons/GraphIcon';
 import JsonCrackViewer from './JsonCrackViewer';
 import XIcon from './icons/XIcon';
+import WriteSummaryDisplay from './WriteSummaryDisplay';
+import InfoIcon from './icons/InfoIcon';
 
 interface QueryResultProps {
   isExecuting: boolean;
@@ -21,20 +23,48 @@ const isTableCompatible = (data: any): data is Record<string, any>[] => {
   return Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && data[0] !== null;
 };
 
+// Helper to detect if the result is a summary of a write operation
+const isWriteSummary = (data: any): boolean => {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    return false;
+  }
+  const keys = Object.keys(data);
+  const writeSummaryKeys = [
+    'acknowledged',
+    'matchedCount', 'matched_count',
+    'modifiedCount', 'modified_count',
+    'upsertedId', 'upserted_id',
+    'upsertedCount', 'upserted_count',
+    'deletedCount', 'deleted_count',
+    'insertedId', 'inserted_id',
+    'insertedCount',
+    'insertedIds',
+  ];
+
+  // If at least one of these keys is present, we'll consider it a write summary.
+  return keys.some(key => writeSummaryKeys.includes(key));
+};
+
+
 const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, executionResult }) => {
-  const [viewMode, setViewMode] = useState<'json' | 'table'>('json');
+  const [viewMode, setViewMode] = useState<'json' | 'table' | 'summary'>('json');
   const [isJsonCollapsed, setIsJsonCollapsed] = useState(false);
   const [isGraphVisible, setIsGraphVisible] = useState(false);
 
-  // Determine if the table view should be an option
+  // Memoize checks on the execution result
+  const isWriteOpSummary = useMemo(() => isWriteSummary(executionResult), [executionResult]);
   const canBeTable = useMemo(() => isTableCompatible(executionResult), [executionResult]);
   
-  // Reset view if result changes
+  // Reset view if result changes, defaulting to the appropriate view
   useEffect(() => {
-    setViewMode('json');
+    if (isWriteOpSummary) {
+      setViewMode('summary');
+    } else {
+      setViewMode('json');
+    }
     setIsJsonCollapsed(false);
     setIsGraphVisible(false); // also hide graph on new results
-  }, [executionResult]);
+  }, [executionResult, isWriteOpSummary]);
 
   if (isExecuting) {
     return (
@@ -114,6 +144,16 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
             {/* View Mode Toolbar */}
             <div className="flex items-center justify-between bg-slate-100 p-2 rounded-lg border border-slate-200">
                 <div className="flex items-center gap-1">
+                    {isWriteOpSummary && (
+                       <button 
+                        onClick={() => setViewMode('summary')}
+                        disabled={viewMode === 'summary'}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${viewMode === 'summary' ? 'bg-blue-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-200'}`}
+                      >
+                          <InfoIcon className="w-4 h-4" />
+                          Summary
+                      </button>
+                    )}
                     <button 
                         onClick={() => setViewMode('json')}
                         disabled={viewMode === 'json'}
@@ -151,6 +191,7 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
 
             {/* Content Display */}
             <div>
+                {viewMode === 'summary' && <WriteSummaryDisplay data={executionResult} />}
                 {viewMode === 'json' && !isJsonCollapsed && <JsonDisplay data={executionResult} />}
                 {viewMode === 'table' && canBeTable && <Table data={executionResult} />}
             </div>

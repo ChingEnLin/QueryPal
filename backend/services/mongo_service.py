@@ -1,5 +1,6 @@
 from bson import ObjectId
 import pymongo
+from pymongo.results import UpdateResult, InsertOneResult, InsertManyResult, DeleteResult
 
 def execute_mongo_query(connection_string: str, database: str, query: str):
     client = pymongo.MongoClient(connection_string)
@@ -15,6 +16,7 @@ def execute_mongo_query(connection_string: str, database: str, query: str):
         return query_result
 
 def transform_mongo_result(result):
+
     if isinstance(result, list):
         for doc in result:
             for k, v in doc.items():
@@ -24,4 +26,18 @@ def transform_mongo_result(result):
         for k, v in result.items():
             if isinstance(v, ObjectId):
                 result[k] = str(v)
+    elif isinstance(result, InsertOneResult):
+        return {"inserted_id": str(result.inserted_id)}
+    elif isinstance(result, InsertManyResult):
+        return {"inserted_ids": [str(_id) for _id in result.inserted_ids]}
+    elif isinstance(result, UpdateResult):
+        return {
+            "matched_count": result.matched_count,
+            "modified_count": result.modified_count,
+            "upserted_id": str(result.upserted_id) if result.upserted_id else None
+        }
+    elif isinstance(result, DeleteResult):
+        return {
+            "deleted_count": result.deleted_count
+        }
     return result
