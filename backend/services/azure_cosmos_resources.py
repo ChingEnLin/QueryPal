@@ -4,7 +4,17 @@ import pymongo
 import bson
 
 # Cache with max 100 entries and 10-minute TTL
-cosmos_list_cache = TTLCache(maxsize=100, ttl=600)
+cosmos_list_cache = TTLCache(maxsize=5, ttl=600)
+connection_string_cache = TTLCache(maxsize=5, ttl=600)
+database_info_cache = TTLCache(maxsize=50, ttl=600)
+collection_info_cache = TTLCache(maxsize=100, ttl=600)
+
+ALL_CACHES = [
+    cosmos_list_cache,
+    connection_string_cache,
+    database_info_cache,
+    collection_info_cache
+]
 
 @cached(cache=cosmos_list_cache)
 def list_cosmos_resources(access_token: str):
@@ -24,7 +34,7 @@ def list_cosmos_resources(access_token: str):
             })
     return results
 
-@cached(cache=cosmos_list_cache)
+@cached(cache=connection_string_cache)
 def get_connection_string(account_id: str, access_token: str) -> str:
     url = f"https://management.azure.com/{account_id}/listConnectionStrings?api-version=2023-03-15"
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -34,6 +44,7 @@ def get_connection_string(account_id: str, access_token: str) -> str:
     conn_data = response.json()
     return conn_data["connectionStrings"][0]["connectionString"]
 
+@cached(cache=database_info_cache)
 def get_cosmosdb_info_from_conn_str(connection_string: str):
     client = pymongo.MongoClient(connection_string)
     db_names = client.list_database_names()
@@ -56,6 +67,7 @@ def get_cosmosdb_info_from_conn_str(connection_string: str):
 
     return all_info
 
+@cached(cache=collection_info_cache)
 def get_collection_info_with_conn_str(connection_string: str, db_name: str, collection_name: str):
     client = pymongo.MongoClient(connection_string)
     db = client[db_name]
