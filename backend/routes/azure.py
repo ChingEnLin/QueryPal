@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Header, Body, HTTPException
-from ..services.azure_auth import exchange_token_obo
-from ..services.azure_cosmos_resources import (
+from services.azure_auth import exchange_token_obo
+from services.azure_cosmos_resources import (
     list_cosmos_resources,
     get_connection_string,
     get_cosmosdb_info_from_conn_str,
     get_collection_info_with_conn_str
 )
-from ..models.schemas import (
+from models.schemas import (
     AccountDetailsRequest,
     CollectionInfoRequest
 )

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from ..services.azure_cosmos_resources import ALL_CACHES
+from services.azure_cosmos_resources import ALL_CACHES
 
 router = APIRouter()
 

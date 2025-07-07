@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Header, Body, HTTPException
-from ..services.azure_auth import exchange_token_obo
-from ..services.azure_cosmos_resources import (
+from services.azure_auth import exchange_token_obo
+from services.azure_cosmos_resources import (
     get_connection_string,
 )
-from ..models.schemas import QueryPrompt, ExecuteInput
-from ..services.gemini_service import generate_query_from_prompt
-from ..services.mongo_service import execute_mongo_query, transform_mongo_result
+from models.schemas import QueryPrompt, ExecuteInput
+from services.gemini_service import generate_query_from_prompt
+from services.mongo_service import execute_mongo_query, transform_mongo_result
 
 router = APIRouter()
 

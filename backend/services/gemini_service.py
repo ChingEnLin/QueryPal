@@ -1,6 +1,5 @@
-from os import environ as env
 from google import genai
-from ..models.schemas import GeneratedCode, CollectionContext
+from models.schemas import GeneratedCode, CollectionContext
 
 PROMPT_TEMPLATE = """
 You are an assistant that converts user requests into MongoDB query code.
