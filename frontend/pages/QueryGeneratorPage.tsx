@@ -3,6 +3,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { generateMongoQuery } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource } from '../types';
+import { mockECommerceDbInfo, mockCollectionInfoMap } from '../services/mockData';
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
 import Loader from '../components/Loader';
@@ -13,6 +14,8 @@ import CollectionActionPanel from '../components/CollectionActionPanel';
 import RefreshIcon from '../components/icons/RefreshIcon';
 import SpinnerIcon from '../components/icons/SpinnerIcon';
 import CheckIcon from '../components/icons/CheckIcon';
+import HelpIcon from '../components/icons/HelpIcon';
+import Tutorial from '../components/Tutorial';
 
 // --- Header Component ---
 interface HeaderUIProps {
@@ -21,9 +24,10 @@ interface HeaderUIProps {
   onClearCache: () => void;
   isClearingCache: boolean;
   cacheClearStatus: 'idle' | 'success' | 'error';
+  onStartTutorial: () => void;
 }
 
-const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus }) => {
+const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial }) => {
   const getCacheButtonContent = () => {
     if (isClearingCache) {
       return <><SpinnerIcon className="w-4 h-4" /> Clearing...</>;
@@ -59,19 +63,28 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
         </div>
         <div className="flex items-center gap-2">
           {name && <span className="text-slate-600 text-sm hidden md:block">Welcome, {name}</span>}
-          <button
-              onClick={onClearCache}
-              disabled={isClearingCache || cacheClearStatus !== 'idle'}
-              className={getCacheButtonClasses()}
-          >
-              {getCacheButtonContent()}
-          </button>
-          <button
-              onClick={onLogout}
-              className="px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-600 bg-white hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
-          >
-              Sign Out
-          </button>
+          <div id="tutorial-header-actions" className="flex items-center gap-2">
+            <button
+                onClick={onClearCache}
+                disabled={isClearingCache || cacheClearStatus !== 'idle'}
+                className={getCacheButtonClasses()}
+            >
+                {getCacheButtonContent()}
+            </button>
+            <button
+                onClick={onStartTutorial}
+                className="p-2 border border-slate-300 rounded-md text-slate-600 bg-white hover:bg-slate-100 transition-colors"
+                aria-label="Start tutorial"
+            >
+                <HelpIcon className="w-4 h-4" />
+            </button>
+            <button
+                onClick={onLogout}
+                className="px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-600 bg-white hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
+            >
+                Sign Out
+            </button>
+          </div>
         </div>
     </header>
   );
@@ -117,6 +130,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const [isClearingCache, setIsClearingCache] = useState<boolean>(false);
   const [cacheClearStatus, setCacheClearStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
+  // State for tutorial
+  const [isTutorialActive, setIsTutorialActive] = useState(false);
+  const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
+
   const connectedAccountName = useMemo(() => {
     if (!connectedResource) return '';
     return azureAccounts.find(acc => acc.id === connectedResource.accountId)?.name ?? 'Unknown Account';
@@ -137,6 +154,11 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
 
   useEffect(() => {
     fetchAccounts();
+    // Check if the user has seen the tutorial before
+    const hasSeenTutorial = localStorage.getItem('hasSeenTutorial');
+    if (!hasSeenTutorial) {
+      setIsTutorialActive(true);
+    }
   }, [fetchAccounts]);
   
   const handleClearCache = useCallback(async () => {
@@ -296,7 +318,17 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     }
   }, [selectedCollection, connectedResource]);
 
-  const isQuerySectionDisabled = !connectedDbInfo;
+  // --- Tutorial Demo Mode Logic ---
+  const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
+
+  const isConnectedForRender = (connectedDbInfo && connectedResource) || isDemoModeForCollectionStep;
+  const dbInfoForRender = isDemoModeForCollectionStep ? mockECommerceDbInfo : connectedDbInfo;
+  const accountNameForRender = isDemoModeForCollectionStep ? 'prod-ecommerce-db' : connectedAccountName;
+
+  const selectedCollectionForRender = isDemoModeForCollectionStep ? 'users' : selectedCollection;
+  const collectionInfoForRender = isDemoModeForCollectionStep ? mockCollectionInfoMap.get('users')! : collectionInfo;
+  const showCollectionPanel = isDemoModeForCollectionStep || isFetchingCollectionInfo || (collectionInfo && selectedCollection === collectionInfo.name) || collectionInfoError;
+  const isQuerySectionDisabled = !isConnectedForRender;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 sm:p-6 lg:p-8">
@@ -308,18 +340,19 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
             onClearCache={handleClearCache}
             isClearingCache={isClearingCache}
             cacheClearStatus={cacheClearStatus}
+            onStartTutorial={() => setIsTutorialActive(true)}
         />
 
         <main className="space-y-8">
           {/* Connection Manager */}
-          <div className="bg-white rounded-xl shadow-md p-6">
-            {connectedDbInfo && connectedResource ? (
+          <div id="tutorial-account-section" className="bg-white rounded-xl shadow-md p-6">
+            {isConnectedForRender && dbInfoForRender ? (
               <div className="animate-fade-in">
                 <div className="flex justify-between items-start">
                   <div>
                     <h2 className="text-xl font-bold text-slate-900">Database Information</h2>
                     <p className="text-blue-600 font-mono text-sm">
-                      Connected to: {connectedAccountName} / <span className="font-bold">{connectedDbInfo.name}</span>
+                      Connected to: {accountNameForRender} / <span className="font-bold">{dbInfoForRender.name}</span>
                     </p>
                   </div>
                   <button
@@ -332,20 +365,20 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                   <div className="bg-slate-100 p-3 rounded-lg">
                     <p className="text-slate-500">Total Documents</p>
-                    <p className="text-slate-900 font-semibold text-lg">{connectedDbInfo.totalDocuments.toLocaleString()}</p>
+                    <p className="text-slate-900 font-semibold text-lg">{dbInfoForRender.totalDocuments.toLocaleString()}</p>
                   </div>
                   <div className="bg-slate-100 p-3 rounded-lg">
                     <p className="text-slate-500">Database Size</p>
-                    <p className="text-slate-900 font-semibold text-lg">{connectedDbInfo.size ?? 'N/A'}</p>
+                    <p className="text-slate-900 font-semibold text-lg">{dbInfoForRender.size ?? 'N/A'}</p>
                   </div>
                   <div className="bg-slate-100 p-3 rounded-lg col-span-1 md:col-span-3">
                      <p className="text-slate-600 mb-2 flex items-center gap-2 font-medium"><ServerIcon className="w-4 h-4" /> Collections</p>
                      <div className="flex flex-wrap gap-2">
-                       {connectedDbInfo.collections.map(col => (
+                       {dbInfoForRender.collections.map(col => (
                          <button 
                             key={col.name} 
                             onClick={() => handleCollectionClick(col.name)}
-                            className={`text-xs font-mono px-3 py-1 rounded-full transition-all duration-200 ${selectedCollection === col.name ? 'bg-blue-500 text-white font-bold ring-2 ring-blue-300' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                            className={`text-xs font-mono px-3 py-1 rounded-full transition-all duration-200 ${selectedCollectionForRender === col.name ? 'bg-blue-500 text-white font-bold ring-2 ring-blue-300' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
                         >
                             {col.name}
                          </button>
@@ -354,13 +387,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                   </div>
                 </div>
                  {/* Collection Action Panel */}
-                 {(isFetchingCollectionInfo || collectionInfo || collectionInfoError) && (
-                    <div className="mt-4">
-                        {isFetchingCollectionInfo && <div className="text-center p-4 text-slate-500">Fetching collection details...</div>}
-                        {collectionInfoError && <p className="text-red-600 text-sm mt-2">{collectionInfoError}</p>}
-                        {collectionInfo && selectedCollection === collectionInfo.name && (
+                 {showCollectionPanel && (
+                    <div id="tutorial-collection-panel" className="mt-4">
+                        {isFetchingCollectionInfo && !isDemoModeForCollectionStep && <div className="text-center p-4 text-slate-500">Fetching collection details...</div>}
+                        {collectionInfoError && !isDemoModeForCollectionStep && <p className="text-red-600 text-sm mt-2">{collectionInfoError}</p>}
+                        {collectionInfoForRender && selectedCollectionForRender === collectionInfoForRender.name && (
                             <CollectionActionPanel
-                                info={collectionInfo}
+                                info={collectionInfoForRender}
                                 onGenerate={handleGenerateCollectionQuery}
                                 onClose={() => { setSelectedCollection(null); setCollectionInfo(null); }}
                                 isLoading={isLoading}
@@ -427,7 +460,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
           </div>
 
           {/* Query Generator */}
-          <div className={`bg-white rounded-xl shadow-md p-6 transition-opacity duration-500 ${isQuerySectionDisabled ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+          <div id="tutorial-prompt-section" className={`bg-white rounded-xl shadow-md p-6 transition-opacity duration-500 ${isQuerySectionDisabled ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
             <div className="space-y-4">
               <label htmlFor="userInput" className="block text-lg font-medium text-slate-700">
                 Enter your command:
@@ -449,7 +482,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
               </button>
             </div>
 
-            <div className="mt-8">
+            <div id="tutorial-results-area" className="mt-8">
               {isLoading && <Loader />}
               {error && (
                   <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg animate-fade-in" role="alert">
@@ -485,6 +518,16 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
           <p>Powered by Google Gemini. For internal use only.</p>
         </footer>
       </div>
+      
+      <Tutorial
+        isActive={isTutorialActive}
+        onStepChange={setTutorialStepIndex}
+        onClose={() => {
+            setIsTutorialActive(false);
+            localStorage.setItem('hasSeenTutorial', 'true');
+        }}
+       />
+
        <style>{`
           @keyframes fade-in {
             from { opacity: 0; transform: translateY(-10px); }
