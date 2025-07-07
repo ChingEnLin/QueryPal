@@ -1,12 +1,14 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import JsonDisplay from './JsonDisplay';
-import Loader from './Loader';
 import Table from './Table';
 import JsonIcon from './icons/JsonIcon';
 import TableIcon from './icons/TableIcon';
 import ChevronDownIcon from './icons/ChevronDownIcon';
-
+import GraphIcon from './icons/GraphIcon';
+import JsonCrackViewer from './JsonCrackViewer';
+import XIcon from './icons/XIcon';
 
 interface QueryResultProps {
   isExecuting: boolean;
@@ -19,18 +21,19 @@ const isTableCompatible = (data: any): data is Record<string, any>[] => {
   return Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && data[0] !== null;
 };
 
-
 const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, executionResult }) => {
   const [viewMode, setViewMode] = useState<'json' | 'table'>('json');
   const [isJsonCollapsed, setIsJsonCollapsed] = useState(false);
+  const [isGraphVisible, setIsGraphVisible] = useState(false);
 
   // Determine if the table view should be an option
   const canBeTable = useMemo(() => isTableCompatible(executionResult), [executionResult]);
   
   // Reset view if result changes
-  React.useEffect(() => {
+  useEffect(() => {
     setViewMode('json');
     setIsJsonCollapsed(false);
+    setIsGraphVisible(false); // also hide graph on new results
   }, [executionResult]);
 
   if (isExecuting) {
@@ -71,9 +74,42 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
   }
   
   if (executionResult) {
+      // Create the drawer using a portal to break out of any transformed parent containers.
+      const drawer = isGraphVisible ? createPortal(
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setIsGraphVisible(false)}
+            className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fade-in-fast"
+            aria-hidden="true"
+          ></div>
+          
+          {/* Drawer Panel */}
+          <aside className="fixed top-0 right-0 h-full w-full md:w-3/4 lg:w-2/3 bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer">
+            <header className="flex items-center justify-between p-4 border-b border-slate-700 flex-shrink-0">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-3">
+                <GraphIcon className="w-5 h-5 text-blue-400" />
+                Interactive Graph View
+              </h3>
+              <button
+                onClick={() => setIsGraphVisible(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                aria-label="Close graph view"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </header>
+            <div className="flex-grow overflow-hidden p-1">
+              <JsonCrackViewer data={executionResult} />
+            </div>
+          </aside>
+        </>,
+        document.body
+      ) : null;
+
       return (
         <div className="space-y-4 animate-fade-in">
-             <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Query Result</h3>
+            <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Query Result</h3>
             
             {/* View Mode Toolbar */}
             <div className="flex items-center justify-between bg-slate-100 p-2 rounded-lg border border-slate-200">
@@ -94,6 +130,13 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
                         <TableIcon className="w-4 h-4" />
                         Table
                     </button>
+                    <button
+                        onClick={() => setIsGraphVisible(true)}
+                        className={'flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors bg-white text-slate-600 hover:bg-slate-200'}
+                    >
+                        <GraphIcon className="w-4 h-4" />
+                        Graph
+                    </button>
                 </div>
                 {viewMode === 'json' && (
                      <button
@@ -107,10 +150,30 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
             </div>
 
             {/* Content Display */}
-            <div className="transition-all">
+            <div>
                 {viewMode === 'json' && !isJsonCollapsed && <JsonDisplay data={executionResult} />}
                 {viewMode === 'table' && canBeTable && <Table data={executionResult} />}
             </div>
+
+            {/* The portal will render the drawer into document.body */}
+            {drawer}
+
+            <style>{`
+              @keyframes fade-in-fast { 
+                from { opacity: 0; } 
+                to { opacity: 1; } 
+              }
+              .animate-fade-in-fast { 
+                animation: fade-in-fast 0.3s ease-out forwards; 
+              }
+              @keyframes slide-in-drawer { 
+                from { transform: translateX(100%); } 
+                to { transform: translateX(0); } 
+              }
+              .animate-slide-in-drawer { 
+                animation: slide-in-drawer 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+              }
+            `}</style>
         </div>
       );
   }
