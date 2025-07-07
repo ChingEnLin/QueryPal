@@ -60,6 +60,59 @@ Azure Cosmos DB (especially MongoDB API) lacks a friendly interface to inspect a
 
 ---
 
+
+## 🐳 Containerization (Docker & Compose)
+
+### Quick Start
+
+1. Build and run both frontend and backend with Docker Compose:
+
+   ```sh
+   docker-compose up --build
+   ```
+
+   - The frontend will be available at http://localhost:3000
+   - The backend API will be available at http://localhost:8000
+
+2. Environment variables for the backend are managed via `.env.docker` (see below).
+
+### Environment Variables
+
+Create a `.env.docker` file in the project root (already provided):
+
+```env
+# Google Gemini API Key
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Azure Entra Auth
+AZURE_TENANT_ID=xxxx-tenant-id
+AZURE_CLIENT_ID=xxxx-backend-app-id
+AZURE_CLIENT_SECRET=xxxx-client-secret
+ARM_SCOPE=https://management.azure.com/.default
+```
+
+The `docker-compose.yml` is configured to load this file for the backend service.
+
+### Manual Build/Run (Advanced)
+
+You can also build and run each service separately:
+
+#### Frontend
+```sh
+cd frontend
+docker build -t querypal-frontend .
+docker run -p 3000:80 querypal-frontend
+```
+
+#### Backend
+```sh
+cd backend
+docker build -t querypal-backend .
+docker run --env-file ../.env.docker -p 8000:8000 querypal-backend
+```
+
+---
+
 ## ⚙️ Setup Instructions
 
 ### 1. Register Azure Entra ID Application
