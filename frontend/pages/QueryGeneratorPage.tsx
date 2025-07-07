@@ -382,7 +382,7 @@ const QueryGeneratorPage: React.FC = () => {
                 id="userInput"
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
-                placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : "e.g., 'Find all users from Canada and sort them by name'"}
+                placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : "e.g., 'Find all patients that are over 50 years old and have pathology of diabetes.'"}
                 className="w-full h-28 p-4 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-slate-400 resize-none"
                 disabled={isLoading || isQuerySectionDisabled}
               />

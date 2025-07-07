@@ -186,7 +186,7 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
           id={`collection-prompt-${info.name}`}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder={`e.g., 'Find all users with an "inactive" status'`}
+          placeholder={`e.g., 'Find all users with an system_admin set to true'`}
           className="w-full h-20 p-3 bg-white border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-slate-400 resize-y"
           disabled={isLoading}
         />
