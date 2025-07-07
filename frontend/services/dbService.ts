@@ -164,7 +164,7 @@ export const getCollectionInfo = async (collectionName: string, resource: Select
  * @param resource The context of the database account and name.
  * @returns A promise that resolves with the query result.
  */
-export const runMongoQuery = async (query: string, resource: SelectedResource): Promise<any> => {
+export const runMongoQuery = async (accountId: string, query: string, resource: SelectedResource): Promise<any> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
         console.log(`DEV MODE: Returning mock execution result for query on ${resource.databaseName}.`);
@@ -180,12 +180,26 @@ export const runMongoQuery = async (query: string, resource: SelectedResource): 
         return Promise.resolve(mockGenericExecutionResult);
     }
     // --- END DEVELOPMENT MOCK ---
+    console.log(`Fetching databases for account ID ${accountId} from backend...`);
+    const accounts = msalInstance.getAllAccounts();
+    const tokenResponse = await msalInstance.acquireTokenSilent({
+        ...loginRequest,
+        account: accounts[0],
+    });
 
+    const accessToken = tokenResponse.accessToken;
     console.log(`Sending query for execution on ${resource.databaseName} to backend...`);
-    const response = await fetch(`${API_BASE_URL}/run-query`, {
+    const response = await fetch(`${API_BASE_URL}/query/execute`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, ...resource }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+         },
+        body: JSON.stringify({
+          account_id: resource.accountId,
+          database_name: resource.databaseName,
+          query: query,
+        }),
     });
 
     if (!response.ok) {
@@ -218,7 +232,7 @@ export const clearSystemCache = async (): Promise<{ message: string }> => {
         account: accounts[0],
     });
 
-    const response = await fetch(`${API_BASE_URL}/system/clear-cache`, {
+    const response = await fetch(`${API_BASE_URL}/system/clear_cache`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${tokenResponse.accessToken}`,

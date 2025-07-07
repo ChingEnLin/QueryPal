@@ -264,7 +264,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setExecutionResult(null);
 
     try {
-      const result = await runMongoQuery(editableCode, connectedResource);
+      const result = await runMongoQuery(selectedAccountId, editableCode, connectedResource);
       setExecutionResult(result);
     } catch (e) {
       if (e instanceof Error) setExecutionError(e.message);

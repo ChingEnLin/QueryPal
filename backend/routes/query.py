@@ -1,19 +1,27 @@
-from fastapi import APIRouter
-from ..models.schemas import QueryPrompt, BaseModel
+from fastapi import APIRouter, Header, Body, HTTPException
+from ..services.azure_auth import exchange_token_obo
+from ..services.azure_cosmos_resources import (
+    get_connection_string,
+)
+from ..models.schemas import QueryPrompt, ExecuteInput
 from ..services.gemini_service import generate_query_from_prompt
-from ..services.mongo_service import execute_mongo_query
+from ..services.mongo_service import execute_mongo_query, transform_mongo_result
 
 router = APIRouter()
 
-class ExecuteInput(BaseModel):
-    generated_code: str
-    connection_string: str
-
 @router.post("/nl2query")
-def nl2query(input: QueryPrompt):
-    collections = [col.name for col in input.db_context.collections]
-    return generate_query_from_prompt(input.user_input, collections, input.db_context.name, input.collection_context)
+def nl2query(prompt: QueryPrompt = Body(...)):
+    collections = [col.name for col in prompt.db_context.collections]
+    return generate_query_from_prompt(prompt.user_input, collections, prompt.db_context.name, prompt.collection_context)
 
 @router.post("/execute")
-def execute(input: ExecuteInput):
-    return execute_mongo_query(input.generated_code, input.connection_string)
+def execute(query: ExecuteInput = Body(...),
+            authorization: str = Header(...)):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+
+    user_token = authorization.replace("Bearer ", "")
+    access_token = exchange_token_obo(user_token)
+    connection_string = get_connection_string(query.account_id, access_token)
+    result = execute_mongo_query(connection_string, query.database_name, query.query)
+    return transform_mongo_result(result)

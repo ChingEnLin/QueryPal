@@ -8,7 +8,6 @@ class CollectionInfoRequest(BaseModel):
     database_name: str
     collection_name: str
 
-
 class Collection(BaseModel):
     name: str
     count: int
@@ -26,5 +25,10 @@ class QueryPrompt(BaseModel):
     db_context: DBContext
     collection_context: CollectionContext | None = None  # Optional context for specific collection
 
-class QueryResultData(BaseModel):
+class GeneratedCode(BaseModel):
     generated_code: str
+
+class ExecuteInput(BaseModel):
+    account_id: str
+    database_name: str
+    query: str

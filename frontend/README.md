@@ -62,7 +62,7 @@ Discovers the Cosmos DB accounts the user has access to.
 
 ---
 
-### `POST /api/account_details`
+### `POST /api/azure/account_details`
 
 Fetches detailed information for all databases within a specific account.
 
@@ -99,7 +99,7 @@ Fetches detailed information for all databases within a specific account.
 
 ---
 
-### `POST /api/collection_info`
+### `POST /api/azure/collection_info`
 
 Fetches detailed information for a specific collection.
 
@@ -123,7 +123,7 @@ Fetches detailed information for a specific collection.
     ```
 ---
 
-### `POST /api/nl2query`
+### `POST /api/query/nl2query`
 
 Generates a query using the Gemini API, providing database schema for context.
 
@@ -144,7 +144,7 @@ Generates a query using the Gemini API, providing database schema for context.
 
 ---
 
-### `POST /api/run-query`
+### `POST /api/query/execute`
 
 Executes a query against the specified database.
 

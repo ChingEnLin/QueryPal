@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, Body, HTTPException
 from ..services.azure_auth import exchange_token_obo
-from fastapi import Body
 from ..services.azure_cosmos_resources import (
     list_cosmos_resources,
     get_connection_string,

@@ -1,6 +1,6 @@
 from os import environ as env
 from google import genai
-from ..models.schemas import QueryResultData, CollectionContext
+from ..models.schemas import GeneratedCode, CollectionContext
 
 PROMPT_TEMPLATE = """
 You are an assistant that converts user requests into MongoDB query code.
@@ -25,7 +25,7 @@ def extract_python_code(text: str) -> str:
 def generate_query_from_prompt(user_input: str,
                                collections: list[str],
                                database: str,
-                               collection_context: CollectionContext = None) -> QueryResultData:
+                               collection_context: CollectionContext = None) -> GeneratedCode:
     full_prompt = PROMPT_TEMPLATE.format(
         user_input=user_input,
         database=database,
@@ -35,4 +35,4 @@ def generate_query_from_prompt(user_input: str,
     client = genai.Client()
     response = client.models.generate_content(model="gemini-2.5-flash", contents=full_prompt)
     code = extract_python_code(response.text)
-    return QueryResultData(generated_code=code)
+    return GeneratedCode(generated_code=code)
