@@ -1,4 +1,5 @@
-import { QueryResultData, DbInfo } from '../types';
+
+import { QueryResultData, DbInfo, CollectionInfo } from '../types';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery } from './mockData';
 
@@ -7,9 +8,14 @@ import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuer
  * The backend is responsible for securely calling the AI model and returning the structured result.
  * @param userInput The natural language query from the user.
  * @param dbInfo Optional information about the connected database to provide context to the AI.
+ * @param collectionContext Optional information about a specific collection to provide even more detailed context.
  * @returns A promise that resolves with the structured query data.
  */
-export const generateMongoQuery = async (userInput: string, dbInfo?: DbInfo): Promise<QueryResultData> => {
+export const generateMongoQuery = async (
+    userInput: string,
+    dbInfo?: DbInfo,
+    collectionContext?: CollectionInfo
+): Promise<QueryResultData> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
         console.log("DEV MODE: Returning mock AI-generated query.");
@@ -36,6 +42,7 @@ export const generateMongoQuery = async (userInput: string, dbInfo?: DbInfo): Pr
         body: JSON.stringify({
             user_input: userInput,
             db_context: dbInfo, // Send DB context to the backend for more accurate queries
+            collection_context: collectionContext, // Optional: send collection context if available
         }),
     });
 

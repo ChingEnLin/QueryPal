@@ -179,14 +179,20 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
       </div>
 
       <div className="space-y-3">
-        <label htmlFor={`collection-prompt-${info.name}`} className="block text-md font-medium text-slate-700">
-          Perform an action on this collection:
+        <label htmlFor={`collection-prompt-${info.name}`} className="flex items-center gap-2 text-md font-medium text-slate-700">
+            <span>Perform an action on this collection:</span>
+            <div className="relative group flex items-center">
+                <InfoIcon className="w-4 h-4 text-slate-400 cursor-help" />
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-2 text-center text-xs text-white bg-slate-800 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
+                    Collection name and schema will be sent to the AI prompt for more precise query generation.
+                </div>
+            </div>
         </label>
         <textarea
           id={`collection-prompt-${info.name}`}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder={`e.g., 'Find all users with an system_admin set to true'`}
+          placeholder={`e.g., 'Find all users with an "inactive" status'`}
           className="w-full h-20 p-3 bg-white border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-slate-400 resize-y"
           disabled={isLoading}
         />

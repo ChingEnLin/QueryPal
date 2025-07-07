@@ -132,6 +132,7 @@ Generates a query using the Gemini API, providing database schema for context.
     {
       "userInput": "A natural language prompt from the user.",
       "dbContext": { ...DbInfo } // Optional: context of the connected database
+      "collectionContext": { ...CollectionInfo } // Optional: context of the specific collection
     }
     ```
 -   **Success Response (200):** An object containing the generated code string.

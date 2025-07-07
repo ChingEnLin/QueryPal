@@ -12,7 +12,7 @@ class ExecuteInput(BaseModel):
 @router.post("/nl2query")
 def nl2query(input: QueryPrompt):
     collections = [col.name for col in input.db_context.collections]
-    return generate_query_from_prompt(input.user_input, collections, input.db_context.name)
+    return generate_query_from_prompt(input.user_input, collections, input.db_context.name, input.collection_context)
 
 @router.post("/execute")
 def execute(input: ExecuteInput):

@@ -224,7 +224,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     clearQueryState();
   }, [selectedAccountId, azureAccounts, clearQueryState]);
 
-  const handleGenerateQuery = useCallback(async (prompt: string) => {
+  const handleGenerateQuery = useCallback(async (prompt: string, collectionCtx?: CollectionInfo) => {
     if (!prompt.trim()) {
       setError("Please enter a command in plain English.");
       return;
@@ -234,7 +234,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     clearQueryState();
 
     try {
-      const result = await generateMongoQuery(prompt, connectedDbInfo ?? undefined);
+      const result = await generateMongoQuery(prompt, connectedDbInfo ?? undefined, collectionCtx);
       setQueryResult(result);
       setEditableCode(result.generated_code);
     } catch (e) {
@@ -248,10 +248,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const handleMainGenerateClick = () => handleGenerateQuery(userInput);
   
   const handleGenerateCollectionQuery = (collectionPrompt: string) => {
-    if (!selectedCollection) return;
+    if (!selectedCollection || !collectionInfo) return;
     const fullPrompt = `For the '${selectedCollection}' collection, ${collectionPrompt}`;
     setUserInput(fullPrompt);
-    handleGenerateQuery(fullPrompt);
+    handleGenerateQuery(fullPrompt, collectionInfo);
   };
 
   const handleRunQuery = useCallback(async () => {
