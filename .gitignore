@@ -30,3 +30,4 @@ __pycache__/
 # Environment variables and configuration
 .env
 .env.local
+.env.docker
