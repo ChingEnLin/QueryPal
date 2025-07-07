@@ -145,3 +145,6 @@ export const mockProductUpdateResult = {
 };
 
 export const mockGenericExecutionResult = { message: 'Query executed successfully (mocked).' };
+
+// --- Mock System Action Results ---
+export const mockCacheClearResult = { message: 'Cache cleared successfully.' };

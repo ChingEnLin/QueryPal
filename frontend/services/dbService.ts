@@ -8,7 +8,8 @@ import {
     mockUserFindResult,
     mockProductUpdateResult,
     mockGenericExecutionResult,
-    mockDelay
+    mockDelay,
+    mockCacheClearResult
 } from './mockData';
 
 /**
@@ -189,6 +190,43 @@ export const runMongoQuery = async (query: string, resource: SelectedResource): 
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Invalid syntax in query or runtime error.' }));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+    
+    return response.json();
+};
+
+/**
+ * Sends a request to the backend to clear any server-side caches.
+ */
+export const clearSystemCache = async (): Promise<{ message: string }> => {
+    // --- DEVELOPMENT MOCK ---
+    if (!USE_MSAL_AUTH) {
+        console.log("DEV MODE: Simulating system cache clear.");
+        await mockDelay(800);
+        return Promise.resolve(mockCacheClearResult);
+    }
+    // --- END DEVELOPMENT MOCK ---
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+        throw new Error("No signed-in user found.");
+    }
+
+    // acquire token for backend API
+    const tokenResponse = await msalInstance.acquireTokenSilent({
+        ...loginRequest,
+        account: accounts[0],
+    });
+
+    const response = await fetch(`${API_BASE_URL}/system/clear-cache`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${tokenResponse.accessToken}`,
+        },
+    });
+
+     if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to clear server cache.' }));
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
     

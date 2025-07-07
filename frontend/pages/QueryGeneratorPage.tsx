@@ -1,6 +1,7 @@
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { generateMongoQuery } from '../services/geminiService';
-import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo } from '../services/dbService';
+import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource } from '../types';
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
@@ -9,59 +10,80 @@ import MongoIcon from '../components/icons/MongoIcon';
 import DatabaseIcon from '../components/icons/DatabaseIcon';
 import ServerIcon from '../components/icons/ServerIcon';
 import CollectionActionPanel from '../components/CollectionActionPanel';
-import { useMsal } from "@azure/msal-react";
-import { useAuth } from '../contexts/AuthContext';
-import { USE_MSAL_AUTH } from '../app.config';
+import RefreshIcon from '../components/icons/RefreshIcon';
+import SpinnerIcon from '../components/icons/SpinnerIcon';
+import CheckIcon from '../components/icons/CheckIcon';
 
-// --- Header Components ---
+// --- Header Component ---
 interface HeaderUIProps {
+  name?: string;
+  onLogout: () => void;
+  onClearCache: () => void;
+  isClearingCache: boolean;
+  cacheClearStatus: 'idle' | 'success' | 'error';
+}
+
+const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus }) => {
+  const getCacheButtonContent = () => {
+    if (isClearingCache) {
+      return <><SpinnerIcon className="w-4 h-4" /> Clearing...</>;
+    }
+    if (cacheClearStatus === 'success') {
+      return <><CheckIcon className="w-4 h-4" /> Cache Cleared!</>;
+    }
+    if (cacheClearStatus === 'error') {
+      return <>Error Clearing</>;
+    }
+    return <><RefreshIcon className="w-4 h-4" /> Clear Cache</>;
+  };
+
+  const getCacheButtonClasses = () => {
+    let baseClasses = "flex items-center justify-center gap-2 px-3 py-1.5 border text-xs font-medium rounded-md transition-all duration-300 disabled:cursor-not-allowed";
+    if (cacheClearStatus === 'success') {
+      return `${baseClasses} bg-green-100 border-green-300 text-green-700`;
+    }
+    if (cacheClearStatus === 'error') {
+      return `${baseClasses} bg-red-100 border-red-300 text-red-700`;
+    }
+    return `${baseClasses} bg-white border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50`;
+  };
+
+  return (
+    <header className="flex items-center justify-between mb-8">
+        <div className="flex items-center space-x-4">
+            <MongoIcon className="w-12 h-12 text-blue-500" />
+            <div>
+                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">QueryPal</h1>
+                <p className="text-slate-500 text-sm sm:text-base">Your AI-powered database assistant.</p>
+            </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {name && <span className="text-slate-600 text-sm hidden md:block">Welcome, {name}</span>}
+          <button
+              onClick={onClearCache}
+              disabled={isClearingCache || cacheClearStatus !== 'idle'}
+              className={getCacheButtonClasses()}
+          >
+              {getCacheButtonContent()}
+          </button>
+          <button
+              onClick={onLogout}
+              className="px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-600 bg-white hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
+          >
+              Sign Out
+          </button>
+        </div>
+    </header>
+  );
+};
+
+export interface QueryGeneratorPageProps {
   name?: string;
   onLogout: () => void;
 }
 
-const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout }) => (
-  <header className="flex items-center justify-between mb-8">
-      <div className="flex items-center space-x-4">
-          <MongoIcon className="w-12 h-12 text-blue-500" />
-          <div>
-              <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">QueryPal</h1>
-              <p className="text-slate-500 text-sm sm:text-base">Your AI-powered database assistant.</p>
-          </div>
-      </div>
-      <div className="flex items-center gap-4">
-        {name && <span className="text-slate-600 text-sm hidden sm:block">Welcome, {name}</span>}
-        <button
-            onClick={onLogout}
-            className="px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
-        >
-            Sign Out
-        </button>
-      </div>
-  </header>
-);
-
-const MsalHeader: React.FC = () => {
-    const { instance, accounts } = useMsal();
-    const name = accounts[0]?.name;
-    const handleLogout = () => {
-        instance.logoutRedirect({ postLogoutRedirectUri: "/" });
-    };
-    return <HeaderUI name={name} onLogout={handleLogout} />;
-};
-
-const BypassHeader: React.FC = () => {
-    const { user, logout } = useAuth();
-    const name = user?.name;
-    return <HeaderUI name={name} onLogout={logout} />;
-};
-
-const PageHeader: React.FC = () => {
-    return USE_MSAL_AUTH ? <MsalHeader /> : <BypassHeader />;
-};
-
-
 // --- Main Page Component ---
-const QueryGeneratorPage: React.FC = () => {
+const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout }) => {
   const [userInput, setUserInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,14 +112,17 @@ const QueryGeneratorPage: React.FC = () => {
   const [collectionInfo, setCollectionInfo] = useState<CollectionInfo | null>(null);
   const [isFetchingCollectionInfo, setIsFetchingCollectionInfo] = useState<boolean>(false);
   const [collectionInfoError, setCollectionInfoError] = useState<string | null>(null);
+  
+  // State for cache clearing
+  const [isClearingCache, setIsClearingCache] = useState<boolean>(false);
+  const [cacheClearStatus, setCacheClearStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   const connectedAccountName = useMemo(() => {
     if (!connectedResource) return '';
     return azureAccounts.find(acc => acc.id === connectedResource.accountId)?.name ?? 'Unknown Account';
   }, [connectedResource, azureAccounts]);
-
-  useEffect(() => {
-    const fetchAccounts = async () => {
+  
+  const fetchAccounts = useCallback(async () => {
       setIsLoadingAccounts(true);
       setDbError(null);
       try {
@@ -108,9 +133,31 @@ const QueryGeneratorPage: React.FC = () => {
       } finally {
         setIsLoadingAccounts(false);
       }
-    };
+    }, []);
+
+  useEffect(() => {
     fetchAccounts();
-  }, []);
+  }, [fetchAccounts]);
+  
+  const handleClearCache = useCallback(async () => {
+      setIsClearingCache(true);
+      setCacheClearStatus('idle');
+      setDbError(null); // Clear old DB errors
+      try {
+          await clearSystemCache();
+          setCacheClearStatus('success');
+          // Refresh accounts list after clearing cache
+          await fetchAccounts();
+      } catch (e) {
+          setCacheClearStatus('error');
+          if (e instanceof Error) setDbError(e.message);
+          else setDbError("An unknown error occurred while clearing the cache.");
+      } finally {
+          setIsClearingCache(false);
+          // Reset the button state after 3 seconds
+          setTimeout(() => setCacheClearStatus('idle'), 3000);
+      }
+  }, [fetchAccounts]);
 
   const clearQueryState = useCallback(() => {
     setQueryResult(null);
@@ -255,7 +302,13 @@ const QueryGeneratorPage: React.FC = () => {
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
         
-        <PageHeader />
+        <HeaderUI 
+            name={name}
+            onLogout={onLogout}
+            onClearCache={handleClearCache}
+            isClearingCache={isClearingCache}
+            cacheClearStatus={cacheClearStatus}
+        />
 
         <main className="space-y-8">
           {/* Connection Manager */}
@@ -319,11 +372,12 @@ const QueryGeneratorPage: React.FC = () => {
             ) : (
               <div>
                 <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2"><DatabaseIcon className="w-6 h-6 text-blue-500"/> Select a Database to Connect</h2>
+                 {dbError && !isLoadingAccounts && !isLoadingDatabases && (
+                     <p className="text-red-600 bg-red-50 border border-red-200 text-sm mt-4 p-3 rounded-md">{dbError}</p>
+                 )}
                 {isLoadingAccounts ? (
                     <div className="text-center p-8 text-slate-500">Loading your Azure accounts...</div>
-                ) : dbError && !isLoadingDatabases ? (
-                     <p className="text-red-600 text-sm mt-2">{dbError}</p>
-                ) : azureAccounts.length === 0 ? (
+                ) : !dbError && azureAccounts.length === 0 ? (
                     <div className="text-center p-8 text-slate-500 border-2 border-dashed rounded-lg mt-4">
                         No accessible Cosmos DB accounts found.
                         <br/>
@@ -382,7 +436,7 @@ const QueryGeneratorPage: React.FC = () => {
                 id="userInput"
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
-                placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : "e.g., 'Find all patients that are over 50 years old and have pathology of diabetes.'"}
+                placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : "e.g., 'Find all users from Canada and sort them by name'"}
                 className="w-full h-28 p-4 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-slate-400 resize-none"
                 disabled={isLoading || isQuerySectionDisabled}
               />
@@ -428,7 +482,7 @@ const QueryGeneratorPage: React.FC = () => {
         </main>
         
         <footer className="text-center mt-8 text-slate-500 text-sm">
-          <p>Powered by Google Gemini.</p>
+          <p>Powered by Google Gemini. For demonstration purposes only.</p>
         </footer>
       </div>
        <style>{`

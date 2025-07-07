@@ -156,6 +156,21 @@ Executes a query against the specified database.
     }
     ```
 -   **Success Response (200):** Query result from the database.
+
+---
+
+### `POST /api/system/clear-cache`
+
+Clears any server-side caches related to Azure resources.
+
+-   **Request Body:** None.
+-   **Success Response (200):** A confirmation message.
+    ```json
+    {
+      "message": "Cache cleared successfully."
+    }
+    ```
+
 ---
 
 ## Disclaimer
