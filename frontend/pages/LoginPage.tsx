@@ -42,7 +42,7 @@ const LoginUI: React.FC<LoginUIProps> = ({ onLogin, buttonText, ButtonIcon }) =>
             </main>
         </div>
         <footer className="text-center mt-8 text-slate-500 text-sm">
-            <p>Powered by Google Gemini.</p>
+            <p>Powered by Google Gemini. For internal use only.</p>
         </footer>
     </div>
 );

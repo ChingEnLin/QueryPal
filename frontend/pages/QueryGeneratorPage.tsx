@@ -482,7 +482,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
         </main>
         
         <footer className="text-center mt-8 text-slate-500 text-sm">
-          <p>Powered by Google Gemini. For demonstration purposes only.</p>
+          <p>Powered by Google Gemini. For internal use only.</p>
         </footer>
       </div>
        <style>{`
