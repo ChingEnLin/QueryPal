@@ -9,7 +9,7 @@ export const msalConfig: Configuration = {
     auth: {
         clientId: "6a136cee-b760-41a0-a039-b92ee63f1320", // This is the ONLY mandatory field that you need to supply.
         authority: "https://login.microsoftonline.com/0851d291-32a7-4681-b8dd-491bc4bd6ea5", // Or "consumers" for personal accounts, or "organizations" for multi-tenant.
-        redirectUri: "http://localhost:5173/", // You must register this URI on Azure Portal/App Registration.
+        redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI, // You must register this URI on Azure Portal/App Registration.
         postLogoutRedirectUri: "/", // Indicates the page to navigate to after logout.
     },
     cache: {
