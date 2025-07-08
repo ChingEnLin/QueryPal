@@ -31,3 +31,6 @@ __pycache__/
 .env
 .env.local
 .env.docker
+
+# CD and deployment files
+publish-profile.yml
