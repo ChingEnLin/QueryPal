@@ -114,6 +114,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   // State for AI query generation
   const [queryResult, setQueryResult] = useState<QueryResultData | null>(null);
   const [editableCode, setEditableCode] = useState<string>('');
+  const [codeHistory, setCodeHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
 
   // State for query execution
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
@@ -187,6 +189,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setEditableCode('');
     setExecutionResult(null);
     setExecutionError(null);
+    setCodeHistory([]);
+    setHistoryIndex(-1);
   }, []);
   
   const handleDisconnect = useCallback(() => {
@@ -253,19 +257,29 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     }
 
     setIsLoading(true);
-    clearQueryState();
+    // Keep execution results on screen until the next query is executed, but clear old errors/code.
+    setError(null);
+    setExecutionError(null);
 
     try {
       const result = await generateMongoQuery(prompt, connectedDbInfo ?? undefined, collectionCtx);
       setQueryResult(result);
-      setEditableCode(result.generated_code);
+
+      // Add to history
+      const newHistory = [...codeHistory.slice(0, historyIndex + 1), result.generated_code];
+      const newIndex = newHistory.length - 1;
+      setCodeHistory(newHistory);
+      setHistoryIndex(newIndex);
+      setEditableCode(newHistory[newIndex]);
+
     } catch (e) {
+      setQueryResult(null); // Clear old results on error
       if (e instanceof Error) setError(e.message);
       else setError("An unexpected error occurred.");
     } finally {
       setIsLoading(false);
     }
-  }, [connectedDbInfo, clearQueryState]);
+  }, [connectedDbInfo, clearQueryState, codeHistory, historyIndex]);
 
   const handleMainGenerateClick = () => handleGenerateQuery(userInput);
   
@@ -317,6 +331,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
         setIsFetchingCollectionInfo(false);
     }
   }, [selectedCollection, connectedResource]);
+
+  const handleNavigateHistory = useCallback((direction: 'prev' | 'next') => {
+    const newIndex = direction === 'prev' ? historyIndex - 1 : historyIndex + 1;
+    if (newIndex >= 0 && newIndex < codeHistory.length) {
+      setHistoryIndex(newIndex);
+      setEditableCode(codeHistory[newIndex]);
+    }
+  }, [historyIndex, codeHistory]);
 
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
@@ -497,6 +519,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                         onCodeChange={setEditableCode}
                         onRunQuery={handleRunQuery}
                         isExecuting={isExecuting}
+                        historyCount={codeHistory.length}
+                        historyIndex={historyIndex}
+                        onNavigateHistory={handleNavigateHistory}
                     />
                     <QueryResult
                         isExecuting={isExecuting}

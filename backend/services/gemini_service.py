@@ -1,4 +1,5 @@
 from google import genai
+from google.genai import types
 from models.schemas import GeneratedCode, CollectionContext
 
 PROMPT_TEMPLATE = """
@@ -32,6 +33,11 @@ def generate_query_from_prompt(user_input: str,
         collection_context=collection_context.sampleDocument if collection_context else ""
     )
     client = genai.Client()
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=full_prompt)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=full_prompt,
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=0) # Disables thinking
+        ))
     code = extract_python_code(response.text)
     return GeneratedCode(generated_code=code)

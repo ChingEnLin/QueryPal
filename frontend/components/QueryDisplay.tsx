@@ -1,21 +1,28 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import ClipboardIcon from './icons/ClipboardIcon';
 import CheckIcon from './icons/CheckIcon';
 import PlayIcon from './icons/PlayIcon';
+import ArrowLeftIcon from './icons/ArrowLeftIcon';
+import ArrowRightIcon from './icons/ArrowRightIcon';
+
 
 interface QueryDisplayProps {
   code: string;
   onCodeChange: (newCode: string) => void;
   onRunQuery: () => void;
   isExecuting: boolean;
+  historyCount: number;
+  historyIndex: number;
+  onNavigateHistory: (direction: 'prev' | 'next') => void;
 }
 
 // This regex is more reliable for detecting MongoDB write methods.
-const WRITE_OPERATION_REGEX = /\.(insert_one|insert_many|update_one|update_many|replace_one|delete_one|delete_many|bulk_write|drop|drop_index|drop_indexes|create_index|create_indexes|rename_collection)\s*\(/i;
+const WRITE_OPERATION_REGEX = /\.(insertOne|insertMany|updateOne|updateMany|replaceOne|deleteOne|deleteMany|bulkWrite|drop|dropIndex|dropIndexes|createIndex|createIndexes|renameCollection)\s*\(/i;
 
 
-const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQuery, isExecuting }) => {
+const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQuery, isExecuting, historyCount, historyIndex, onNavigateHistory }) => {
   const [copied, setCopied] = useState(false);
   const [allowWrite, setAllowWrite] = useState(false);
 
@@ -45,7 +52,30 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
     <div className="bg-white rounded-lg p-6 space-y-4 animate-fade-in border border-slate-200">
       <div className="space-y-2">
         <div className="flex justify-between items-center">
-            <h3 className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Generated & Editable Code</h3>
+            <div className="flex items-center gap-4">
+                <h3 className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Generated & Editable Code</h3>
+                {historyCount > 1 && (
+                    <div className="flex items-center gap-2 text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
+                        <button
+                            onClick={() => onNavigateHistory('prev')}
+                            disabled={historyIndex <= 0}
+                            className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Previous query version"
+                        >
+                            <ArrowLeftIcon className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs font-medium tabular-nums">Version {historyIndex + 1} of {historyCount}</span>
+                        <button
+                            onClick={() => onNavigateHistory('next')}
+                            disabled={historyIndex >= historyCount - 1}
+                            className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Next query version"
+                        >
+                            <ArrowRightIcon className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
+            </div>
             <div className="flex items-center gap-3">
                  {isWriteOperation ? (
                      <div className="text-xs text-red-800 bg-red-100 border border-red-200 px-2 py-1 rounded-md">
