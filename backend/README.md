@@ -90,4 +90,4 @@ GEMINI_API_KEY=AIzaSyXXX...your_key_here
 
 👨‍💻 Author
 
-Built by Ching-En Lin · Powered by FastAPI, MongoDB & Gemini
+Built by Ching-En Lin · Powered by Microsoft Azure and Google Gemini.
