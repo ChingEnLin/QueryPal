@@ -113,6 +113,67 @@ docker run --env-file ../.env.docker -p 8000:8000 querypal-backend
 
 ---
 
+## ☁️ Deployment to Google Cloud Run
+
+### Prerequisites
+
+- A GCP project with billing enabled
+- Docker installed and configured
+- Google Cloud CLI (`gcloud`) installed and authenticated
+- Google Artifact Registry enabled and repository created (optional but recommended)
+
+### Steps
+
+#### 1. Build and Push Container Images
+
+Build and push both frontend and backend images to Google Artifact Registry or Docker Hub:
+
+```bash
+# Backend
+cd backend
+docker build -t gcr.io/YOUR_PROJECT_ID/querypal-backend .
+docker push gcr.io/YOUR_PROJECT_ID/querypal-backend
+
+# Frontend
+cd ../frontend
+docker build -t gcr.io/YOUR_PROJECT_ID/querypal-frontend .
+docker push gcr.io/YOUR_PROJECT_ID/querypal-frontend
+```
+
+#### 2. Deploy to Cloud Run
+
+```bash
+# Backend
+gcloud run deploy querypal-backend \
+  --image gcr.io/YOUR_PROJECT_ID/querypal-backend \
+  --region europe-west1 \
+  --port 8000 \
+  --set-env-vars PORT=8000,GEMINI_API_KEY=xxx,AZURE_TENANT_ID=xxx,AZURE_CLIENT_ID=xxx,AZURE_CLIENT_SECRET=xxx,ARM_SCOPE=https://management.azure.com/.default \
+  --allow-unauthenticated
+
+# Frontend
+gcloud run deploy querypal-frontend \
+  --image gcr.io/YOUR_PROJECT_ID/querypal-frontend \
+  --region europe-west1 \
+  --port 4000 \
+  --allow-unauthenticated
+```
+
+> 💡 Make sure the backend URL is correctly set in the frontend proxy or `.env` if needed.
+
+#### 3. (Optional) Map Custom Domains
+
+You can map your frontend and backend services to custom domains via:
+
+```bash
+gcloud run domain-mappings create --service querypal-frontend --domain frontend.example.com --region europe-west1
+gcloud run domain-mappings create --service querypal-backend --domain api.example.com --region europe-west1
+```
+
+Follow the DNS instructions in the Cloud Console to complete the setup.
+
+---
+
 ## ⚙️ Setup Instructions
 
 ### 1. Register Azure Entra ID Application

@@ -1,5 +1,7 @@
 # 🧠 MongoDB Natural Language Query Backend
 
+[![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run/?git_repo=https://github.com/celinlin/QueryPal&dir=backend)
+
 This is a modular FastAPI backend that powers a web application allowing users to perform MongoDB operations using natural language, powered by Google Gemini.
 
 ## 🚀 Features

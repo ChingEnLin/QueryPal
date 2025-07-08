@@ -1,5 +1,7 @@
 # QueryPal - Secure Edition
 
+[![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run/?git_repo=https://github.com/celinlin/QueryPal&dir=frontend)
+
 QueryPal is an intelligent, AI-powered assistant that helps users perform database operations using natural language. This version is designed with a secure, enterprise-ready architecture that dynamically discovers and connects to databases the authenticated user has access to.
 
 The application uses **Google Gemini API** for its natural language processing and **Azure Entra ID** for user authentication, communicating with a **secure backend service** that handles all sensitive operations.
