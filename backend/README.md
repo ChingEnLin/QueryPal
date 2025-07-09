@@ -18,18 +18,20 @@ This is a modular FastAPI backend that powers a web application allowing users t
 
 ```plaintext
 backend/
-├── main.py                     # FastAPI app entry point
-├── api/
-│   └── routes/
-│       ├── db.py               # Endpoints for DB config & connect
-│       └── query.py            # Endpoints for NL query and execution
+├── main.py                         # FastAPI app entry point
+├── routes/
+│   ├── azure.py                    # Endpoints for Azure Cosmos DB discovery
+│   ├── query.py                    # Endpoints for NL query and execution
+│   └── system.py                   # System health check and cache management
 ├── models/
-│   ├── schemas.py              # Pydantic models
-│   └── config.py               # DB connection list
+│   └── schemas.py                  # Pydantic models
 ├── services/
-│   ├── gemini_service.py       # Gemini API integration
-│   └── mongo_service.py        # MongoDB connection & query logic
-├── .env                        # Gemini API key
+│   ├── azure_cosmos_resources.py   # Azure ARM API integration
+│   ├── gemini_service.py           # Gemini API integration
+│   └── mongo_service.py            # MongoDB connection & query logic
+├── .env                            # Environment variables
+├── requirements.txt                # Python dependencies
+└── README.md                       # Project documentation
 ```
 ---
 
@@ -44,11 +46,16 @@ python -m venv venv
 source venv/bin/activate  # or venv\\Scripts\\activate on Windows
 pip install -r requirements.txt
 ```
-2. Add your Gemini API Key
+2. Add your Gemini API Key and Azure Entra ID credentials to the `.env` file:
 
-Create a .env file and add:
-
+```plaintext
 GEMINI_API_KEY=your_google_gemini_api_key
+AZURE_TENANT_ID=your_azure_tenant_id
+AZURE_CLIENT_ID=your_azure_client_id
+AZURE_CLIENT_SECRET=your_azure_client_secret
+ARM_SCOPE=https://management.azure.com/.default
+GEMINI_API_KEY=your_google_gemini_api_key
+```
 
 3. Run the App
 
@@ -59,37 +66,27 @@ API docs will be available at:
 
 ⸻
 
-📡 API Endpoints
 
-Method	Endpoint	Description
-GET	/db/available-databases	Returns list of DB configs
-POST	/db/connect	Checks MongoDB connection
-POST	/query/nl2query	Converts natural language to query
-POST	/query/execute	Executes generated MongoDB query
+## 📡 API Endpoints
 
-
-⸻
-
-⚠️ Security Notes
-	•	MongoDB eval() is unsafe — use in controlled environment only. For production, implement a secure query parser or query builder.
-	•	Keep your .env file safe and never expose Gemini API key to frontend.
-
-⸻
-
-🧪 Sample .env
-
-GEMINI_API_KEY=AIzaSyXXX...your_key_here
+| Method | Endpoint                   | Description                        |
+|--------|----------------------------|------------------------------------|
+| POST   | /query/nl2query            | NL2Query (natural language → query) |
+| POST   | /query/execute             | Execute MongoDB query               |
+| GET    | /azure/cosmos_accounts     | Get Cosmos Resources                |
+| POST   | /azure/account_details     | Get Account Details                 |
+| POST   | /azure/collection_info     | Get Collection Info                 |
+| POST   | /system/clear_cache        | Clear All Caches                    |
 
 
 ⸻
 
-✅ Next Ideas
-	•	Add JWT or Azure Entra ID authentication.
+## ✅ Next Ideas
 	•	Sandbox query execution.
 	•	Integrate OpenAI or Claude as fallback NLP engines.
 
 ⸻
 
-👨‍💻 Author
+## 👨‍💻 Author
 
 Built by Ching-En Lin · Powered by Microsoft Azure and Google Gemini.
