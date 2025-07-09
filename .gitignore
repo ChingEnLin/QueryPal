@@ -34,3 +34,4 @@ __pycache__/
 
 # CD and deployment files
 publish-profile.yml
+deployment_note.txt
