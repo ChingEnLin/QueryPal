@@ -16,16 +16,22 @@ def execute_mongo_query(connection_string: str, database: str, query: str):
         return query_result
 
 def transform_mongo_result(result):
-
+    # If result is a list of dicts, convert ObjectIds
     if isinstance(result, list):
-        for doc in result:
-            for k, v in doc.items():
-                if isinstance(v, ObjectId):
-                    doc[k] = str(v)
+        if result and isinstance(result[0], dict):
+            for doc in result:
+                for k, v in doc.items():
+                    if isinstance(v, ObjectId):
+                        doc[k] = str(v)
+            return result
+        else:
+            # List of primitives (e.g., from distinct)
+            return result
     elif isinstance(result, dict):
         for k, v in result.items():
             if isinstance(v, ObjectId):
                 result[k] = str(v)
+        return result
     elif isinstance(result, InsertOneResult):
         return {"inserted_id": str(result.inserted_id)}
     elif isinstance(result, InsertManyResult):
