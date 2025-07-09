@@ -15,13 +15,13 @@ interface LoginUIProps {
 }
 
 const LoginUI: React.FC<LoginUIProps> = ({ onLogin, buttonText, ButtonIcon }) => (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 text-slate-800">
-        <div className="max-w-md w-full mx-auto bg-white rounded-xl shadow-md p-8 text-center">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col justify-center items-center p-4 text-slate-800 dark:text-slate-200">
+        <div className="max-w-md w-full mx-auto bg-white dark:bg-slate-800/50 dark:ring-1 dark:ring-slate-700 rounded-xl shadow-lg dark:shadow-black/20 p-8 text-center">
             <header className="flex flex-col items-center justify-center space-y-4 mb-8">
                 <MongoIcon className="w-16 h-16 text-blue-500" />
                 <div>
                     <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-violet-600 to-blue-600 bg-clip-text text-transparent">QueryPal</h1>
-                    <p className="text-slate-500 mt-2">Your AI-Powered Database Assistant</p>
+                    <p className="text-slate-500 dark:text-slate-400 mt-2">Your AI-Powered Database Assistant</p>
                 </div>
             </header>
 
@@ -33,7 +33,7 @@ const LoginUI: React.FC<LoginUIProps> = ({ onLogin, buttonText, ButtonIcon }) =>
                     <ButtonIcon className="w-6 h-6" />
                     {buttonText}
                 </button>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                     {USE_MSAL_AUTH 
                         ? "You will be redirected to the Microsoft login page for authentication."
                         : "Using developer sign-in. No credentials required."
@@ -41,7 +41,7 @@ const LoginUI: React.FC<LoginUIProps> = ({ onLogin, buttonText, ButtonIcon }) =>
                 </p>
             </main>
         </div>
-        <footer className="text-center mt-8 text-slate-500 text-sm">
+        <footer className="text-center mt-8 text-slate-500 dark:text-slate-400 text-sm">
             <p>Powered by Microsoft Azure and Google Gemini. For internal use only.</p>
         </footer>
     </div>

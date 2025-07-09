@@ -89,14 +89,14 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
             </svg>
-            <span className="text-slate-600 text-lg">Running query...</span>
+            <span className="text-slate-600 dark:text-slate-400 text-lg">Running query...</span>
         </div>
     );
   }
 
   if (executionError) {
     return (
-      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg animate-fade-in" role="alert">
+      <div className="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900/50 dark:border-red-500/50 dark:text-red-300 px-4 py-3 rounded-lg animate-fade-in" role="alert">
         <strong className="font-bold">Execution Error: </strong>
         <span className="block sm:inline">{executionError}</span>
       </div>
@@ -139,16 +139,16 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
 
       return (
         <div className="space-y-4 animate-fade-in">
-            <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Query Result</h3>
+            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Query Result</h3>
             
             {/* View Mode Toolbar */}
-            <div className="flex items-center justify-between bg-slate-100 p-2 rounded-lg border border-slate-200">
+            <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-1">
                     {isWriteOpSummary && (
                        <button 
                         onClick={() => setViewMode('summary')}
                         disabled={viewMode === 'summary'}
-                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${viewMode === 'summary' ? 'bg-blue-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-200'}`}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${viewMode === 'summary' ? 'bg-blue-500 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
                       >
                           <InfoIcon className="w-4 h-4" />
                           Summary
@@ -157,7 +157,7 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
                     <button 
                         onClick={() => setViewMode('json')}
                         disabled={viewMode === 'json'}
-                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${viewMode === 'json' ? 'bg-blue-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-200'}`}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${viewMode === 'json' ? 'bg-blue-500 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
                     >
                         <JsonIcon className="w-4 h-4" />
                         JSON
@@ -165,14 +165,14 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
                     <button 
                         onClick={() => setViewMode('table')}
                         disabled={!canBeTable || viewMode === 'table'}
-                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${viewMode === 'table' ? 'bg-blue-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed'}`}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${viewMode === 'table' ? 'bg-blue-500 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed'}`}
                     >
                         <TableIcon className="w-4 h-4" />
                         Table
                     </button>
                     <button
                         onClick={() => setIsGraphVisible(true)}
-                        className={'flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors bg-white text-slate-600 hover:bg-slate-200'}
+                        className={'flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}
                     >
                         <GraphIcon className="w-4 h-4" />
                         Graph
@@ -181,7 +181,7 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
                 {viewMode === 'json' && (
                      <button
                         onClick={() => setIsJsonCollapsed(!isJsonCollapsed)}
-                        className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 p-1 rounded-md"
+                        className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white p-1 rounded-md"
                      >
                         <span>{isJsonCollapsed ? 'Expand' : 'Collapse'}</span>
                         <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${!isJsonCollapsed && 'rotate-180'}`} />

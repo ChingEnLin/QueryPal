@@ -44,38 +44,30 @@ export const SchemaRenderer: React.FC<SchemaRendererProps> = ({ data, indent = 0
   const padStyle = { paddingLeft: `${indent * 24}px` };
 
   return (
-    <div>
+    <div className="space-y-1">
       {Object.entries(data).map(([key, value]) => {
         const type = getType(value);
 
-        // Nested object
-        if (type === 'Object') {
-          return (
-            <div key={key}>
-              <div style={padStyle}>
-                <strong>{key}</strong>: <span>Object</span>
-              </div>
-              <SchemaRenderer data={value} indent={indent + 1} />
+        const renderField = (
+            <div className="flex items-center gap-2">
+              <strong className="text-slate-600 dark:text-slate-300 font-medium">{key}</strong>:
+              <code className="text-purple-800 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 font-semibold px-2 py-0.5 rounded-md text-xs">{type}</code>
+            </div>
+        );
+
+        if ((type === 'Object' || type.startsWith('Array<Object>')) && value && (Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0)) {
+           const nestedData = Array.isArray(value) ? value[0] : value;
+           return (
+            <div key={key} style={padStyle}>
+              {renderField}
+              <SchemaRenderer data={nestedData} indent={indent + 1} />
             </div>
           );
         }
 
-        // Array of objects
-        if (type === 'Array<Object>' && value.length > 0) {
-          return (
-            <div key={key}>
-              <div style={padStyle}>
-                <strong>{key}</strong>: <span>{type}</span>
-              </div>
-              <SchemaRenderer data={value[0]} indent={indent + 1} />
-            </div>
-          );
-        }
-
-        // Primitive or array
         return (
           <div key={key} style={padStyle}>
-            <strong>{key}</strong>: <code>{type}</code>
+            {renderField}
           </div>
         );
       })}
@@ -110,14 +102,14 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
   const sampleDocument = info.sampleDocument || {};
 
   return (
-    <div className="bg-slate-100 rounded-lg p-4 mt-4 border border-slate-200 animate-fade-in space-y-6">
+    <div className="bg-slate-100 dark:bg-slate-800/50 rounded-lg p-4 mt-4 border border-slate-200 dark:border-slate-700 animate-fade-in space-y-6">
       <header className="flex justify-between items-center">
-        <h3 className="text-lg font-bold text-blue-600">
-          Actions for: <span className="font-mono bg-blue-100 text-blue-800 px-2 py-1 rounded">{info.name}</span>
+        <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400">
+          Actions for: <span className="font-mono bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-1 rounded">{info.name}</span>
         </h3>
         <button
           onClick={onClose}
-          className="p-1 rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
+          className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
           aria-label="Close panel"
         >
           <XIcon className="w-5 h-5" />
@@ -125,27 +117,27 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
       </header>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-        <div className="bg-white p-3 rounded-lg flex items-center gap-3 border border-slate-200">
+        <div className="bg-white dark:bg-slate-700/50 p-3 rounded-lg flex items-center gap-3 border border-slate-200 dark:border-slate-600">
             <InfoIcon className="w-5 h-5 text-slate-400 flex-shrink-0" />
             <div>
-                <p className="text-slate-500">Documents</p>
-                <p className="text-slate-800 font-semibold">{info.documentCount.toLocaleString()}</p>
+                <p className="text-slate-500 dark:text-slate-400">Documents</p>
+                <p className="text-slate-800 dark:text-slate-200 font-semibold">{info.documentCount.toLocaleString()}</p>
             </div>
         </div>
-         <div className="bg-white p-3 rounded-lg flex items-center gap-3 border border-slate-200">
+         <div className="bg-white dark:bg-slate-700/50 p-3 rounded-lg flex items-center gap-3 border border-slate-200 dark:border-slate-600">
             <InfoIcon className="w-5 h-5 text-slate-400 flex-shrink-0" />
             <div>
-                <p className="text-slate-500">Avg. Doc Size</p>
-                <p className="text-slate-800 font-semibold">{info.averageDocumentSize}</p>
+                <p className="text-slate-500 dark:text-slate-400">Avg. Doc Size</p>
+                <p className="text-slate-800 dark:text-slate-200 font-semibold">{info.averageDocumentSize}</p>
             </div>
         </div>
       </div>
 
       <div className="space-y-2">
-        <p className="text-slate-600 flex items-center gap-2 font-semibold"><IndexIcon className="w-5 h-5" /> Indexes</p>
+        <p className="text-slate-600 dark:text-slate-300 flex items-center gap-2 font-semibold"><IndexIcon className="w-5 h-5" /> Indexes</p>
         <div className="flex flex-wrap gap-2">
             {info.indexes.map(idx => (
-                <span key={idx} className="bg-purple-100 text-purple-800 text-xs font-mono px-2 py-1 rounded-full">{idx}</span>
+                <span key={idx} className="bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300 text-xs font-mono px-2 py-1 rounded-full">{idx}</span>
             ))}
         </div>
       </div>
@@ -153,7 +145,7 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
        <div className="space-y-2">
         <button
           onClick={() => setIsSchemaOpen(!isSchemaOpen)}
-          className="w-full flex items-center gap-2 text-left text-slate-600 font-semibold p-1 -ml-1 rounded-md hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          className="w-full flex items-center gap-2 text-left text-slate-600 dark:text-slate-300 font-semibold p-1 -ml-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
           aria-expanded={isSchemaOpen}
           aria-controls={`schema-content-${info.name}`}
         >
@@ -165,21 +157,19 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
         {isSchemaOpen && (
           <div
             id={`schema-content-${info.name}`}
-            className="bg-white p-4 rounded-md text-sm text-slate-800 ring-1 ring-slate-200 overflow-x-auto animate-fade-in-short"
+            className="bg-white dark:bg-slate-700/50 p-4 rounded-md text-sm ring-1 ring-slate-200 dark:ring-slate-600 overflow-x-auto animate-fade-in-short"
           >
             {Object.keys(sampleDocument).length > 0 ? (
-              <div className="font-mono schema-tree">
-                <SchemaRenderer data={sampleDocument} />
-              </div>
+              <SchemaRenderer data={sampleDocument} />
             ) : (
-              <p className="font-sans text-slate-500">No sample document available to infer a schema.</p>
+              <p className="font-sans text-slate-500 dark:text-slate-400">No sample document available to infer a schema.</p>
             )}
           </div>
         )}
       </div>
 
       <div className="space-y-3">
-        <label htmlFor={`collection-prompt-${info.name}`} className="flex items-center gap-2 text-md font-medium text-slate-700">
+        <label htmlFor={`collection-prompt-${info.name}`} className="flex items-center gap-2 text-md font-medium text-slate-700 dark:text-slate-300">
             <span>Perform an action on this collection:</span>
             <div className="relative group flex items-center">
                 <InfoIcon className="w-4 h-4 text-slate-400 cursor-help" />
@@ -193,32 +183,18 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder={`e.g., 'Find all users with an "inactive" status'`}
-          className="w-full h-20 p-3 bg-white border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-slate-400 resize-y"
+          className="w-full h-20 p-3 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-slate-400 dark:placeholder-slate-500 resize-y"
           disabled={isLoading}
         />
         <button
           onClick={handleGenerateClick}
           disabled={isLoading || !prompt.trim()}
-          className="w-full flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 focus:ring-blue-500 transition-colors"
+          className="w-full flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
         >
           {isLoading ? 'Generating...' : 'Generate Query for Collection'}
         </button>
       </div>
       <style>{`
-        .schema-tree code {
-            color: #0b5394;
-            font-weight: bold;
-            background-color: #eef6ff;
-            padding: 2px 4px;
-            border-radius: 4px;
-        }
-        .schema-tree em {
-            color: #999;
-            font-style: italic;
-        }
-        .schema-tree strong {
-            color: #3e3e3e;
-        }
         @keyframes fade-in-short {
           from { opacity: 0; transform: translateY(-5px); }
           to { opacity: 1; transform: translateY(0); }

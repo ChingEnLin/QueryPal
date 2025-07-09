@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import XIcon from './icons/XIcon';
@@ -40,7 +41,7 @@ const tutorialSteps: TutorialStep[] = [
   {
     targetId: 'tutorial-header-actions',
     title: '4. Manage Your Session',
-    content: 'Here you can clear the server cache to fetch the latest resources, restart this tutorial, or sign out of your account.',
+    content: 'Here you can clear the server cache to fetch the latest resources, toggle dark mode, restart this tutorial, or sign out of your account.',
     placement: 'bottom',
   },
   {
@@ -76,12 +77,13 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
   const prevStep = () => setStepIndex(i => Math.max(i - 1, 0));
   const endTour = () => {
     onClose();
+    // After closing, reset to the first step for the next time it opens
+    setTimeout(() => setStepIndex(0), 300);
   };
 
   useEffect(() => {
     if (!isActive) {
-        // Reset position when not active
-        setTargetRect(null);
+        setTargetRect(null); // Reset position
         return;
     };
     
@@ -113,8 +115,17 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
 
   }, [isActive, currentStep]);
 
-  const popoverPosition = useMemo(() => {
-    if (isModalStep || !targetRect || !popoverRef.current) return {};
+  const popoverPosition = useMemo((): React.CSSProperties => {
+    // For modal steps, all positioning is handled by CSS classes.
+    if (isModalStep) {
+        return {};
+    }
+    
+    // For non-modal steps, if we don't have the info yet,
+    // hide the popover to prevent it from flashing in the wrong spot.
+    if (!targetRect || !popoverRef.current) {
+        return { opacity: 0, pointerEvents: 'none' };
+    }
     
     const popoverHeight = popoverRef.current.offsetHeight;
     const popoverWidth = popoverRef.current.offsetWidth;
@@ -173,15 +184,15 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
                 <MongoIcon className="w-16 h-16 text-blue-500" />
             </div>
         )}
-        <h3 className="text-xl font-bold text-slate-800 mb-2">{currentStep.title}</h3>
-        <p className="text-slate-600 flex-grow">{currentStep.content}</p>
+        <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">{currentStep.title}</h3>
+        <p className="text-slate-600 dark:text-slate-300 flex-grow">{currentStep.content}</p>
         <div className="mt-6 flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-500">{stepIndex + 1} / {tutorialSteps.length}</span>
+            <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{stepIndex + 1} / {tutorialSteps.length}</span>
             <div className="flex items-center gap-2">
                 {stepIndex > 0 && (
                     <button
                         onClick={prevStep}
-                        className="px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-600 bg-white hover:bg-slate-100 transition-colors"
+                        className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
                     >
                         Back
                     </button>
@@ -206,12 +217,12 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
         <div
             ref={popoverRef}
             style={popoverPosition}
-            className={`fixed bg-white rounded-lg shadow-2xl p-6 w-[360px] max-w-[90vw] z-[1001] transition-all duration-300 ease-in-out animate-fade-in
+            className={`fixed bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl p-6 w-[360px] max-w-[90vw] z-[1001] transition-all duration-300 ease-in-out animate-fade-in
                 ${isModalStep ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2' : ''}`}
         >
             <button
                 onClick={endTour}
-                className="absolute top-3 right-3 p-1.5 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                className="absolute top-3 right-3 p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
                 aria-label="End tour"
             >
                 <XIcon className="w-5 h-5"/>
@@ -227,11 +238,21 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
             animation: tutorial-fade-in 0.5s ease-out forwards;
           }
            .animate-fade-in-fast {
-            animation: tutorial-fade-in 0.3s ease-out forwards;
+            animation: tutorial-backdrop-fade-in 0.3s ease-out forwards;
           }
           @keyframes tutorial-fade-in {
-            from { opacity: 0; transform: scale(0.98) translateY(10px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
+            from {
+              opacity: 0;
+              transform: translate(var(--tw-translate-x, 0), calc(var(--tw-translate-y, 0) + 10px)) scale(0.98);
+            }
+            to {
+              opacity: 1;
+              transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) scale(1);
+            }
+          }
+          @keyframes tutorial-backdrop-fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
           }
       `}</style>
     </div>

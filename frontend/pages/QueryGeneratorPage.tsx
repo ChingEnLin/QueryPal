@@ -16,6 +16,9 @@ import SpinnerIcon from '../components/icons/SpinnerIcon';
 import CheckIcon from '../components/icons/CheckIcon';
 import HelpIcon from '../components/icons/HelpIcon';
 import Tutorial from '../components/Tutorial';
+import { useTheme } from '../contexts/ThemeContext';
+import SunIcon from '../components/icons/SunIcon';
+import MoonIcon from '../components/icons/MoonIcon';
 
 // --- Header Component ---
 interface HeaderUIProps {
@@ -28,6 +31,8 @@ interface HeaderUIProps {
 }
 
 const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial }) => {
+  const { theme, toggleTheme } = useTheme();
+
   const getCacheButtonContent = () => {
     if (isClearingCache) {
       return <><SpinnerIcon className="w-4 h-4" /> Clearing...</>;
@@ -44,12 +49,12 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
   const getCacheButtonClasses = () => {
     let baseClasses = "flex items-center justify-center gap-2 px-3 py-1.5 border text-xs font-medium rounded-md transition-all duration-300 disabled:cursor-not-allowed";
     if (cacheClearStatus === 'success') {
-      return `${baseClasses} bg-green-100 border-green-300 text-green-700`;
+      return `${baseClasses} bg-green-100 border-green-300 text-green-700 dark:bg-green-900/50 dark:border-green-700 dark:text-green-300`;
     }
     if (cacheClearStatus === 'error') {
-      return `${baseClasses} bg-red-100 border-red-300 text-red-700`;
+      return `${baseClasses} bg-red-100 border-red-300 text-red-700 dark:bg-red-900/50 dark:border-red-700 dark:text-red-300`;
     }
-    return `${baseClasses} bg-white border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50`;
+    return `${baseClasses} bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50`;
   };
 
   return (
@@ -57,12 +62,12 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
         <div className="flex items-center space-x-4">
             <MongoIcon className="w-12 h-12 text-blue-500" />
             <div>
-                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">QueryPal</h1>
-                <p className="text-slate-500 text-sm sm:text-base">Your AI-powered database assistant.</p>
+                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-slate-100">QueryPal</h1>
+                <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base">Your AI-powered database assistant.</p>
             </div>
         </div>
         <div className="flex items-center gap-2">
-          {name && <span className="text-slate-600 text-sm hidden md:block">Welcome, {name}</span>}
+          {name && <span className="text-slate-600 dark:text-slate-300 text-sm hidden md:block">Welcome, {name}</span>}
           <div id="tutorial-header-actions" className="flex items-center gap-2">
             <button
                 onClick={onClearCache}
@@ -72,15 +77,22 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
                 {getCacheButtonContent()}
             </button>
             <button
+              onClick={toggleTheme}
+              className="p-2 border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              aria-label="Toggle theme"
+            >
+              {theme === 'light' ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
+            </button>
+            <button
                 onClick={onStartTutorial}
-                className="p-2 border border-slate-300 rounded-md text-slate-600 bg-white hover:bg-slate-100 transition-colors"
+                className="p-2 border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 aria-label="Start tutorial"
             >
                 <HelpIcon className="w-4 h-4" />
             </button>
             <button
                 onClick={onLogout}
-                className="px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-600 bg-white hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
+                className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
             >
                 Sign Out
             </button>
@@ -353,7 +365,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const isQuerySectionDisabled = !isConnectedForRender;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
         
         <HeaderUI 
@@ -367,40 +379,40 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
 
         <main className="space-y-8">
           {/* Connection Manager */}
-          <div id="tutorial-account-section" className="bg-white rounded-xl shadow-md p-6">
+          <div id="tutorial-account-section" className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6">
             {isConnectedForRender && dbInfoForRender ? (
               <div className="animate-fade-in">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h2 className="text-xl font-bold text-slate-900">Database Information</h2>
-                    <p className="text-blue-600 font-mono text-sm">
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Database Information</h2>
+                    <p className="text-blue-600 dark:text-blue-400 font-mono text-sm">
                       Connected to: {accountNameForRender} / <span className="font-bold">{dbInfoForRender.name}</span>
                     </p>
                   </div>
                   <button
                     onClick={handleDisconnect}
-                    className="px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+                    className="px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/50 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors"
                   >
                     Disconnect
                   </button>
                 </div>
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div className="bg-slate-100 p-3 rounded-lg">
-                    <p className="text-slate-500">Total Documents</p>
-                    <p className="text-slate-900 font-semibold text-lg">{dbInfoForRender.totalDocuments.toLocaleString()}</p>
+                  <div className="bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg">
+                    <p className="text-slate-500 dark:text-slate-400">Total Documents</p>
+                    <p className="text-slate-900 dark:text-slate-100 font-semibold text-lg">{dbInfoForRender.totalDocuments.toLocaleString()}</p>
                   </div>
-                  <div className="bg-slate-100 p-3 rounded-lg">
-                    <p className="text-slate-500">Database Size</p>
-                    <p className="text-slate-900 font-semibold text-lg">{dbInfoForRender.size ?? 'N/A'}</p>
+                  <div className="bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg">
+                    <p className="text-slate-500 dark:text-slate-400">Database Size</p>
+                    <p className="text-slate-900 dark:text-slate-100 font-semibold text-lg">{dbInfoForRender.size ?? 'N/A'}</p>
                   </div>
-                  <div className="bg-slate-100 p-3 rounded-lg col-span-1 md:col-span-3">
-                     <p className="text-slate-600 mb-2 flex items-center gap-2 font-medium"><ServerIcon className="w-4 h-4" /> Collections</p>
+                  <div className="bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg col-span-1 md:col-span-3">
+                     <p className="text-slate-600 dark:text-slate-300 mb-2 flex items-center gap-2 font-medium"><ServerIcon className="w-4 h-4" /> Collections</p>
                      <div className="flex flex-wrap gap-2">
                        {dbInfoForRender.collections.map(col => (
                          <button 
                             key={col.name} 
                             onClick={() => handleCollectionClick(col.name)}
-                            className={`text-xs font-mono px-3 py-1 rounded-full transition-all duration-200 ${selectedCollectionForRender === col.name ? 'bg-blue-500 text-white font-bold ring-2 ring-blue-300' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                            className={`text-xs font-mono px-3 py-1 rounded-full transition-all duration-200 ${selectedCollectionForRender === col.name ? 'bg-blue-500 text-white font-bold ring-2 ring-blue-300 dark:bg-blue-600 dark:ring-blue-500' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'}`}
                         >
                             {col.name}
                          </button>
@@ -411,8 +423,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                  {/* Collection Action Panel */}
                  {showCollectionPanel && (
                     <div id="tutorial-collection-panel" className="mt-4">
-                        {isFetchingCollectionInfo && !isDemoModeForCollectionStep && <div className="text-center p-4 text-slate-500">Fetching collection details...</div>}
-                        {collectionInfoError && !isDemoModeForCollectionStep && <p className="text-red-600 text-sm mt-2">{collectionInfoError}</p>}
+                        {isFetchingCollectionInfo && !isDemoModeForCollectionStep && <div className="text-center p-4 text-slate-500 dark:text-slate-400">Fetching collection details...</div>}
+                        {collectionInfoError && !isDemoModeForCollectionStep && <p className="text-red-600 dark:text-red-400 text-sm mt-2">{collectionInfoError}</p>}
                         {collectionInfoForRender && selectedCollectionForRender === collectionInfoForRender.name && (
                             <CollectionActionPanel
                                 info={collectionInfoForRender}
@@ -426,14 +438,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
               </div>
             ) : (
               <div>
-                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2"><DatabaseIcon className="w-6 h-6 text-blue-500"/> Select a Database to Connect</h2>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2"><DatabaseIcon className="w-6 h-6 text-blue-500"/> Select a Database to Connect</h2>
                  {dbError && !isLoadingAccounts && !isLoadingDatabases && (
-                     <p className="text-red-600 bg-red-50 border border-red-200 text-sm mt-4 p-3 rounded-md">{dbError}</p>
+                     <p className="text-red-600 bg-red-50 border border-red-200 text-sm mt-4 p-3 rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">{dbError}</p>
                  )}
                 {isLoadingAccounts ? (
-                    <div className="text-center p-8 text-slate-500">Loading your Azure accounts...</div>
+                    <div className="text-center p-8 text-slate-500 dark:text-slate-400">Loading your Azure accounts...</div>
                 ) : !dbError && azureAccounts.length === 0 ? (
-                    <div className="text-center p-8 text-slate-500 border-2 border-dashed rounded-lg mt-4">
+                    <div className="text-center p-8 text-slate-500 dark:text-slate-400 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg mt-4">
                         No accessible Cosmos DB accounts found.
                         <br/>
                         <span className="text-xs">Ensure your account has Reader permissions on the resources.</span>
@@ -441,11 +453,11 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                 ) : (
                     <div className="mt-4 space-y-4">
                         {azureAccounts.map(account => (
-                            <div key={account.id} className="bg-slate-50 p-4 rounded-lg border">
+                            <div key={account.id} className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border dark:border-slate-700">
                                <button 
                                     onClick={() => handleSelectAccount(account.id)}
                                     disabled={isLoadingDatabases}
-                                    className="w-full text-left font-bold text-slate-800 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="w-full text-left font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                     <ServerIcon className="w-5 h-5 text-slate-500" />
                                     {account.name}
@@ -453,23 +465,23 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                                {selectedAccountId === account.id && (
                                    <div className="mt-3 pl-7 animate-fade-in">
                                         {isLoadingDatabases ? (
-                                             <div className="text-sm text-slate-500 py-2">Loading databases...</div>
+                                             <div className="text-sm text-slate-500 dark:text-slate-400 py-2">Loading databases...</div>
                                         ): dbError ? (
-                                             <p className="text-red-600 text-sm">{dbError}</p>
+                                             <p className="text-red-600 dark:text-red-400 text-sm">{dbError}</p>
                                         ) : accountDatabases.length > 0 ? (
                                             <div className="flex flex-wrap gap-2">
                                                 {accountDatabases.map(db => (
                                                     <button
                                                         key={db.name}
                                                         onClick={() => handleConnectDatabase(db)}
-                                                        className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 focus:ring-blue-500 transition-colors"
+                                                        className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
                                                     >
                                                         {db.name}
                                                     </button>
                                                 ))}
                                             </div>
                                         ) : (
-                                            <p className="text-xs text-slate-500">No databases found in this account.</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400">No databases found in this account.</p>
                                         )}
                                    </div>
                                )}
@@ -482,9 +494,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
           </div>
 
           {/* Query Generator */}
-          <div id="tutorial-prompt-section" className={`bg-white rounded-xl shadow-md p-6 transition-opacity duration-500 ${isQuerySectionDisabled ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+          <div id="tutorial-prompt-section" className={`bg-white dark:bg-slate-800 rounded-xl shadow-md p-6 transition-opacity duration-500 ${isQuerySectionDisabled ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
             <div className="space-y-4">
-              <label htmlFor="userInput" className="block text-lg font-medium text-slate-700">
+              <label htmlFor="userInput" className="block text-lg font-medium text-slate-700 dark:text-slate-300">
                 Enter your command:
               </label>
               <textarea
@@ -492,13 +504,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
                 placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : "e.g., 'Find all users from Canada and sort them by name'"}
-                className="w-full h-28 p-4 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-slate-400 resize-none"
+                className="w-full h-28 p-4 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none"
                 disabled={isLoading || isQuerySectionDisabled}
               />
               <button
                 onClick={handleMainGenerateClick}
                 disabled={isLoading || !userInput.trim() || isQuerySectionDisabled}
-                className="w-full flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.99]"
+                className="w-full flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.99]"
               >
                 {isLoading ? 'Generating...' : 'Generate Query'}
               </button>
@@ -507,7 +519,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
             <div id="tutorial-results-area" className="mt-8">
               {isLoading && <Loader />}
               {error && (
-                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg animate-fade-in" role="alert">
+                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg animate-fade-in dark:bg-red-900/50 dark:border-red-500/50 dark:text-red-300" role="alert">
                       <strong className="font-bold">Error: </strong>
                       <span className="block sm:inline">{error}</span>
                   </div>
@@ -531,7 +543,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                 </div>
               )}
               {!isLoading && !error && !queryResult && (
-                <div className="text-center text-slate-500 py-10 border-2 border-dashed border-slate-300 rounded-lg">
+                <div className="text-center text-slate-500 dark:text-slate-400 py-10 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg">
                   <p>{isQuerySectionDisabled ? 'Connect to a database to generate queries.' : 'Your generated query will appear here.'}</p>
                 </div>
               )}
@@ -539,7 +551,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
           </div>
         </main>
         
-        <footer className="text-center mt-8 text-slate-500 text-sm">
+        <footer className="text-center mt-8 text-slate-500 dark:text-slate-400 text-sm">
           <p>Powered by Microsoft Azure and Google Gemini. For internal use only.</p>
         </footer>
       </div>
@@ -561,7 +573,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
           .animate-fade-in {
             animation: fade-in 0.5s ease-out forwards;
           }
-      `}</style>
+       `}</style>
     </div>
   );
 };

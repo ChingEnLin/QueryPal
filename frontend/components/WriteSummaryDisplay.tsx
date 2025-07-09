@@ -40,31 +40,31 @@ const WriteSummaryDisplay: React.FC<WriteSummaryDisplayProps> = ({ data }) => {
     .filter(item => item.mapping);
 
   return (
-    <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm animate-fade-in">
-      <h3 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-3">
-        <CheckIcon className="w-7 h-7 text-green-500 p-1 bg-green-100 rounded-full" />
+    <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm animate-fade-in">
+      <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-3">
+        <CheckIcon className="w-7 h-7 text-green-500 bg-green-100 dark:bg-green-900/50 dark:text-green-400 rounded-full p-1" />
         Operation Successful
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {displayEntries.map(({ key, value, mapping }) => {
           let displayValue;
           if (typeof value === 'boolean') {
-            displayValue = <span className={`font-bold ${value ? 'text-green-600' : 'text-red-600'}`}>{value ? 'Yes' : 'No'}</span>;
+            displayValue = <span className={`font-bold ${value ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{value ? 'Yes' : 'No'}</span>;
           } else if (value === null) {
-            displayValue = <span className="text-slate-500">None</span>;
+            displayValue = <span className="text-slate-500 dark:text-slate-400">None</span>;
           } else if (typeof value === 'object') {
-            displayValue = <code className="text-xs bg-slate-200 p-1 rounded-sm">{JSON.stringify(value)}</code>;
+            displayValue = <code className="text-xs bg-slate-200 dark:bg-slate-600 p-1 rounded-sm">{JSON.stringify(value)}</code>;
           } else {
-            displayValue = <span className="text-slate-900">{value.toLocaleString()}</span>;
+            displayValue = <span className="text-slate-900 dark:text-slate-100">{value.toLocaleString()}</span>;
           }
 
           return (
-            <div key={key} className="bg-slate-50 p-4 rounded-lg flex items-center gap-4 ring-1 ring-slate-200/80">
-              <div className="flex-shrink-0 text-blue-600 bg-blue-100 rounded-full p-2.5">
+            <div key={key} className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg flex items-center gap-4 ring-1 ring-slate-200/80 dark:ring-slate-600/80">
+              <div className="flex-shrink-0 text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 rounded-full p-2.5">
                 {mapping.icon}
               </div>
               <div>
-                <p className="text-sm text-slate-600 font-medium">{mapping.label}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 font-medium">{mapping.label}</p>
                 <p className="text-2xl font-bold">{displayValue}</p>
               </div>
             </div>

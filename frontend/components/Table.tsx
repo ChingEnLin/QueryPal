@@ -64,24 +64,24 @@ const Table: React.FC<TableProps> = ({ data }) => {
 
     const renderCell = (item: any) => {
         if (item === null || item === undefined) {
-            return <em className="text-slate-400">null</em>;
+            return <em className="text-slate-400 dark:text-slate-500">null</em>;
         }
         if (typeof item === 'object') {
-            return <code className="text-xs bg-slate-200/50 p-1 rounded-sm">{JSON.stringify(item)}</code>
+            return <code className="text-xs bg-slate-200/50 dark:bg-slate-700 p-1 rounded-sm">{JSON.stringify(item)}</code>
         }
         return String(item);
     }
 
     return (
-        <div className="w-full overflow-x-auto bg-white border border-slate-200 rounded-lg">
-            <table className="min-w-full text-sm text-left text-slate-600">
-                <thead className="bg-slate-100 text-xs text-slate-700 uppercase">
+        <div className="w-full overflow-x-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+            <table className="min-w-full text-sm text-left text-slate-600 dark:text-slate-300">
+                <thead className="bg-slate-100 dark:bg-slate-700/50 text-xs text-slate-700 dark:text-slate-400 uppercase">
                     <tr>
                         {headers.map(key => (
                             <th key={key} scope="col" className="px-6 py-3">
                                 <button 
                                     onClick={() => requestSort(key)}
-                                    className="flex items-center gap-1.5 hover:text-slate-900"
+                                    className="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white"
                                 >
                                     {key}
                                     {getSortIcon(key)}
@@ -92,7 +92,7 @@ const Table: React.FC<TableProps> = ({ data }) => {
                 </thead>
                 <tbody>
                     {sortedData.map((row, rowIndex) => (
-                        <tr key={rowIndex} className="bg-white border-b border-slate-200 hover:bg-slate-50">
+                        <tr key={rowIndex} className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/70">
                             {headers.map(header => (
                                 <td key={`${rowIndex}-${header}`} className="px-6 py-4 font-mono">
                                     {renderCell(row[header])}
