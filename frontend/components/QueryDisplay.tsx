@@ -19,7 +19,7 @@ interface QueryDisplayProps {
 }
 
 // This regex is more reliable for detecting MongoDB write methods.
-const WRITE_OPERATION_REGEX = /\.(insertOne|insertMany|updateOne|updateMany|replaceOne|deleteOne|deleteMany|bulkWrite|drop|dropIndex|dropIndexes|createIndex|createIndexes|renameCollection)\s*\(/i;
+const WRITE_OPERATION_REGEX = /\.(insert_one|insert_many|update_one|update_many|replace_one|delete_one|delete_many|bulk_write|drop|drop_index|drop_indexes|create_index|create_indexes|rename_collection)\s*\(/i;
 
 
 const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQuery, isExecuting, historyCount, historyIndex, onNavigateHistory }) => {
