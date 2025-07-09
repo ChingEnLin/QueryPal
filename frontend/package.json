@@ -9,11 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@azure/msal-browser": "^3.10.0",
+    "@azure/msal-react": "^2.0.12",
+    "@google/genai": "^1.8.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@google/genai": "^1.8.0",
-    "@azure/msal-browser": "^3.10.0",
-    "@azure/msal-react": "^2.0.12"
+    "react-json-view-lite": "^2.4.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
