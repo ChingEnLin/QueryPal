@@ -9,8 +9,8 @@ const MicrosoftIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   >
     <defs>
       <linearGradient id="entra-gradient" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor="#8A3FFC" />
-        <stop offset="100%" stopColor="#0078D4" />
+        <stop offset="0%" stopColor="#C3A6FF" />
+        <stop offset="100%" stopColor="#6EC6FF" />
       </linearGradient>
     </defs>
     <path
