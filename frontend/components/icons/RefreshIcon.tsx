@@ -1,6 +1,6 @@
 import React from 'react';
 
-
+// Modern, bold refresh icon with a dynamic arrow and partial circle
 const RefreshIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -9,18 +9,17 @@ const RefreshIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth={2}
+    strokeWidth={2.2}
     strokeLinecap="round"
     strokeLinejoin="round"
     {...props}
   >
-    {/* Circular arrow */}
-    <path d="M4.93 4.93a10 10 0 1 1-1.32 2.09" />
-    <polyline points="4 4 4 8 8 8" />
-    {/* Small clock in the center */}
-    <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.2" fill="none" />
-    <line x1="12" y1="12" x2="12" y2="9.8" stroke="currentColor" strokeWidth="1.2" />
-    <line x1="12" y1="12" x2="13.6" y2="12" stroke="currentColor" strokeWidth="1.2" />
+    {/* Partial bold circle */}
+    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+    {/* Arrow head */}
+    <polyline points="22 4 22 8 18 8" />
+    {/* Subtle shadow for depth */}
+    <path d="M21 12a9 9 0 0 1-9 9" stroke="currentColor" strokeOpacity="0.15" strokeWidth={3} />
   </svg>
 );
 
