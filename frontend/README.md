@@ -162,6 +162,26 @@ Executes a query against the specified database.
 
 ---
 
+### `POST /api/query/debug`
+
+Sends a failed query to the AI for debugging analysis.
+
+-   **Request Body:**
+    ```json
+    {
+      "query": "db.collection('users').find({}).sor({ name: 1 })",
+      "error_message": "pymongo.errors.OperationFailure: ... unknown operator: $sor"
+    }
+    ```
+-   **Success Response (200):** An object containing the AI's suggestion.
+    ```json
+    {
+      "suggestion": "The error indicates an unknown operator '$sor'. The correct sort operator in MongoDB is '$sort'. Try replacing '$sor' with '$sort' in your query."
+    }
+    ```
+
+---
+
 ### `POST /api/system/clear-cache`
 
 Clears any server-side caches related to Azure resources.

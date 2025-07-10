@@ -73,6 +73,7 @@ API docs will be available at:
 |--------|----------------------------|------------------------------------|
 | POST   | /query/nl2query            | NL2Query (natural language → query) |
 | POST   | /query/execute             | Execute MongoDB query               |
+| POST   | /query/debug               | Debug Query (failed query → suggestion) |
 | GET    | /azure/cosmos_accounts     | Get Cosmos Resources                |
 | POST   | /azure/account_details     | Get Account Details                 |
 | POST   | /azure/collection_info     | Get Collection Info                 |

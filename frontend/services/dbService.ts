@@ -1,3 +1,4 @@
+
 import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource } from '../types';
 import { msalInstance, loginRequest } from '@/authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
@@ -47,8 +48,9 @@ export const getAzureCosmosAccounts = async (): Promise<CosmosDBAccount[]> => {
   });
 
   if (!responseApi.ok) {
-    const errorData = await responseApi.json().catch(() => ({ message: 'Could not load Azure resource list from server.' }));
-    throw new Error(errorData.message || `HTTP error! status: ${responseApi.status}`);
+    const errorData = await responseApi.json().catch(() => ({}));
+    const errorMessage = errorData.detail || errorData.message || `Could not load Azure resource list from server. Status: ${responseApi.status}`;
+    throw new Error(errorMessage);
   }
   
   return responseApi.json();
@@ -97,8 +99,9 @@ export const getDatabasesForAccount = async (accountId: string): Promise<DbInfo[
   });
 
   if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: `Failed to fetch databases for account ID ${accountId}.` }));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.detail || errorData.message || `Failed to fetch databases. Status: ${response.status}`;
+      throw new Error(errorMessage);
   }
 
   return response.json();
@@ -151,8 +154,9 @@ export const getCollectionInfo = async (collectionName: string, resource: Select
     });
 
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to fetch collection details.' }));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || errorData.message || `Failed to fetch collection details. Status: ${response.status}`;
+        throw new Error(errorMessage);
     }
 
     return response.json();
@@ -176,6 +180,10 @@ export const runMongoQuery = async (accountId: string, query: string, resource: 
         }
         if (lowerQuery.includes('.updatemany') && lowerQuery.includes('products')) {
             return Promise.resolve(mockProductUpdateResult);
+        }
+        // Mock a failure for debugging demo
+        if (lowerQuery.includes('sor')) {
+            return Promise.reject(new Error('MongoDB query error: unknown operator: $sor (MongoServerError)'));
         }
         return Promise.resolve(mockGenericExecutionResult);
     }
@@ -203,8 +211,9 @@ export const runMongoQuery = async (accountId: string, query: string, resource: 
     });
 
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Invalid syntax in query or runtime error.' }));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || errorData.message || `Query execution failed. Status: ${response.status}`;
+        throw new Error(errorMessage);
     }
     
     return response.json();
@@ -240,8 +249,9 @@ export const clearSystemCache = async (): Promise<{ message: string }> => {
     });
 
      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to clear server cache.' }));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || errorData.message || `Failed to clear server cache. Status: ${response.status}`;
+        throw new Error(errorMessage);
     }
     
     return response.json();

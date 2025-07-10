@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import JsonDisplay from './JsonDisplay';
@@ -11,11 +12,19 @@ import JsonCrackViewer from './JsonCrackViewer';
 import XIcon from './icons/XIcon';
 import WriteSummaryDisplay from './WriteSummaryDisplay';
 import InfoIcon from './icons/InfoIcon';
+import AiSparkleIcon from './icons/AiSparkleIcon';
+import DebuggingSuggestion from './DebuggingSuggestion';
+import SpinnerIcon from './icons/SpinnerIcon';
 
 interface QueryResultProps {
   isExecuting: boolean;
   executionError: string | null;
   executionResult: any | null;
+  // New props for debugging
+  onDebug: () => void;
+  isDebugging: boolean;
+  debuggingResult: { suggestion: string } | null;
+  debugError: string | null;
 }
 
 // Helper to check if data can be displayed as a table
@@ -46,7 +55,7 @@ const isWriteSummary = (data: any): boolean => {
 };
 
 
-const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, executionResult }) => {
+const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, executionResult, onDebug, isDebugging, debuggingResult, debugError }) => {
   const [viewMode, setViewMode] = useState<'json' | 'table' | 'summary'>('json');
   const [isJsonCollapsed, setIsJsonCollapsed] = useState(false);
   const [isGraphVisible, setIsGraphVisible] = useState(false);
@@ -96,9 +105,42 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
 
   if (executionError) {
     return (
-      <div className="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900/50 dark:border-red-500/50 dark:text-red-300 px-4 py-3 rounded-lg animate-fade-in" role="alert">
-        <strong className="font-bold">Execution Error: </strong>
-        <span className="block sm:inline">{executionError}</span>
+      <div className="space-y-4 animate-fade-in">
+        <div className="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900/50 dark:border-red-500/50 dark:text-red-300 px-4 py-3 rounded-lg" role="alert">
+          <strong className="font-bold">Execution Error: </strong>
+          <span className="block sm:inline">{executionError}</span>
+        </div>
+
+        <div className="flex flex-col items-start gap-4">
+            <button
+                onClick={onDebug}
+                disabled={isDebugging}
+                className="flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600 disabled:from-slate-400 disabled:to-slate-500 disabled:bg-gradient-to-r disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-violet-500 transition-all duration-200 transform hover:scale-[1.03] active:scale-[1]"
+            >
+                <AiSparkleIcon className="w-5 h-5" />
+                {isDebugging ? 'Debugging with AI...' : 'Debug with AI'}
+            </button>
+
+            {isDebugging && (
+                <div className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <SpinnerIcon className="h-5 w-5 text-blue-500" />
+                    <span>The AI is analyzing your query...</span>
+                </div>
+            )}
+
+            {debugError && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg w-full" role="alert">
+                    <strong className="font-bold">Debugging Error: </strong>
+                    <span className="block sm:inline">{debugError}</span>
+                </div>
+            )}
+
+            {debuggingResult && (
+                <div className="w-full">
+                    <DebuggingSuggestion suggestion={debuggingResult.suggestion} />
+                </div>
+            )}
+        </div>
       </div>
     );
   }

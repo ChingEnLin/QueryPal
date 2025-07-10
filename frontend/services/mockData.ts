@@ -1,4 +1,4 @@
-import { CosmosDBAccount, DbInfo, CollectionInfo, QueryResultData } from '../types';
+import { CosmosDBAccount, DbInfo, CollectionInfo, QueryResultData, DebuggingResult } from '../types';
 
 // --- Helper to simulate network latency ---
 export const mockDelay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -125,6 +125,11 @@ export const mockUpdateProductsQuery: QueryResultData = {
 
 export const mockDefaultQuery: QueryResultData = {
     generated_code: 'db.collection(\'your_collection\').find({})',
+};
+
+// --- Mock AI Debugging ---
+export const mockDebuggingResult: DebuggingResult = {
+    suggestion: `It looks like there's a typo in your query.\n\nThe error message "pymongo.errors.OperationFailure: Message: {\\"Errors\\":[\\"Unknown operator: '$sor'\\"]}" suggests that the operator \`$sor\` is not recognized.\n\nThe correct operator for sorting in MongoDB is \`$sort\`.\n\n**Suggestion:**\nChange \`{ '$sor': { 'name': 1 } }\` to \`{ '$sort': { 'name': 1 } }\` in your query code.`
 };
 
 

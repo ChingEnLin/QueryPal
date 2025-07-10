@@ -1,7 +1,8 @@
 
-import { QueryResultData, DbInfo, CollectionInfo } from '../types';
+
+import { QueryResultData, DbInfo, CollectionInfo, DebuggingResult } from '../types';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
-import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery } from './mockData';
+import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery, mockDebuggingResult } from './mockData';
 
 /**
  * Sends the user's natural language prompt to the backend for processing by the Gemini API.
@@ -47,18 +48,49 @@ export const generateMongoQuery = async (
     });
 
     if (!response.ok) {
-        try {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'The AI model failed to generate a valid query.');
-        } catch (e) {
-            // This catches JSON parsing errors or if the error response wasn't JSON.
-             if (e instanceof Error) {
-                throw new Error(e.message);
-            }
-            throw new Error('An unexpected error occurred while generating the query.');
-        }
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || errorData.message || 'The AI model failed to generate a valid query.';
+        throw new Error(errorMessage);
     }
 
     const result: QueryResultData = await response.json();
+    return result;
+};
+
+/**
+ * Sends a failed query and its error message to the backend for debugging with an AI model.
+ * @param query The query code that failed.
+ * @param errorMessage The error message from the database.
+ * @returns A promise that resolves with the AI's debugging suggestion.
+ */
+export const debugMongoQuery = async (query: string, errorMessage: string): Promise<DebuggingResult> => {
+    // --- DEVELOPMENT MOCK ---
+    if (!USE_MSAL_AUTH) {
+        console.log("DEV MODE: Returning mock AI debugging result.");
+        await mockDelay(2000); // Simulate AI thinking time
+        return Promise.resolve(mockDebuggingResult);
+    }
+    // --- END DEVELOPMENT MOCK ---
+    
+    console.log("Sending failed query to backend for debugging...");
+
+    const response = await fetch(`${API_BASE_URL}/query/debug`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            query: query,
+            error_message: errorMessage,
+        }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || errorData.message || 'The AI model failed to provide a debugging suggestion.';
+        throw new Error(errorMessage);
+    }
+
+    const result: DebuggingResult = await response.json();
     return result;
 };

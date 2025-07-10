@@ -21,6 +21,13 @@ export interface QueryResultData {
 }
 
 /**
+ * Represents the result from the AI debugging service.
+ */
+export interface DebuggingResult {
+    suggestion: string;
+}
+
+/**
  * Represents a discoverable Azure Cosmos DB account.
  */
 export interface CosmosDBAccount {

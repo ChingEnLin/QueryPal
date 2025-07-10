@@ -1,8 +1,9 @@
 
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { generateMongoQuery } from '../services/geminiService';
+import { generateMongoQuery, debugMongoQuery } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
-import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource } from '../types';
+import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult } from '../types';
 import { mockECommerceDbInfo, mockCollectionInfoMap } from '../services/mockData';
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
@@ -134,6 +135,11 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const [executionResult, setExecutionResult] = useState<any | null>(null);
   const [executionError, setExecutionError] = useState<string | null>(null);
 
+  // State for query debugging
+  const [isDebugging, setIsDebugging] = useState<boolean>(false);
+  const [debuggingResult, setDebuggingResult] = useState<DebuggingResult | null>(null);
+  const [debugError, setDebugError] = useState<string | null>(null);
+
   // State for collection details
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
   const [collectionInfo, setCollectionInfo] = useState<CollectionInfo | null>(null);
@@ -201,6 +207,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setEditableCode('');
     setExecutionResult(null);
     setExecutionError(null);
+    setDebuggingResult(null);
+    setDebugError(null);
     setCodeHistory([]);
     setHistoryIndex(-1);
   }, []);
@@ -272,6 +280,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     // Keep execution results on screen until the next query is executed, but clear old errors/code.
     setError(null);
     setExecutionError(null);
+    setDebuggingResult(null);
+    setDebugError(null);
 
     try {
       const result = await generateMongoQuery(prompt, connectedDbInfo ?? undefined, collectionCtx);
@@ -291,7 +301,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     } finally {
       setIsLoading(false);
     }
-  }, [connectedDbInfo, clearQueryState, codeHistory, historyIndex]);
+  }, [connectedDbInfo, codeHistory, historyIndex]);
 
   const handleMainGenerateClick = () => handleGenerateQuery(userInput);
   
@@ -310,6 +320,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setIsExecuting(true);
     setExecutionError(null);
     setExecutionResult(null);
+    setDebuggingResult(null);
+    setDebugError(null);
 
     try {
       const result = await runMongoQuery(selectedAccountId, editableCode, connectedResource);
@@ -321,6 +333,24 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
       setIsExecuting(false);
     }
   }, [editableCode, connectedDbInfo, connectedResource]);
+
+  const handleDebugQuery = useCallback(async () => {
+    if (!editableCode || !executionError) return;
+
+    setIsDebugging(true);
+    setDebugError(null);
+    setDebuggingResult(null);
+
+    try {
+        const result = await debugMongoQuery(editableCode, executionError);
+        setDebuggingResult(result);
+    } catch (e) {
+        if (e instanceof Error) setDebugError(e.message);
+        else setDebugError("An unexpected error occurred while debugging.");
+    } finally {
+        setIsDebugging(false);
+    }
+  }, [editableCode, executionError]);
 
   const handleCollectionClick = useCallback(async (collectionName: string) => {
     if (!connectedResource) return;
@@ -539,6 +569,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                         isExecuting={isExecuting}
                         executionError={executionError}
                         executionResult={executionResult}
+                        onDebug={handleDebugQuery}
+                        isDebugging={isDebugging}
+                        debuggingResult={debuggingResult}
+                        debugError={debugError}
                     />
                 </div>
               )}

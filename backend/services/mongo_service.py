@@ -5,8 +5,12 @@ from pymongo.results import UpdateResult, InsertOneResult, InsertManyResult, Del
 def execute_mongo_query(connection_string: str, database: str, query: str):
     client = pymongo.MongoClient(connection_string)
     db = client[database]
-    # Evaluate the query string in the context of the db variable
-    query_result = eval(query, {"db": db})
+    try:
+        # Evaluate the query string in the context of the db variable
+        query_result = eval(query, {"db": db})
+    except Exception as e:
+        # Return the exception to be handled by the endpoint
+        return {"error": str(e), "exception_type": type(e).__name__}
     # Convert cursor to list if it's a cursor object
     if hasattr(query_result, 'to_list'):
         return query_result.to_list()

@@ -3,8 +3,16 @@ from services.azure_auth import exchange_token_obo
 from services.azure_cosmos_resources import (
     get_connection_string,
 )
-from models.schemas import QueryPrompt, ExecuteInput
-from services.gemini_service import generate_query_from_prompt
+from models.schemas import (
+    QueryPrompt,
+    ExecuteInput,
+    DebugQueryRequest,
+    DebugSuggestionResponse
+)
+from services.gemini_service import (
+    generate_query_from_prompt,
+    generate_suggestion_from_query_error
+)
 from services.mongo_service import execute_mongo_query, transform_mongo_result
 
 router = APIRouter()
@@ -24,4 +32,14 @@ def execute(query: ExecuteInput = Body(...),
     access_token = exchange_token_obo(user_token)
     connection_string = get_connection_string(query.account_id, access_token)
     result = execute_mongo_query(connection_string, query.database_name, query.query)
+    if isinstance(result, dict) and "error" in result:
+        raise HTTPException(status_code=500, detail=f"MongoDB query error: {result['error']} ({result['exception_type']})")
     return transform_mongo_result(result)
+
+@router.post("/debug", response_model=DebugSuggestionResponse)
+def debug(
+    body: DebugQueryRequest = Body(...)):
+    """
+    Sends a failed query and error message to Gemini for debugging suggestion.
+    """
+    return generate_suggestion_from_query_error(body.query, body.error_message)

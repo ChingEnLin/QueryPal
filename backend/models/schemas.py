@@ -32,3 +32,10 @@ class ExecuteInput(BaseModel):
     account_id: str
     database_name: str
     query: str
+
+class DebugQueryRequest(BaseModel):
+    query: str
+    error_message: str
+
+class DebugSuggestionResponse(BaseModel):
+    suggestion: str
