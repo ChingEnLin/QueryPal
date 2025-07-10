@@ -118,14 +118,24 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
         <div className="bg-white dark:bg-slate-700/50 p-3 rounded-lg flex items-center gap-3 border border-slate-200 dark:border-slate-600">
-            <InfoIcon className="w-5 h-5 text-slate-400 flex-shrink-0" />
+            <div className="relative group flex items-center">
+              <InfoIcon className="w-5 h-5 text-slate-400 flex-shrink-0 cursor-help" />
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-2 text-center text-xs text-white bg-slate-800 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
+                Number of documents in the selected collection.
+              </div>
+            </div>
             <div>
                 <p className="text-slate-500 dark:text-slate-400">Documents</p>
                 <p className="text-slate-800 dark:text-slate-200 font-semibold">{info.documentCount.toLocaleString()}</p>
             </div>
         </div>
          <div className="bg-white dark:bg-slate-700/50 p-3 rounded-lg flex items-center gap-3 border border-slate-200 dark:border-slate-600">
-            <InfoIcon className="w-5 h-5 text-slate-400 flex-shrink-0" />
+            <div className="relative group flex items-center">
+              <InfoIcon className="w-5 h-5 text-slate-400 flex-shrink-0 cursor-help" />
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-2 text-center text-xs text-white bg-slate-800 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
+                Estimated by sampling 10% of documents and average the document size.
+              </div>
+            </div>
             <div>
                 <p className="text-slate-500 dark:text-slate-400">Avg. Doc Size</p>
                 <p className="text-slate-800 dark:text-slate-200 font-semibold">{info.averageDocumentSize}</p>
