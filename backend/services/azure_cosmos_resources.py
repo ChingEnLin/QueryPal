@@ -75,17 +75,38 @@ def get_collection_info_with_conn_str(connection_string: str, db_name: str, coll
 
     # Get stats (collstats not supported in Cosmos DB Mongo API)
     document_count = collection.estimated_document_count()
-    avg_obj_size = None  # Not available in Cosmos DB Mongo API
+    avg_obj_size = None  # Will estimate from sample
 
     # Get indexes
     indexes = [index["name"] for index in collection.list_indexes()]
 
-    # Get a sample document
-    sample_doc = collection.aggregate([{"$sample": {"size": 1}}])
-    try:
-        sample = next(sample_doc)
-    except StopIteration:
-        sample = {}
+    # Get a sample document: sample a subset and pick the one with the most keys
+    sample = {}
+    max_keys = 0
+    sizes = []
+    # Dynamically determine sample size: up to 100 or 10% of collection, whichever is smaller
+    if document_count > 0:
+        sample_size = min(100, max(1, int(document_count * 0.1)))
+        try:
+            sample_docs = collection.aggregate([{"$sample": {"size": sample_size}}])
+            for doc in sample_docs:
+                sizes.append(len(bson.BSON.encode(doc)))
+                num_keys = len(doc.keys())
+                if num_keys > max_keys:
+                    max_keys = num_keys
+                    sample = doc
+        except Exception:
+            # Fallback: scan up to sample_size docs if $sample is not supported
+            for i, doc in enumerate(collection.find({}, projection={"_id": False})):
+                if i >= sample_size:
+                    break
+                sizes.append(len(bson.BSON.encode(doc)))
+                num_keys = len(doc.keys())
+                if num_keys > max_keys:
+                    max_keys = num_keys
+                    sample = doc
+    if sizes:
+        avg_obj_size = sum(sizes) / len(sizes)
 
     # Helper to convert binary types to Extended JSON (e.g. ObjectId, datetime)
     def convert_bson(value):
