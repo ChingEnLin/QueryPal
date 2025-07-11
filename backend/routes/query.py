@@ -20,7 +20,11 @@ router = APIRouter()
 @router.post("/nl2query")
 def nl2query(prompt: QueryPrompt = Body(...)):
     collections = [col.name for col in prompt.db_context.collections]
-    return generate_query_from_prompt(prompt.user_input, collections, prompt.db_context.name, prompt.collection_context)
+    return generate_query_from_prompt(prompt.user_input,
+                                      collections,
+                                      prompt.db_context.name,
+                                      prompt.collection_context,
+                                      prompt.intermediate_context)
 
 @router.post("/execute")
 def execute(query: ExecuteInput = Body(...),

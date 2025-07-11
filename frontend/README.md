@@ -132,11 +132,20 @@ Generates a query using the Gemini API, providing database schema for context.
 -   **Request Body:**
     ```json
     {
-      "userInput": "A natural language prompt from the user.",
-      "dbContext": { ...DbInfo } // Optional: context of the connected database
-      "collectionContext": { ...CollectionInfo } // Optional: context of the specific collection
+      "user_input": "A natural language prompt from the user.",
+      "db_context": { "...DbInfo" },
+      "collection_context": { "...CollectionInfo" },
+      "intermediate_context": [
+        { "...document1" },
+        { "...document2" }
+      ]
     }
     ```
+    -   `user_input` (string, required): The user's natural language prompt.
+    -   `db_context` (object, optional): Context of the connected database.
+    -   `collection_context` (object, optional): Context of a specific collection.
+    -   `intermediate_context` (array, optional): An array of values (e.g., documents, strings of IDs) from a previous query result to use as context for multi-step queries.
+
 -   **Success Response (200):** An object containing the generated code string.
     ```json
     {
@@ -153,8 +162,8 @@ Executes a query against the specified database.
 -   **Request Body:**
     ```json
     {
-      "accountId": "/subscriptions/sub-id/resourceGroups/rg-prod/...",
-      "databaseName": "ECommerce-DB",
+      "account_id": "/subscriptions/sub-id/resourceGroups/rg-prod/...",
+      "database_name": "ECommerce-DB",
       "query": "db.collection('users').find({})"
     }
     ```

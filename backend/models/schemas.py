@@ -24,6 +24,7 @@ class QueryPrompt(BaseModel):
     user_input: str
     db_context: DBContext
     collection_context: CollectionContext | None = None  # Optional context for specific collection
+    intermediate_context: object | None = None  # Optional intermediate context for complex queries
 
 class GeneratedCode(BaseModel):
     generated_code: str

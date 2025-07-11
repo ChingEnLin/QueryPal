@@ -1,6 +1,7 @@
 
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { generateMongoQuery, debugMongoQuery } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult } from '../types';
@@ -20,6 +21,9 @@ import Tutorial from '../components/Tutorial';
 import { useTheme } from '../contexts/ThemeContext';
 import SunIcon from '../components/icons/SunIcon';
 import MoonIcon from '../components/icons/MoonIcon';
+import PinIcon from '../components/icons/PinIcon';
+import XIcon from '../components/icons/XIcon';
+import JsonDisplay from '../components/JsonDisplay';
 
 // --- Header Component ---
 interface HeaderUIProps {
@@ -134,6 +138,11 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [executionResult, setExecutionResult] = useState<any | null>(null);
   const [executionError, setExecutionError] = useState<string | null>(null);
+  
+  // State for intermediate context (multi-step queries)
+  const [intermediateContext, setIntermediateContext] = useState<{ data: any; source: string; } | null>(null);
+  const [isContextViewerOpen, setIsContextViewerOpen] = useState(false);
+
 
   // State for query debugging
   const [isDebugging, setIsDebugging] = useState<boolean>(false);
@@ -211,6 +220,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setDebugError(null);
     setCodeHistory([]);
     setHistoryIndex(-1);
+    setIntermediateContext(null);
   }, []);
   
   const handleDisconnect = useCallback(() => {
@@ -284,8 +294,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setDebugError(null);
 
     try {
-      const result = await generateMongoQuery(prompt, connectedDbInfo ?? undefined, collectionCtx);
+      const result = await generateMongoQuery(prompt, connectedDbInfo ?? undefined, collectionCtx, intermediateContext?.data);
       setQueryResult(result);
+      setIntermediateContext(null); // Clear context after use
 
       // Add to history
       const newHistory = [...codeHistory.slice(0, historyIndex + 1), result.generated_code];
@@ -301,7 +312,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     } finally {
       setIsLoading(false);
     }
-  }, [connectedDbInfo, codeHistory, historyIndex]);
+  }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext]);
 
   const handleMainGenerateClick = () => handleGenerateQuery(userInput);
   
@@ -332,7 +343,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     } finally {
       setIsExecuting(false);
     }
-  }, [editableCode, connectedDbInfo, connectedResource]);
+  }, [editableCode, connectedDbInfo, connectedResource, selectedAccountId]);
 
   const handleDebugQuery = useCallback(async () => {
     if (!editableCode || !executionError) return;
@@ -381,6 +392,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
       setEditableCode(codeHistory[newIndex]);
     }
   }, [historyIndex, codeHistory]);
+  
+  const handleSetIntermediateContext = useCallback((data: any, source: string) => {
+      setIntermediateContext({ data, source });
+  }, []);
 
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
@@ -393,6 +408,35 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const collectionInfoForRender = isDemoModeForCollectionStep ? mockCollectionInfoMap.get('users')! : collectionInfo;
   const showCollectionPanel = isDemoModeForCollectionStep || isFetchingCollectionInfo || (collectionInfo && selectedCollection === collectionInfo.name) || collectionInfoError;
   const isQuerySectionDisabled = !isConnectedForRender;
+
+  const contextViewerDrawer = isContextViewerOpen && intermediateContext ? createPortal(
+    <>
+      <div
+        onClick={() => setIsContextViewerOpen(false)}
+        className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fade-in-fast"
+        aria-hidden="true"
+      ></div>
+      <aside className="fixed top-0 right-0 h-full w-full md:w-3/4 lg:w-2/3 bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer">
+        <header className="flex items-center justify-between p-4 border-b border-slate-700 flex-shrink-0">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-3">
+            <PinIcon className="w-5 h-5 text-blue-400" />
+            Active Query Context
+          </h3>
+          <button
+            onClick={() => setIsContextViewerOpen(false)}
+            className="p-1.5 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+            aria-label="Close context viewer"
+          >
+            <XIcon className="w-5 h-5" />
+          </button>
+        </header>
+        <div className="flex-grow overflow-auto p-4">
+          <JsonDisplay data={intermediateContext.data} />
+        </div>
+      </aside>
+    </>,
+    document.body
+  ) : null;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
@@ -525,6 +569,26 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
 
           {/* Query Generator */}
           <div id="tutorial-prompt-section" className={`bg-white dark:bg-slate-800 rounded-xl shadow-md p-6 transition-opacity duration-500 ${isQuerySectionDisabled ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+            {intermediateContext && (
+                <div className="relative bg-blue-50 dark:bg-slate-800/60 border border-blue-200 dark:border-blue-500/30 rounded-lg p-4 mb-6 animate-fade-in">
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                             <PinIcon className="w-6 h-6 text-blue-500 flex-shrink-0" />
+                            <div>
+                                <h4 className="font-bold text-blue-800 dark:text-blue-300">Query Context Active</h4>
+                                <p className="text-sm text-blue-700 dark:text-blue-200/80">
+                                    Using results from the <strong className="font-mono">'{intermediateContext.source}'</strong> collection ({Array.isArray(intermediateContext.data) ? intermediateContext.data.length : 1} items) as context for the next query.
+                                </p>
+                                <button onClick={() => setIsContextViewerOpen(true)} className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-semibold mt-1">View Data</button>
+                            </div>
+                        </div>
+                        <button onClick={() => setIntermediateContext(null)} className="p-1.5 rounded-full text-blue-600 dark:text-blue-400 hover:bg-blue-200/50 dark:hover:bg-blue-900/40">
+                            <XIcon className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
+            
             <div className="space-y-4">
               <label htmlFor="userInput" className="block text-lg font-medium text-slate-700 dark:text-slate-300">
                 Enter your command:
@@ -573,6 +637,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                         isDebugging={isDebugging}
                         debuggingResult={debuggingResult}
                         debugError={debugError}
+                        sourceCollection={selectedCollectionForRender}
+                        onSetIntermediateContext={handleSetIntermediateContext}
+                        intermediateContext={intermediateContext}
                     />
                 </div>
               )}
@@ -599,6 +666,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
         }}
        />
 
+      {contextViewerDrawer}
+
        <style>{`
           @keyframes fade-in {
             from { opacity: 0; transform: translateY(-10px); }
@@ -606,6 +675,20 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
           }
           .animate-fade-in {
             animation: fade-in 0.5s ease-out forwards;
+          }
+          @keyframes fade-in-fast { 
+            from { opacity: 0; } 
+            to { opacity: 1; } 
+          }
+          .animate-fade-in-fast { 
+            animation: fade-in-fast 0.3s ease-out forwards; 
+          }
+          @keyframes slide-in-drawer { 
+            from { transform: translateX(100%); } 
+            to { transform: translateX(0); } 
+          }
+          .animate-slide-in-drawer { 
+            animation: slide-in-drawer 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
           }
        `}</style>
     </div>

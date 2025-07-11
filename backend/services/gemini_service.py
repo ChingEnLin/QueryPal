@@ -12,6 +12,7 @@ User said: "{user_input}"
 Database: {database}
 Available collections: {collections}
 Sample collection document (optional): {collection_context}
+Intermediate context (optional): {intermediate_context}
 Return:
 pymongo query code (e.g., db["collection"].find(...))
 """
@@ -33,15 +34,60 @@ def extract_python_code(text: str) -> str:
         return match.group(1).strip()
     return text.strip()
 
+def prune_intermediate_context(context: dict, max_length: int = 512) -> dict:
+    """
+    Recursively remove keys from the context dict that likely contain image or large binary data (e.g., base64-encoded images).
+    - Removes any string value longer than max_length.
+    - Removes keys with common image/binary names (e.g., 'image', 'img', 'picture', 'photo', 'data', 'file', 'content', 'blob').
+    - Recurses into nested dicts and lists.
+    """
+    if not isinstance(context, dict):
+        return context
+    image_keys = {'image', 'picture', 'photo', 'thumbnail', 'preview_image', 'avatar', 'icon'}
+    pruned = {}
+    for k, v in context.items():
+        # Remove by key name
+        if k.lower() in image_keys:
+            continue
+        # Remove by string length (likely base64 or large text)
+        if isinstance(v, str) and len(v) > max_length:
+            continue
+        # Recurse for dicts
+        if isinstance(v, dict):
+            nested = prune_intermediate_context(v, max_length)
+            if nested:  # Only add if not empty
+                pruned[k] = nested
+        # Recurse for lists
+        elif isinstance(v, list):
+            filtered = []
+            for item in v:
+                if isinstance(item, dict):
+                    nested = prune_intermediate_context(item, max_length)
+                    if nested:
+                        filtered.append(nested)
+                elif isinstance(item, str) and len(item) <= max_length:
+                    filtered.append(item)
+                elif not isinstance(item, str):
+                    filtered.append(item)
+            if filtered:
+                pruned[k] = filtered
+        else:
+            pruned[k] = v
+    return pruned
+
 def generate_query_from_prompt(user_input: str,
                                collections: list[str],
                                database: str,
-                               collection_context: CollectionContext = None) -> GeneratedCode:
+                               collection_context: CollectionContext = None,
+                               intermediate_context: dict = None) -> GeneratedCode:
+    # Prune intermediate_context to remove image/large data
+    safe_intermediate_context = prune_intermediate_context(intermediate_context) if intermediate_context else {}
     full_prompt = PROMPT_TEMPLATE_QUERY.format(
         user_input=user_input,
         database=database,
         collections=", ".join(collections),
-        collection_context=collection_context.sampleDocument if collection_context else ""
+        collection_context=collection_context.sampleDocument if collection_context else "",
+        intermediate_context=safe_intermediate_context
     )
     client = genai.Client()
     response = client.models.generate_content(

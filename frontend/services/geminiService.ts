@@ -1,5 +1,4 @@
 
-
 import { QueryResultData, DbInfo, CollectionInfo, DebuggingResult } from '../types';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery, mockDebuggingResult } from './mockData';
@@ -10,12 +9,14 @@ import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuer
  * @param userInput The natural language query from the user.
  * @param dbInfo Optional information about the connected database to provide context to the AI.
  * @param collectionContext Optional information about a specific collection to provide even more detailed context.
+ * @param intermediateContext Optional data from a previous query result to be used as context.
  * @returns A promise that resolves with the structured query data.
  */
 export const generateMongoQuery = async (
     userInput: string,
     dbInfo?: DbInfo,
-    collectionContext?: CollectionInfo
+    collectionContext?: CollectionInfo,
+    intermediateContext?: any,
 ): Promise<QueryResultData> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
@@ -44,6 +45,7 @@ export const generateMongoQuery = async (
             user_input: userInput,
             db_context: dbInfo, // Send DB context to the backend for more accurate queries
             collection_context: collectionContext, // Optional: send collection context if available
+            intermediate_context: intermediateContext, // Optional: send data from a previous query
         }),
     });
 

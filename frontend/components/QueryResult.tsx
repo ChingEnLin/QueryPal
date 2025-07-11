@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import JsonDisplay from './JsonDisplay';
@@ -15,21 +16,31 @@ import InfoIcon from './icons/InfoIcon';
 import AiSparkleIcon from './icons/AiSparkleIcon';
 import DebuggingSuggestion from './DebuggingSuggestion';
 import SpinnerIcon from './icons/SpinnerIcon';
+import PinIcon from './icons/PinIcon';
 
 interface QueryResultProps {
   isExecuting: boolean;
   executionError: string | null;
   executionResult: any | null;
-  // New props for debugging
+  // Props for debugging
   onDebug: () => void;
   isDebugging: boolean;
   debuggingResult: { suggestion: string } | null;
   debugError: string | null;
+  // Props for multi-step context queries
+  sourceCollection: string | null;
+  onSetIntermediateContext: (data: any, source: string) => void;
+  intermediateContext: { data: any; source: string; } | null;
 }
 
 // Helper to check if data can be displayed as a table
 const isTableCompatible = (data: any): data is Record<string, any>[] => {
   return Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && data[0] !== null;
+};
+
+// Helper to check if data can be used as query context (any non-empty array)
+const isContextCompatible = (data: any): boolean => {
+  return Array.isArray(data) && data.length > 0;
 };
 
 // Helper to detect if the result is a summary of a write operation
@@ -55,7 +66,11 @@ const isWriteSummary = (data: any): boolean => {
 };
 
 
-const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, executionResult, onDebug, isDebugging, debuggingResult, debugError }) => {
+const QueryResult: React.FC<QueryResultProps> = ({ 
+    isExecuting, executionError, executionResult, 
+    onDebug, isDebugging, debuggingResult, debugError,
+    sourceCollection, onSetIntermediateContext, intermediateContext
+}) => {
   const [viewMode, setViewMode] = useState<'json' | 'table' | 'summary'>('json');
   const [isJsonCollapsed, setIsJsonCollapsed] = useState(false);
   const [isGraphVisible, setIsGraphVisible] = useState(false);
@@ -63,6 +78,12 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
   // Memoize checks on the execution result
   const isWriteOpSummary = useMemo(() => isWriteSummary(executionResult), [executionResult]);
   const canBeTable = useMemo(() => isTableCompatible(executionResult), [executionResult]);
+  const canBeContext = useMemo(() => isContextCompatible(executionResult), [executionResult]);
+  
+  const isCurrentResultInContext = useMemo(() => {
+    // Check for strict equality. This works because we are setting the state with the exact same object reference.
+    return intermediateContext?.data === executionResult;
+  }, [intermediateContext, executionResult]);
   
   // Reset view if result changes, defaulting to the appropriate view
   useEffect(() => {
@@ -74,6 +95,12 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
     setIsJsonCollapsed(false);
     setIsGraphVisible(false); // also hide graph on new results
   }, [executionResult, isWriteOpSummary]);
+
+  const handleSetContextClick = () => {
+    if (sourceCollection && executionResult) {
+      onSetIntermediateContext(executionResult, sourceCollection);
+    }
+  };
 
   if (isExecuting) {
     return (
@@ -218,6 +245,15 @@ const QueryResult: React.FC<QueryResultProps> = ({ isExecuting, executionError, 
                     >
                         <GraphIcon className="w-4 h-4" />
                         Graph
+                    </button>
+                     <button
+                        onClick={handleSetContextClick}
+                        disabled={!canBeContext || isCurrentResultInContext}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${isCurrentResultInContext ? 'bg-blue-500 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                        title="Use this result as context for the next query"
+                    >
+                        <PinIcon className="w-4 h-4" />
+                        {isCurrentResultInContext ? 'Context Set' : 'Use as Context'}
                     </button>
                 </div>
                 {viewMode === 'json' && (
