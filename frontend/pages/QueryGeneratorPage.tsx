@@ -1,12 +1,10 @@
 
-
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { generateMongoQuery, debugMongoQuery } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult } from '../types';
-import { mockECommerceDbInfo, mockCollectionInfoMap } from '../services/mockData';
+import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult } from '../services/mockData';
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
 import Loader from '../components/Loader';
@@ -400,10 +398,12 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
 
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
+  const isDemoModeForResultsStep = isTutorialActive && (tutorialStepIndex === 4 || tutorialStepIndex === 5);
+  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 6;
 
-  const isConnectedForRender = (connectedDbInfo && connectedResource) || isDemoModeForCollectionStep;
-  const dbInfoForRender = isDemoModeForCollectionStep ? mockECommerceDbInfo : connectedDbInfo;
-  const accountNameForRender = isDemoModeForCollectionStep ? 'prod-ecommerce-db' : connectedAccountName;
+  const isConnectedForRender = (connectedDbInfo && connectedResource) || isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep;
+  const dbInfoForRender = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep ? mockECommerceDbInfo : connectedDbInfo;
+  const accountNameForRender = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep ? 'prod-ecommerce-db' : connectedAccountName;
 
   const selectedCollectionForRender = isDemoModeForCollectionStep ? 'users' : selectedCollection;
   const collectionInfoForRender = isDemoModeForCollectionStep ? mockCollectionInfoMap.get('users')! : collectionInfo;
@@ -619,14 +619,71 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
             </div>
 
             <div id="tutorial-results-area" className="mt-8">
-              {isLoading && <Loader />}
-              {error && (
+              {isLoading && !isDemoModeForDebugStep && !isDemoModeForResultsStep && <Loader />}
+              
+              {error && !isDemoModeForDebugStep && !isDemoModeForResultsStep && (
                   <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg animate-fade-in dark:bg-red-900/50 dark:border-red-500/50 dark:text-red-300" role="alert">
                       <strong className="font-bold">Error: </strong>
                       <span className="block sm:inline">{error}</span>
                   </div>
               )}
-              {!isLoading && !error && queryResult && (
+
+              {/* Tutorial Demo for Results View (Steps 4 & 5) */}
+              {isDemoModeForResultsStep && (
+                <div className="space-y-8 animate-fade-in">
+                  <QueryDisplay
+                    code={mockFindUsersQuery.generated_code}
+                    onCodeChange={() => {}}
+                    onRunQuery={() => {}}
+                    isExecuting={false}
+                    historyCount={1}
+                    historyIndex={0}
+                    onNavigateHistory={() => {}}
+                  />
+                  <QueryResult
+                    isExecuting={false}
+                    executionError={null}
+                    executionResult={mockUserFindResult}
+                    onDebug={() => {}}
+                    isDebugging={false}
+                    debuggingResult={null}
+                    debugError={null}
+                    sourceCollection={'users'}
+                    onSetIntermediateContext={() => {}}
+                    intermediateContext={null}
+                  />
+                </div>
+              )}
+              
+              {/* Tutorial Demo for Debug View (Step 6) */}
+              {isDemoModeForDebugStep && (
+                <div className="space-y-8 animate-fade-in">
+                  <QueryDisplay
+                    code={"db.collection('users').find({}).sor({ name: 1 })"}
+                    onCodeChange={() => {}}
+                    onRunQuery={() => {}}
+                    isExecuting={false}
+                    historyCount={1}
+                    historyIndex={0}
+                    onNavigateHistory={() => {}}
+                  />
+                  <QueryResult
+                    isExecuting={false}
+                    executionError={"MongoDB query error: unknown operator: $sor (MongoServerError)"}
+                    executionResult={null}
+                    onDebug={() => {}}
+                    isDebugging={false}
+                    debuggingResult={null}
+                    debugError={null}
+                    sourceCollection={'users'}
+                    onSetIntermediateContext={() => {}}
+                    intermediateContext={null}
+                  />
+                </div>
+              )}
+
+              {/* Real results */}
+              {(!isLoading && !error && queryResult && !isDemoModeForResultsStep && !isDemoModeForDebugStep) && (
                 <div className="space-y-8">
                     <QueryDisplay
                         code={editableCode}
@@ -651,7 +708,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                     />
                 </div>
               )}
-              {!isLoading && !error && !queryResult && (
+              
+              {/* Placeholder */}
+              {(!isLoading && !error && !queryResult && !isDemoModeForResultsStep && !isDemoModeForDebugStep) && (
                 <div className="text-center text-slate-500 dark:text-slate-400 py-10 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg">
                   <p>{isQuerySectionDisabled ? 'Connect to a database to generate queries.' : 'Your generated query will appear here.'}</p>
                 </div>

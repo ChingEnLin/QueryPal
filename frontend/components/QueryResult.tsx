@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import JsonDisplay from './JsonDisplay';
@@ -211,7 +209,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
             <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Query Result</h3>
             
             {/* View Mode Toolbar */}
-            <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div id="tutorial-view-switcher" className="flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-1">
                     {isWriteOpSummary && (
                        <button 

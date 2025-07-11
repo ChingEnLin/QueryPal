@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import XIcon from './icons/XIcon';
@@ -18,30 +17,48 @@ const tutorialSteps: TutorialStep[] = [
   {
     targetId: 'modal',
     title: 'Welcome to QueryPal!',
-    content: 'This quick tour will walk you through the main features of the app. You can exit at any time.',
+    content: 'This quick tour will walk you through the main features. You can exit at any time.',
   },
   {
     targetId: 'tutorial-account-section',
     title: '1. Connect to a Database',
-    content: 'Start by selecting an Azure account, then choose a database to connect to. The app can only see resources you have permission for.',
+    content: 'Start by selecting an Azure account, then choose a database. The app only discovers resources you have permission to access.',
     placement: 'bottom',
   },
   {
     targetId: 'tutorial-collection-panel',
-    title: '2. Target a Specific Collection',
-    content: 'Click on a collection to open this panel. Here you can see its schema and run a query targeted at just this collection for more accurate results. The AI will generate queries based on the collection schema for better accuracy.',
+    title: '2. Target a Collection',
+    content: 'Click a collection to see its schema. When a collection is selected, the AI uses its schema to generate more accurate queries.',
     placement: 'top',
   },
   {
     targetId: 'tutorial-prompt-section',
-    title: '3. Generate & Run Queries',
-    content: "Once connected, write commands, generate queries, review the code, and see the results all in this section. You can also edit the generated code directly.",
+    title: '3. Generate a Query',
+    content: "Write a command in plain English, then click 'Generate Query'. You can also edit the generated code directly in the text area.",
     placement: 'top',
   },
   {
+    targetId: 'tutorial-view-switcher',
+    title: '4. View & Visualize Results',
+    content: "After running a query, you can view the results as raw JSON, a sortable Table, or an interactive Graph for complex data.",
+    placement: 'top',
+  },
+  {
+    targetId: 'tutorial-view-switcher',
+    title: '5. Chain Queries with Context',
+    content: 'Click the "Pin" icon to use the current result set as context for your next query. This is great for multi-step questions.',
+    placement: 'top',
+  },
+  {
+    targetId: 'tutorial-results-area',
+    title: '6. Debug with AI',
+    content: "If a query fails, don't worry! Click 'Debug with AI' and the assistant will analyze the error and provide a fix.",
+    placement: 'bottom',
+  },
+  {
     targetId: 'tutorial-header-actions',
-    title: '4. Manage Your Session',
-    content: 'Here you can clear the server cache to fetch the latest resources, toggle dark mode, restart this tutorial, or sign out of your account.',
+    title: '7. Manage Your Session',
+    content: 'Here you can clear the cache to refresh resources, toggle dark mode, restart this tutorial, or sign out.',
     placement: 'bottom',
   },
   {
