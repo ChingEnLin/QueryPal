@@ -21,11 +21,11 @@ Azure Cosmos DB (especially MongoDB API) lacks a friendly interface to inspect a
 | Layer             | Technology                                                                 |
 |------------------|-----------------------------------------------------------------------------|
 | Frontend         | React, TypeScript, Tailwind CSS                                             |
-| Authentication   | Microsoft Entra ID + MSAL (On-Behalf-Of Flow)                              |
-| AI Query Engine  | Google Gemini Pro API                                                       |
+| Authentication   | Microsoft Entra ID + MSAL (On-Behalf-Of Flow)                               |
+| AI Query Engine  | Google Gemini.                                                              |
 | Backend          | FastAPI (Python)                                                            |
 | Database Access  | Azure Cosmos DB (MongoDB API)                                               |
-| Cloud APIs       | Azure Resource Manager (ARM), MS Graph (optional in future)                |
+| Cloud APIs       | Azure Resource Manager (ARM)                                                |
 | Auth Libraries   | MSAL (Python, JS)                                                           |
 
 ---
