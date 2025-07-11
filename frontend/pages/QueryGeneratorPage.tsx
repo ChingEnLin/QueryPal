@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { generateMongoQuery, debugMongoQuery } from '../services/geminiService';
@@ -129,6 +131,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
 
   // State for AI query generation
   const [queryResult, setQueryResult] = useState<QueryResultData | null>(null);
+  const [querySourceCollection, setQuerySourceCollection] = useState<string | null>(null);
   const [editableCode, setEditableCode] = useState<string>('');
   const [codeHistory, setCodeHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
@@ -220,6 +223,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setCodeHistory([]);
     setHistoryIndex(-1);
     setIntermediateContext(null);
+    setQuerySourceCollection(null);
   }, []);
   
   const handleDisconnect = useCallback(() => {
@@ -314,6 +318,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext]);
   
   const handleGenerateQueryClick = () => {
+    setQuerySourceCollection(selectedCollection);
     // If a collection is selected, pass its info as context.
     // Otherwise, this will be undefined, and the query will be against the whole DB.
     handleGenerateQuery(userInput, collectionInfo ?? undefined);
@@ -640,7 +645,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                         isDebugging={isDebugging}
                         debuggingResult={debuggingResult}
                         debugError={debugError}
-                        sourceCollection={selectedCollectionForRender}
+                        sourceCollection={querySourceCollection}
                         onSetIntermediateContext={handleSetIntermediateContext}
                         intermediateContext={intermediateContext}
                     />
