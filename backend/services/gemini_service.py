@@ -14,7 +14,7 @@ Available collections: {collections}
 Sample collection document (optional): {collection_context}
 Intermediate context (optional): {intermediate_context}
 Return:
-pymongo query code (e.g., db["collection"].find(...))
+only one line of pure pymongo query code (e.g., db["collection"].find(...))
 """
 
 PROMPT_TEMPLATE_DEBUG = """

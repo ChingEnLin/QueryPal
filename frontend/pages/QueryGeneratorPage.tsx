@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { generateMongoQuery, debugMongoQuery } from '../services/geminiService';
@@ -313,14 +312,11 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
       setIsLoading(false);
     }
   }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext]);
-
-  const handleMainGenerateClick = () => handleGenerateQuery(userInput);
   
-  const handleGenerateCollectionQuery = (collectionPrompt: string) => {
-    if (!selectedCollection || !collectionInfo) return;
-    const fullPrompt = `For the '${selectedCollection}' collection, ${collectionPrompt}`;
-    setUserInput(fullPrompt);
-    handleGenerateQuery(fullPrompt, collectionInfo);
+  const handleGenerateQueryClick = () => {
+    // If a collection is selected, pass its info as context.
+    // Otherwise, this will be undefined, and the query will be against the whole DB.
+    handleGenerateQuery(userInput, collectionInfo ?? undefined);
   };
 
   const handleRunQuery = useCallback(async () => {
@@ -408,6 +404,15 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const collectionInfoForRender = isDemoModeForCollectionStep ? mockCollectionInfoMap.get('users')! : collectionInfo;
   const showCollectionPanel = isDemoModeForCollectionStep || isFetchingCollectionInfo || (collectionInfo && selectedCollection === collectionInfo.name) || collectionInfoError;
   const isQuerySectionDisabled = !isConnectedForRender;
+  
+  const generateButtonText = useMemo(() => {
+    if (isLoading) return 'Generating...';
+    if (selectedCollection) {
+        return `Generate Query for ${selectedCollection} collection`;
+    }
+    return 'Generate Query';
+  }, [isLoading, selectedCollection]);
+
 
   const contextViewerDrawer = isContextViewerOpen && intermediateContext ? createPortal(
     <>
@@ -502,9 +507,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                         {collectionInfoForRender && selectedCollectionForRender === collectionInfoForRender.name && (
                             <CollectionActionPanel
                                 info={collectionInfoForRender}
-                                onGenerate={handleGenerateCollectionQuery}
                                 onClose={() => { setSelectedCollection(null); setCollectionInfo(null); }}
-                                isLoading={isLoading}
                             />
                         )}
                     </div>
@@ -597,16 +600,16 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                 id="userInput"
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
-                placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : "e.g., 'Find all users from Canada and sort them by name'"}
+                placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : (selectedCollection ? `Querying '${selectedCollection}'... e.g., 'Find all users from Canada'` : "e.g., 'Find all users from Canada and sort them by name'")}
                 className="w-full h-28 p-4 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none"
                 disabled={isLoading || isQuerySectionDisabled}
               />
               <button
-                onClick={handleMainGenerateClick}
+                onClick={handleGenerateQueryClick}
                 disabled={isLoading || !userInput.trim() || isQuerySectionDisabled}
                 className="w-full flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.99]"
               >
-                {isLoading ? 'Generating...' : 'Generate Query'}
+                {generateButtonText}
               </button>
             </div>
 

@@ -80,13 +80,10 @@ export const SchemaRenderer: React.FC<SchemaRendererProps> = ({ data, indent = 0
 
 interface CollectionActionPanelProps {
   info: CollectionInfo;
-  onGenerate: (prompt: string) => void;
   onClose: () => void;
-  isLoading: boolean;
 }
 
-const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onGenerate, onClose, isLoading }) => {
-  const [prompt, setPrompt] = useState('');
+const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onClose }) => {
   const [isSchemaOpen, setIsSchemaOpen] = useState(true);
 
   useEffect(() => {
@@ -94,18 +91,13 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
     setIsSchemaOpen(true);
   }, [info.name]);
   
-  const handleGenerateClick = () => {
-    if (!prompt.trim()) return;
-    onGenerate(prompt);
-  };
-
   const sampleDocument = info.sampleDocument || {};
 
   return (
     <div className="bg-slate-100 dark:bg-slate-800/50 rounded-lg p-4 mt-4 border border-slate-200 dark:border-slate-700 animate-fade-in space-y-6">
       <header className="flex justify-between items-center">
         <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400">
-          Actions for: <span className="font-mono bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-1 rounded">{info.name}</span>
+          Collection Details: <span className="font-mono bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-1 rounded">{info.name}</span>
         </h3>
         <button
           onClick={onClose}
@@ -118,24 +110,14 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
         <div className="bg-white dark:bg-slate-700/50 p-3 rounded-lg flex items-center gap-3 border border-slate-200 dark:border-slate-600">
-            <div className="relative group flex items-center">
-              <InfoIcon className="w-5 h-5 text-slate-400 flex-shrink-0 cursor-help" />
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-2 text-center text-xs text-white bg-slate-800 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
-                Number of documents in the selected collection.
-              </div>
-            </div>
+            <InfoIcon className="w-5 h-5 text-slate-400 flex-shrink-0" />
             <div>
                 <p className="text-slate-500 dark:text-slate-400">Documents</p>
                 <p className="text-slate-800 dark:text-slate-200 font-semibold">{info.documentCount.toLocaleString()}</p>
             </div>
         </div>
          <div className="bg-white dark:bg-slate-700/50 p-3 rounded-lg flex items-center gap-3 border border-slate-200 dark:border-slate-600">
-            <div className="relative group flex items-center">
-              <InfoIcon className="w-5 h-5 text-slate-400 flex-shrink-0 cursor-help" />
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-2 text-center text-xs text-white bg-slate-800 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
-                Estimated by sampling 10% of documents and average the document size.
-              </div>
-            </div>
+            <InfoIcon className="w-5 h-5 text-slate-400 flex-shrink-0" />
             <div>
                 <p className="text-slate-500 dark:text-slate-400">Avg. Doc Size</p>
                 <p className="text-slate-800 dark:text-slate-200 font-semibold">{info.averageDocumentSize}</p>
@@ -178,32 +160,6 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onG
         )}
       </div>
 
-      <div className="space-y-3">
-        <label htmlFor={`collection-prompt-${info.name}`} className="flex items-center gap-2 text-md font-medium text-slate-700 dark:text-slate-300">
-            <span>Perform an action on this collection:</span>
-            <div className="relative group flex items-center">
-                <InfoIcon className="w-4 h-4 text-slate-400 cursor-help" />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-2 text-center text-xs text-white bg-slate-800 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
-                    Collection name and schema will be sent to the AI prompt for more precise query generation.
-                </div>
-            </div>
-        </label>
-        <textarea
-          id={`collection-prompt-${info.name}`}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder={`e.g., 'Find all users with an "inactive" status'`}
-          className="w-full h-20 p-3 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-slate-400 dark:placeholder-slate-500 resize-y"
-          disabled={isLoading}
-        />
-        <button
-          onClick={handleGenerateClick}
-          disabled={isLoading || !prompt.trim()}
-          className="w-full flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
-        >
-          {isLoading ? 'Generating...' : 'Generate Query for Collection'}
-        </button>
-      </div>
       <style>{`
         @keyframes fade-in-short {
           from { opacity: 0; transform: translateY(-5px); }
