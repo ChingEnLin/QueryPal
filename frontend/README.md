@@ -191,6 +191,28 @@ Sends a failed query to the AI for debugging analysis.
 
 ---
 
+### `POST /api/query/analyze`
+
+Sends a query result to the AI for analysis and visualization suggestions.
+
+-   **Request Body:**
+    ```json
+    {
+      "query_result": [ { "...document1" }, { "...document2" } ]
+    }
+    ```
+-   **Success Response (200):** An object containing the AI's insight and a Chart.js compatible configuration.
+    ```json
+    {
+      "insight": "A textual summary of the data.",
+      "chartType": "bar",
+      "chartData": { "...Chart.js data object" },
+      "chartOptions": { "...Chart.js options object" }
+    }
+    ```
+
+---
+
 ### `POST /api/system/clear-cache`
 
 Clears any server-side caches related to Azure resources.

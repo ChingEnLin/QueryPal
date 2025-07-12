@@ -1,5 +1,4 @@
 
-
 /**
  * Represents a summarized view of a collection within a database.
  */
@@ -62,4 +61,36 @@ export interface CollectionInfo {
     averageDocumentSize: string;
     indexes: string[];
     sampleDocument: Record<string, any>;
+}
+
+// --- Types for AI Analysis and Graphing ---
+
+export type ChartJSType = 'bar' | 'line' | 'pie' | 'doughnut' | 'polarArea' | 'radar' | 'scatter' | 'bubble';
+
+export interface ChartJSDataset {
+    label: string;
+    data: number[];
+    backgroundColor?: string | string[];
+    borderColor?: string | string[];
+    borderWidth?: number;
+    // Allow other chart.js dataset properties
+    [key: string]: any; 
+}
+
+export interface ChartJSData {
+    labels: string[];
+    datasets: ChartJSDataset[];
+}
+
+// Using `any` for options is pragmatic as they are very complex
+export type ChartJSOptions = any;
+
+/**
+ * Represents the result from the AI analysis service.
+ */
+export interface AnalysisResult {
+    insight: string;
+    chartType: ChartJSType;
+    chartData: ChartJSData;
+    chartOptions?: ChartJSOptions;
 }

@@ -1,4 +1,4 @@
-import { CosmosDBAccount, DbInfo, CollectionInfo, QueryResultData, DebuggingResult } from '../types';
+import { CosmosDBAccount, DbInfo, CollectionInfo, QueryResultData, DebuggingResult, AnalysisResult } from '../types';
 
 // --- Helper to simulate network latency ---
 export const mockDelay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -150,6 +150,60 @@ export const mockProductUpdateResult = {
 };
 
 export const mockGenericExecutionResult = { message: 'Query executed successfully (mocked).' };
+
+// --- Mock AI Analysis Result ---
+
+export const mockAnalysisResult: AnalysisResult = {
+  insight: "The query returned 3 active users from Canada. This indicates a small but active user base in this region. Visualizing the user count by country could provide broader insights if more data were available.",
+  chartType: 'bar',
+  chartData: {
+    labels: ['Canada'],
+    datasets: [{
+      label: '# of Active Users',
+      data: [3],
+      backgroundColor: 'rgba(54, 162, 235, 0.6)',
+      borderColor: 'rgba(54, 162, 235, 1)',
+      borderWidth: 1
+    }]
+  },
+  chartOptions: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: {
+            color: '#94a3b8' // text-slate-400
+        }
+      },
+      title: {
+        display: true,
+        text: 'Active Users by Country',
+        color: '#f1f5f9' // text-slate-100
+      }
+    },
+    scales: {
+        y: {
+            beginAtZero: true,
+            ticks: {
+                color: '#94a3b8' // text-slate-400
+            },
+            grid: {
+                color: 'rgba(148, 163, 184, 0.2)'
+            }
+        },
+        x: {
+            ticks: {
+                color: '#94a3b8' // text-slate-400
+            },
+            grid: {
+                color: 'rgba(148, 163, 184, 0.2)'
+            }
+        }
+    }
+  }
+};
+
 
 // --- Mock System Action Results ---
 export const mockCacheClearResult = { message: 'Cache cleared successfully.' };

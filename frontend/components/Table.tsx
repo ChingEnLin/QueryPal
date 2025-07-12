@@ -1,10 +1,14 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ArrowUpIcon from './icons/ArrowUpIcon';
 import ArrowDownIcon from './icons/ArrowDownIcon';
+import XIcon from './icons/XIcon';
 
 interface TableProps {
   data: Record<string, any>[];
+  isEditMode: boolean;
+  visibleHeaders: string[];
+  onDeleteColumn: (header: string) => void;
 }
 
 type SortConfig = {
@@ -12,18 +16,8 @@ type SortConfig = {
     direction: 'asc' | 'desc';
 } | null;
 
-const Table: React.FC<TableProps> = ({ data }) => {
+const Table: React.FC<TableProps> = ({ data, isEditMode, visibleHeaders, onDeleteColumn }) => {
     const [sortConfig, setSortConfig] = useState<SortConfig>(null);
-
-    const headers = useMemo(() => {
-        if (data.length === 0) return [];
-        // Get all unique keys from all objects
-        const keySet = new Set<string>();
-        data.forEach(row => {
-            Object.keys(row).forEach(key => keySet.add(key));
-        });
-        return Array.from(keySet);
-    }, [data]);
     
     const sortedData = useMemo(() => {
         let sortableData = [...data];
@@ -77,15 +71,27 @@ const Table: React.FC<TableProps> = ({ data }) => {
             <table className="min-w-full text-sm text-left text-slate-600 dark:text-slate-300">
                 <thead className="bg-slate-100 dark:bg-slate-700/50 text-xs text-slate-700 dark:text-slate-400 uppercase">
                     <tr>
-                        {headers.map(key => (
+                        {visibleHeaders.map(key => (
                             <th key={key} scope="col" className="px-6 py-3">
-                                <button 
-                                    onClick={() => requestSort(key)}
-                                    className="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white"
-                                >
-                                    {key}
-                                    {getSortIcon(key)}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        onClick={() => requestSort(key)}
+                                        className="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white disabled:hover:text-inherit dark:disabled:hover:text-inherit"
+                                        disabled={isEditMode}
+                                    >
+                                        {key}
+                                        {getSortIcon(key)}
+                                    </button>
+                                    {isEditMode && (
+                                        <button 
+                                            onClick={() => onDeleteColumn(key)}
+                                            className="p-1 rounded-full text-slate-500 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/50"
+                                            aria-label={`Delete ${key} column`}
+                                        >
+                                            <XIcon className="w-3 h-3"/>
+                                        </button>
+                                    )}
+                                </div>
                             </th>
                         ))}
                     </tr>
@@ -93,7 +99,7 @@ const Table: React.FC<TableProps> = ({ data }) => {
                 <tbody>
                     {sortedData.map((row, rowIndex) => (
                         <tr key={rowIndex} className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/70">
-                            {headers.map(header => (
+                            {visibleHeaders.map(header => (
                                 <td key={`${rowIndex}-${header}`} className="px-6 py-4 font-mono">
                                     {renderCell(row[header])}
                                 </td>

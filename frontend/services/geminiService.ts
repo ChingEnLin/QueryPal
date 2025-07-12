@@ -1,7 +1,7 @@
 
-import { QueryResultData, DbInfo, CollectionInfo, DebuggingResult } from '../types';
+import { QueryResultData, DbInfo, CollectionInfo, DebuggingResult, AnalysisResult } from '../types';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
-import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery, mockDebuggingResult } from './mockData';
+import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery, mockDebuggingResult, mockAnalysisResult } from './mockData';
 
 /**
  * Sends the user's natural language prompt to the backend for processing by the Gemini API.
@@ -94,5 +94,43 @@ export const debugMongoQuery = async (query: string, errorMessage: string): Prom
     }
 
     const result: DebuggingResult = await response.json();
+    return result;
+};
+
+/**
+ * Sends a query result to the backend to be analyzed by an AI model.
+ * The AI will return insights and a suggested visualization.
+ * @param queryResult The data returned from a successful query execution.
+ * @returns A promise that resolves with the AI's analysis.
+ */
+export const analyzeQueryResult = async (queryResult: any): Promise<AnalysisResult> => {
+    // --- DEVELOPMENT MOCK ---
+    if (!USE_MSAL_AUTH) {
+        console.log("DEV MODE: Returning mock AI analysis result.");
+        await mockDelay(2500); // Simulate AI thinking time
+        // This mock assumes the input is the user find result
+        if (Array.isArray(queryResult) && queryResult[0]?.country === 'Canada') {
+            return Promise.resolve(mockAnalysisResult);
+        }
+        // Generic fallback for other data
+        throw new Error("No mock analysis available for this data. Please implement a new mock in services/mockData.ts");
+    }
+    // --- END DEVELOPMENT MOCK ---
+    
+    console.log("Sending query result to backend for analysis...");
+
+    const response = await fetch(`${API_BASE_URL}/query/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query_result: queryResult }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || errorData.message || 'The AI model failed to provide an analysis.';
+        throw new Error(errorMessage);
+    }
+
+    const result: AnalysisResult = await response.json();
     return result;
 };

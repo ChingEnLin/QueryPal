@@ -1,9 +1,9 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { generateMongoQuery, debugMongoQuery } from '../services/geminiService';
+import { generateMongoQuery, debugMongoQuery, analyzeQueryResult } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
-import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult } from '../types';
+import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult } from '../types';
 import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult } from '../services/mockData';
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
@@ -149,6 +149,11 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const [debuggingResult, setDebuggingResult] = useState<DebuggingResult | null>(null);
   const [debugError, setDebugError] = useState<string | null>(null);
 
+  // State for result analysis
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
   // State for collection details
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
   const [collectionInfo, setCollectionInfo] = useState<CollectionInfo | null>(null);
@@ -200,7 +205,6 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
           // Refresh accounts list after clearing cache
           await fetchAccounts();
       } catch (e) {
-          setCacheClearStatus('error');
           if (e instanceof Error) setDbError(e.message);
           else setDbError("An unknown error occurred while clearing the cache.");
       } finally {
@@ -222,6 +226,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setHistoryIndex(-1);
     setIntermediateContext(null);
     setQuerySourceCollection(null);
+    setAnalysisResult(null);
+    setAnalysisError(null);
   }, []);
   
   const handleDisconnect = useCallback(() => {
@@ -293,6 +299,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setExecutionError(null);
     setDebuggingResult(null);
     setDebugError(null);
+    setAnalysisResult(null);
+    setAnalysisError(null);
+
 
     try {
       const result = await generateMongoQuery(prompt, connectedDbInfo ?? undefined, collectionCtx, intermediateContext?.data);
@@ -332,6 +341,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setExecutionResult(null);
     setDebuggingResult(null);
     setDebugError(null);
+    setAnalysisResult(null);
+    setAnalysisError(null);
 
     try {
       const result = await runMongoQuery(selectedAccountId, editableCode, connectedResource);
@@ -361,6 +372,24 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
         setIsDebugging(false);
     }
   }, [editableCode, executionError]);
+
+  const handleAnalyzeQuery = useCallback(async (dataToAnalyze: any) => {
+    if (!dataToAnalyze) return;
+
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisResult(null);
+
+    try {
+        const result = await analyzeQueryResult(dataToAnalyze);
+        setAnalysisResult(result);
+    } catch (e) {
+        if (e instanceof Error) setAnalysisError(e.message);
+        else setAnalysisError("An unexpected error occurred during AI analysis.");
+    } finally {
+        setIsAnalyzing(false);
+    }
+  }, []);
 
   const handleCollectionClick = useCallback(async (collectionName: string) => {
     if (!connectedResource) return;
@@ -398,8 +427,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
 
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
-  const isDemoModeForResultsStep = isTutorialActive && (tutorialStepIndex === 4 || tutorialStepIndex === 5);
-  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 6;
+  const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 4 && tutorialStepIndex <= 7;
+  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 8;
 
   const isConnectedForRender = (connectedDbInfo && connectedResource) || isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep;
   const dbInfoForRender = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep ? mockECommerceDbInfo : connectedDbInfo;
@@ -628,7 +657,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                   </div>
               )}
 
-              {/* Tutorial Demo for Results View (Steps 4 & 5) */}
+              {/* Tutorial Demo for Results View */}
               {isDemoModeForResultsStep && (
                 <div className="space-y-8 animate-fade-in">
                   <QueryDisplay
@@ -651,11 +680,17 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                     sourceCollection={'users'}
                     onSetIntermediateContext={() => {}}
                     intermediateContext={null}
+                    onAnalyze={() => {}}
+                    isAnalyzing={false}
+                    analysisResult={null}
+                    analysisError={null}
+                    isTutorialActive={isTutorialActive}
+                    tutorialStepIndex={tutorialStepIndex}
                   />
                 </div>
               )}
               
-              {/* Tutorial Demo for Debug View (Step 6) */}
+              {/* Tutorial Demo for Debug View */}
               {isDemoModeForDebugStep && (
                 <div className="space-y-8 animate-fade-in">
                   <QueryDisplay
@@ -678,6 +713,12 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                     sourceCollection={'users'}
                     onSetIntermediateContext={() => {}}
                     intermediateContext={null}
+                    onAnalyze={() => {}}
+                    isAnalyzing={false}
+                    analysisResult={null}
+                    analysisError={null}
+                    isTutorialActive={isTutorialActive}
+                    tutorialStepIndex={tutorialStepIndex}
                   />
                 </div>
               )}
@@ -705,6 +746,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                         sourceCollection={querySourceCollection}
                         onSetIntermediateContext={handleSetIntermediateContext}
                         intermediateContext={intermediateContext}
+                        onAnalyze={handleAnalyzeQuery}
+                        isAnalyzing={isAnalyzing}
+                        analysisResult={analysisResult}
+                        analysisError={analysisError}
                     />
                 </div>
               )}

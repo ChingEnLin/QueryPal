@@ -14,6 +14,8 @@ from services.gemini_service import (
     generate_suggestion_from_query_error
 )
 from services.mongo_service import execute_mongo_query, transform_mongo_result
+from models.analyze import AnalyzeRequest, AnalyzeResponse
+from services.analyze_service import analyze_query_result
 
 router = APIRouter()
 
@@ -47,3 +49,12 @@ def debug(
     Sends a failed query and error message to Gemini for debugging suggestion.
     """
     return generate_suggestion_from_query_error(body.query, body.error_message)
+
+@router.post("/analyze", response_model=AnalyzeResponse)
+def analyze(
+    body: AnalyzeRequest = Body(...)
+):
+    """
+    Sends a query result to the AI for analysis and visualization suggestions.
+    """
+    return analyze_query_result(body.query_result)
