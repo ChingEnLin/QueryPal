@@ -15,6 +15,7 @@ import AiSparkleIcon from './icons/AiSparkleIcon';
 import DebuggingSuggestion from './DebuggingSuggestion';
 import SpinnerIcon from './icons/SpinnerIcon';
 import PinIcon from './icons/PinIcon';
+import DownloadIcon from './icons/DownloadIcon';
 
 interface QueryResultProps {
   isExecuting: boolean;
@@ -98,6 +99,59 @@ const QueryResult: React.FC<QueryResultProps> = ({
     if (sourceCollection && executionResult) {
       onSetIntermediateContext(executionResult, sourceCollection);
     }
+  };
+
+  const handleDownloadCSV = () => {
+    if (!isTableCompatible(executionResult)) return;
+
+    // Get all unique headers from all rows to handle inconsistent objects
+    const headerSet = new Set<string>();
+    executionResult.forEach(row => {
+        if (typeof row === 'object' && row !== null) {
+            Object.keys(row).forEach(key => headerSet.add(key));
+        }
+    });
+    const headers = Array.from(headerSet);
+
+    const escapeCsvCell = (cell: any): string => {
+        if (cell === null || cell === undefined) {
+            return '';
+        }
+        // Stringify objects/arrays so they appear in the cell
+        const str = (typeof cell === 'object') ? JSON.stringify(cell) : String(cell);
+        
+        // If the string contains a comma, a double quote, or a newline, enclose it in double quotes.
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            // Escape existing double quotes by doubling them
+            const escapedStr = str.replace(/"/g, '""');
+            return `"${escapedStr}"`;
+        }
+        return str;
+    };
+    
+    // Header row
+    const csvRows = [headers.join(',')];
+    
+    // Data rows
+    for (const row of executionResult) {
+        const values = headers.map(header => escapeCsvCell(row[header]));
+        csvRows.push(values.join(','));
+    }
+
+    const csvString = csvRows.join('\n');
+    // Add BOM for Excel compatibility with UTF-8 characters
+    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    link.href = URL.createObjectURL(blob);
+    link.download = `query_result_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    document.body.appendChild(link);
+    link.click();
+    
+    // Clean up the DOM and memory
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
   };
 
   if (isExecuting) {
@@ -210,12 +264,13 @@ const QueryResult: React.FC<QueryResultProps> = ({
             
             {/* View Mode Toolbar */}
             <div id="tutorial-view-switcher" className="flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
-                <div className="flex items-center gap-1">
+                {/* View Mode Button Group */}
+                <div className="flex items-center gap-1 flex-wrap">
                     {isWriteOpSummary && (
                        <button 
                         onClick={() => setViewMode('summary')}
                         disabled={viewMode === 'summary'}
-                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${viewMode === 'summary' ? 'bg-blue-500 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'summary' ? 'bg-blue-500 text-white shadow' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
                       >
                           <InfoIcon className="w-4 h-4" />
                           Summary
@@ -224,7 +279,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
                     <button 
                         onClick={() => setViewMode('json')}
                         disabled={viewMode === 'json'}
-                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${viewMode === 'json' ? 'bg-blue-500 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'json' ? 'bg-blue-500 text-white shadow' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
                     >
                         <JsonIcon className="w-4 h-4" />
                         JSON
@@ -232,37 +287,52 @@ const QueryResult: React.FC<QueryResultProps> = ({
                     <button 
                         onClick={() => setViewMode('table')}
                         disabled={!canBeTable || viewMode === 'table'}
-                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${viewMode === 'table' ? 'bg-blue-500 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed'}`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'table' ? 'bg-blue-500 text-white shadow' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed'}`}
                     >
                         <TableIcon className="w-4 h-4" />
                         Table
                     </button>
                     <button
                         onClick={() => setIsGraphVisible(true)}
-                        className={'flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}
+                        className={'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}
                     >
                         <GraphIcon className="w-4 h-4" />
                         Graph
                     </button>
-                     <button
+                </div>
+
+                {/* Actions Group */}
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <button
                         onClick={handleSetContextClick}
                         disabled={!canBeContext || isCurrentResultInContext}
-                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors ${isCurrentResultInContext ? 'bg-blue-500 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border ${isCurrentResultInContext ? 'border-blue-500 bg-blue-500 text-white shadow' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600'} disabled:opacity-50 disabled:cursor-not-allowed`}
                         title="Use this result as context for the next query"
                     >
                         <PinIcon className="w-4 h-4" />
-                        {isCurrentResultInContext ? 'Context Set' : 'Use as Context'}
+                        <span>{isCurrentResultInContext ? 'Context Set' : 'Use as Context'}</span>
                     </button>
+                    
+                    <button
+                        onClick={handleDownloadCSV}
+                        disabled={!canBeTable}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Download table data as CSV"
+                    >
+                        <DownloadIcon className="w-4 h-4" />
+                        <span>Download CSV</span>
+                    </button>
+
+                    {viewMode === 'json' && (
+                         <button
+                            onClick={() => setIsJsonCollapsed(!isJsonCollapsed)}
+                            className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700"
+                         >
+                            <span>{isJsonCollapsed ? 'Expand' : 'Collapse'}</span>
+                            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${!isJsonCollapsed && 'rotate-180'}`} />
+                        </button>
+                    )}
                 </div>
-                {viewMode === 'json' && (
-                     <button
-                        onClick={() => setIsJsonCollapsed(!isJsonCollapsed)}
-                        className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white p-1 rounded-md"
-                     >
-                        <span>{isJsonCollapsed ? 'Expand' : 'Collapse'}</span>
-                        <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${!isJsonCollapsed && 'rotate-180'}`} />
-                    </button>
-                )}
             </div>
 
             {/* Content Display */}
