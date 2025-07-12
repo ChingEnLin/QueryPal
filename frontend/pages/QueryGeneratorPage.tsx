@@ -3,7 +3,8 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { generateMongoQuery, debugMongoQuery, analyzeQueryResult } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
-import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult } from '../types';
+import { generateIpynbContent, downloadFile } from '../services/notebookService';
+import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep } from '../types';
 import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult } from '../services/mockData';
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
@@ -23,6 +24,10 @@ import MoonIcon from '../components/icons/MoonIcon';
 import PinIcon from '../components/icons/PinIcon';
 import XIcon from '../components/icons/XIcon';
 import JsonDisplay from '../components/JsonDisplay';
+import NotebookIcon from '../components/icons/NotebookIcon';
+import DownloadIcon from '../components/icons/DownloadIcon';
+import TrashIcon from '../components/icons/TrashIcon';
+
 
 // --- Header Component ---
 interface HeaderUIProps {
@@ -106,6 +111,74 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
   );
 };
 
+
+// --- Notebook Panel Component ---
+const NotebookStepCard: React.FC<{ step: NotebookStep, index: number }> = ({ step, index }) => (
+    <div className="bg-slate-800/70 p-4 rounded-lg border border-slate-700 space-y-3">
+        <h4 className="font-bold text-slate-200">Step {index + 1}</h4>
+        {step.contextSource && (
+            <div className="text-xs text-blue-300 bg-blue-900/50 border border-blue-500/30 px-2 py-1 rounded-md">
+                <strong>Context Used:</strong> Output from <em>{step.contextSource}</em>
+            </div>
+        )}
+        <blockquote className="border-l-4 border-blue-400 pl-3 text-sm italic text-slate-400">
+            {step.prompt}
+        </blockquote>
+        <div>
+            <p className="text-xs font-semibold uppercase text-slate-500 mb-1">Query</p>
+            <pre className="bg-black/50 p-2 rounded-md text-xs font-mono text-cyan-300 overflow-x-auto">
+                <code>{step.query}</code>
+            </pre>
+        </div>
+    </div>
+);
+
+interface NotebookPanelProps {
+    steps: NotebookStep[];
+    onClose: () => void;
+    onExport: () => void;
+    onClear: () => void;
+}
+
+const NotebookPanel: React.FC<NotebookPanelProps> = ({ steps, onClose, onExport, onClear }) => (
+    <>
+      <div
+        onClick={onClose}
+        className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fade-in-fast"
+        aria-hidden="true"
+      ></div>
+      <aside className="fixed top-0 right-0 h-full w-full md:w-[400px] bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer">
+        <header className="flex items-center justify-between p-4 border-b border-slate-700 flex-shrink-0">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-3">
+            <NotebookIcon className="w-5 h-5 text-blue-400" />
+            Query Notebook
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+            aria-label="Close notebook panel"
+          >
+            <XIcon className="w-5 h-5" />
+          </button>
+        </header>
+        <div className="flex-shrink-0 p-4 border-b border-slate-700 flex items-center justify-between gap-2">
+            <button onClick={onClear} disabled={steps.length === 0} className="flex items-center gap-2 px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><TrashIcon className="w-4 h-4"/>Clear</button>
+            <button onClick={onExport} disabled={steps.length === 0} className="flex items-center gap-2 px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><DownloadIcon className="w-4 h-4"/>Export .ipynb</button>
+        </div>
+        <div className="flex-grow overflow-auto p-4 space-y-4">
+          {steps.length > 0 ? (
+            steps.map((step, index) => <NotebookStepCard key={step.id} step={step} index={index} />)
+          ) : (
+            <div className="text-center text-slate-500 h-full flex flex-col items-center justify-center">
+                <p className="font-semibold">No steps recorded yet.</p>
+                <p className="text-sm">Successfully run a query to add it to the notebook.</p>
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
+);
+
 export interface QueryGeneratorPageProps {
   name?: string;
   onLogout: () => void;
@@ -133,6 +206,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const [editableCode, setEditableCode] = useState<string>('');
   const [codeHistory, setCodeHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [lastSuccessfulPrompt, setLastSuccessfulPrompt] = useState<string>('');
 
   // State for query execution
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
@@ -141,6 +215,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   
   // State for intermediate context (multi-step queries)
   const [intermediateContext, setIntermediateContext] = useState<{ data: any; source: string; } | null>(null);
+  const [currentQueryContextSource, setCurrentQueryContextSource] = useState<string | null>(null);
   const [isContextViewerOpen, setIsContextViewerOpen] = useState(false);
 
 
@@ -167,6 +242,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   // State for tutorial
   const [isTutorialActive, setIsTutorialActive] = useState(false);
   const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
+
+  // State for notebook panel
+  const [notebookSteps, setNotebookSteps] = useState<NotebookStep[]>([]);
+  const [isNotebookPanelOpen, setIsNotebookPanelOpen] = useState<boolean>(false);
 
   const connectedAccountName = useMemo(() => {
     if (!connectedResource) return '';
@@ -228,6 +307,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setQuerySourceCollection(null);
     setAnalysisResult(null);
     setAnalysisError(null);
+    setCurrentQueryContextSource(null);
   }, []);
   
   const handleDisconnect = useCallback(() => {
@@ -325,7 +405,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext]);
   
   const handleGenerateQueryClick = () => {
+    if (intermediateContext) {
+        setCurrentQueryContextSource(intermediateContext.source);
+    } else {
+        setCurrentQueryContextSource(null);
+    }
     setQuerySourceCollection(selectedCollection);
+    setLastSuccessfulPrompt(userInput);
     // If a collection is selected, pass its info as context.
     // Otherwise, this will be undefined, and the query will be against the whole DB.
     handleGenerateQuery(userInput, collectionInfo ?? undefined);
@@ -347,13 +433,26 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     try {
       const result = await runMongoQuery(selectedAccountId, editableCode, connectedResource);
       setExecutionResult(result);
+
+      // --- Add step to notebook ---
+      const resultSample = Array.isArray(result) ? result.slice(0, 5) : result;
+      const newStep: NotebookStep = {
+        id: new Date().toISOString() + Math.random(),
+        prompt: lastSuccessfulPrompt || 'Query executed without a new prompt.',
+        query: editableCode,
+        resultSample: resultSample,
+        contextSource: currentQueryContextSource,
+      };
+      setNotebookSteps(prev => [...prev, newStep]);
+      setCurrentQueryContextSource(null); // Reset after use
+
     } catch (e) {
       if (e instanceof Error) setExecutionError(e.message);
       else setExecutionError("An unknown error occurred while running the query.");
     } finally {
       setIsExecuting(false);
     }
-  }, [editableCode, connectedDbInfo, connectedResource, selectedAccountId]);
+  }, [editableCode, connectedDbInfo, connectedResource, selectedAccountId, lastSuccessfulPrompt, currentQueryContextSource]);
 
   const handleDebugQuery = useCallback(async () => {
     if (!editableCode || !executionError) return;
@@ -425,14 +524,27 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
       setIntermediateContext({ data, source });
   }, []);
 
+  // --- Notebook Handlers ---
+  const handleExportNotebook = useCallback(() => {
+    if (notebookSteps.length === 0) return;
+    const dbName = connectedDbInfo?.name;
+    const content = generateIpynbContent(notebookSteps, dbName);
+    downloadFile(content, 'querypal-notebook.ipynb', 'application/json');
+  }, [notebookSteps, connectedDbInfo]);
+
+  const handleClearNotebook = () => {
+      setNotebookSteps([]);
+  };
+
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
   const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 4 && tutorialStepIndex <= 7;
   const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 8;
+  const isDemoModeForNotebookStep = isTutorialActive && tutorialStepIndex === 9;
 
-  const isConnectedForRender = (connectedDbInfo && connectedResource) || isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep;
-  const dbInfoForRender = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep ? mockECommerceDbInfo : connectedDbInfo;
-  const accountNameForRender = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep ? 'prod-ecommerce-db' : connectedAccountName;
+  const isConnectedForRender = (connectedDbInfo && connectedResource) || isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep || isDemoModeForNotebookStep;
+  const dbInfoForRender = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep || isDemoModeForNotebookStep ? mockECommerceDbInfo : connectedDbInfo;
+  const accountNameForRender = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep || isDemoModeForNotebookStep ? 'prod-ecommerce-db' : connectedAccountName;
 
   const selectedCollectionForRender = isDemoModeForCollectionStep ? 'users' : selectedCollection;
   const collectionInfoForRender = isDemoModeForCollectionStep ? mockCollectionInfoMap.get('users')! : collectionInfo;
@@ -474,6 +586,16 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
         </div>
       </aside>
     </>,
+    document.body
+  ) : null;
+
+  const notebookPanelDrawer = isNotebookPanelOpen ? createPortal(
+    <NotebookPanel
+      steps={notebookSteps}
+      onClose={() => setIsNotebookPanelOpen(false)}
+      onExport={handleExportNotebook}
+      onClear={handleClearNotebook}
+    />,
     document.body
   ) : null;
 
@@ -648,6 +770,21 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
             </div>
 
             <div id="tutorial-results-area" className="mt-8">
+               <div className={`flex justify-between items-center mb-4 ${isQuerySectionDisabled ? 'hidden' : ''}`}>
+                    <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300">
+                        Query Output
+                    </h3>
+                    <button
+                        id="tutorial-notebook-button"
+                        onClick={() => setIsNotebookPanelOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
+                        title="View your session as a reproducible Jupyter Notebook"
+                    >
+                        <NotebookIcon className="w-5 h-5" />
+                        <span>View Notebook</span>
+                    </button>
+                </div>
+
               {isLoading && !isDemoModeForDebugStep && !isDemoModeForResultsStep && <Loader />}
               
               {error && !isDemoModeForDebugStep && !isDemoModeForResultsStep && (
@@ -694,7 +831,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
               {isDemoModeForDebugStep && (
                 <div className="space-y-8 animate-fade-in">
                   <QueryDisplay
-                    code={"db.collection('users').find({}).sor({ name: 1 })"}
+                    code={"db['users'].find({}).sor([('name', 1)])"}
                     onCodeChange={() => {}}
                     onRunQuery={() => {}}
                     isExecuting={false}
@@ -782,6 +919,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
        />
 
       {contextViewerDrawer}
+      {notebookPanelDrawer}
 
        <style>{`
           @keyframes fade-in {

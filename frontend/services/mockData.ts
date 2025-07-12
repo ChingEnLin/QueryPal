@@ -116,15 +116,15 @@ export const mockCollectionInfoMap: Map<string, CollectionInfo> = new Map([
 // --- Mock AI-Generated Queries ---
 
 export const mockFindUsersQuery: QueryResultData = {
-  generated_code: 'db.collection(\'users\').find({\n  country: "Canada",\n  status: "active"\n})',
+  generated_code: 'db[\'users\'].find({\n  "country": "Canada",\n  "status": "active"\n})',
 };
 
 export const mockUpdateProductsQuery: QueryResultData = {
-    generated_code: 'db.collection(\'products\').updateMany(\n  { category: "Electronics" },\n  { $mul: { price: 1.1 } }\n)',
+    generated_code: 'db[\'products\'].update_many(\n  { "category": "Electronics" },\n  { "$mul": { "price": 1.1 } }\n)',
 };
 
 export const mockDefaultQuery: QueryResultData = {
-    generated_code: 'db.collection(\'your_collection\').find({})',
+    generated_code: 'db[\'your_collection\'].find({})',
 };
 
 // --- Mock AI Debugging ---

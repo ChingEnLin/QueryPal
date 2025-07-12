@@ -68,8 +68,14 @@ const tutorialSteps: TutorialStep[] = [
     placement: 'bottom',
   },
   {
+    targetId: 'tutorial-notebook-button',
+    title: '9. Export Your Workflow',
+    content: "Click 'View Notebook' to see your entire query history. You can export it as a Jupyter Notebook (.ipynb) to share or reproduce your analysis.",
+    placement: 'bottom',
+  },
+  {
     targetId: 'tutorial-header-actions',
-    title: '9. Manage Your Session',
+    title: '10. Manage Your Session',
     content: 'Here you can clear the cache to refresh resources, toggle dark mode, restart this tutorial, or sign out.',
     placement: 'bottom',
   },

@@ -178,7 +178,7 @@ export const runMongoQuery = async (accountId: string, query: string, resource: 
         if (lowerQuery.includes('.find') && lowerQuery.includes('users')) {
             return Promise.resolve(mockUserFindResult);
         }
-        if (lowerQuery.includes('.updatemany') && lowerQuery.includes('products')) {
+        if (lowerQuery.includes('.update_many') && lowerQuery.includes('products')) {
             return Promise.resolve(mockProductUpdateResult);
         }
         // Mock a failure for debugging demo

@@ -94,3 +94,14 @@ export interface AnalysisResult {
     chartData: ChartJSData;
     chartOptions?: ChartJSOptions;
 }
+
+/**
+ * Represents a single step in the user's query workflow for notebook generation.
+ */
+export interface NotebookStep {
+  id: string;
+  prompt: string;
+  query: string;
+  resultSample: any;
+  contextSource?: string;
+}
