@@ -614,7 +614,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                             <div>
                                 <h4 className="font-bold text-blue-800 dark:text-blue-300">Query Context Active</h4>
                                 <p className="text-sm text-blue-700 dark:text-blue-200/80">
-                                    Using results from the <strong className="font-mono">'{intermediateContext.source}'</strong> collection ({Array.isArray(intermediateContext.data) ? intermediateContext.data.length : 1} items) as context for the next query.
+                                    Using results from <strong className="font-mono">{intermediateContext.source}</strong> ({Array.isArray(intermediateContext.data) ? intermediateContext.data.length : 1} items) as context for the next query.
                                 </p>
                                 <button onClick={() => setIsContextViewerOpen(true)} className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-semibold mt-1">View Data</button>
                             </div>

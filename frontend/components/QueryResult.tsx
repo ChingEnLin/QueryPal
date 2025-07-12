@@ -193,8 +193,11 @@ const QueryResult: React.FC<QueryResultProps> = ({
   };
 
   const handleSetContextClick = () => {
-    if (sourceCollection && executionResult) {
-      onSetIntermediateContext(processedDataForActions, sourceCollection);
+    if (executionResult) {
+      // The source collection could be null if the query was DB-wide.
+      // We create a descriptive source name for the UI.
+      const sourceName = sourceCollection ? `'${sourceCollection}' collection` : 'the previous query';
+      onSetIntermediateContext(processedDataForActions, sourceName);
     }
   };
   
