@@ -41,8 +41,11 @@ const LoginUI: React.FC<LoginUIProps> = ({ onLogin, buttonText, ButtonIcon }) =>
                 </p>
             </main>
         </div>
-        <footer className="text-center mt-8 text-slate-500 dark:text-slate-400 text-sm">
+                <footer className="text-center mt-8 text-slate-500 dark:text-slate-400 text-sm">
             <p>Powered by Microsoft Azure and Google Gemini. For internal use only.</p>
+            <p className="text-xs max-w-md mx-auto">
+                AI features use the Google Gemini API. Your data is not used to train their models. See the <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-700 dark:hover:text-slate-200">Terms of Service</a>.
+            </p>
         </footer>
     </div>
 );
