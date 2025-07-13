@@ -641,8 +641,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
 
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
-  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 4;
-  const isDemoModeForRunStep = isTutorialActive && tutorialStepIndex === 5;
+  const isDemoModeForRunStep = isTutorialActive && tutorialStepIndex === 4;
+  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 5;
   const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 6 && tutorialStepIndex <= 8;
   const isDemoModeForContextActiveStep = isTutorialActive && tutorialStepIndex === 9;
   const isDemoModeForNotebookButtonStep = isTutorialActive && tutorialStepIndex === 10;

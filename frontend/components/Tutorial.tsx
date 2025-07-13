@@ -39,14 +39,14 @@ const tutorialSteps: TutorialStep[] = [
   },
   {
     targetId: 'tutorial-results-area',
-    title: '4. Debug with AI',
-    content: "If there's execution error, don't worry! After an error, click 'Debug with AI' and the assistant will analyze the problem and suggest a fix.",
+    title: '4. Run & Edit Query',
+    content: "Click 'Run Query' to execute the code against the database. You can also edit the code directly in the text area before running.",
     placement: 'top',
   },
   {
     targetId: 'tutorial-results-area',
-    title: '5. Run & Edit Query',
-    content: "Click 'Run Query' to execute the code against the database. You can also edit the code directly in the text area before running.",
+    title: '5. Debug with AI',
+    content: "If the AI makes a mistake, don't worry! After an error, click 'Debug with AI' and the assistant will analyze the problem and suggest a fix.",
     placement: 'top',
   },
   {
