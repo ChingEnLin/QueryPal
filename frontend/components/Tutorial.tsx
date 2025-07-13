@@ -46,7 +46,7 @@ const tutorialSteps: TutorialStep[] = [
   {
     targetId: 'tutorial-results-area',
     title: '5. Debug with AI',
-    content: "In case of exection error, click 'Debug with AI' and the assistant will analyze the problem and suggest a fix.",
+    content: "In case of execution error, click 'Debug with AI' and the assistant will analyze the problem and suggest a fix.",
     placement: 'top',
   },
   {
