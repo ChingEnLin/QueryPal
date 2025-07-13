@@ -27,6 +27,8 @@ import JsonDisplay from '../components/JsonDisplay';
 import NotebookIcon from '../components/icons/NotebookIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
 import TrashIcon from '../components/icons/TrashIcon';
+import PlusCircleIcon from '../components/icons/PlusCircleIcon';
+import EditIcon from '../components/icons/EditIcon';
 
 
 // --- Header Component ---
@@ -113,41 +115,104 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
 
 
 // --- Notebook Panel Component ---
-const NotebookStepCard: React.FC<{ step: NotebookStep, index: number }> = ({ step, index }) => (
-    <div className="bg-slate-800/70 p-4 rounded-lg border border-slate-700 space-y-3">
-        <h4 className="font-bold text-slate-200">Step {index + 1}</h4>
-        {step.contextSource && (
-            <div className="text-xs text-blue-300 bg-blue-900/50 border border-blue-500/30 px-2 py-1 rounded-md">
-                <strong>Context Used:</strong> Output from <em>{step.contextSource}</em>
-            </div>
-        )}
-        <blockquote className="border-l-4 border-blue-400 pl-3 text-sm italic text-slate-400">
-            {step.prompt}
-        </blockquote>
-        <div>
-            <p className="text-xs font-semibold uppercase text-slate-500 mb-1">Query</p>
-            <pre className="bg-black/50 p-2 rounded-md text-xs font-mono text-cyan-300 overflow-x-auto">
-                <code>{step.query}</code>
-            </pre>
+interface NotebookStepCardProps {
+  step: NotebookStep;
+  index: number;
+  onRemove: (id: string) => void;
+  onUpdate: (id: string, newContent: string) => void;
+  onSetEditing: (id: string, isEditing: boolean) => void;
+}
+
+const NotebookStepCard: React.FC<NotebookStepCardProps> = ({ step, index, onRemove, onUpdate, onSetEditing }) => {
+  const handleSave = () => onSetEditing(step.id, false);
+
+  if (step.type === 'note') {
+    return (
+      <div className="bg-slate-800/70 p-4 rounded-lg border border-slate-700 space-y-3 group">
+        <div className="flex justify-between items-center mb-2">
+          <h4 className="font-bold text-slate-200">Note</h4>
+          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            {step.isEditing ? (
+              <button onClick={handleSave} className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700">
+                <CheckIcon className="w-3 h-3"/> Save
+              </button>
+            ) : (
+              <button onClick={() => onSetEditing(step.id, true)} className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-slate-600 text-slate-200 hover:bg-slate-500">
+                <EditIcon className="w-3 h-3"/> Edit
+              </button>
+            )}
+            <button onClick={() => onRemove(step.id)} className="p-1 rounded-full text-slate-500 hover:bg-red-900/50 hover:text-red-400" aria-label="Remove note">
+              <TrashIcon className="w-4 h-4" />
+            </button>
+          </div>
         </div>
+        {step.isEditing ? (
+          <textarea
+            value={step.prompt}
+            onChange={(e) => onUpdate(step.id, e.target.value)}
+            className="w-full h-28 bg-black/50 text-slate-200 p-2 rounded-md font-sans text-sm border border-slate-600 focus:border-blue-500 focus:ring-blue-500"
+            placeholder="Enter your note here... (Markdown is supported on export)"
+            autoFocus
+          />
+        ) : (
+          <div className="text-sm text-slate-300 whitespace-pre-wrap p-2 rounded-md bg-black/20 min-h-[4rem]">
+            {step.prompt || <span className="text-slate-500">Empty note</span>}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Render Query Step
+  return (
+    <div className="bg-slate-800/70 p-4 rounded-lg border border-slate-700 space-y-3 relative group">
+      <div className="flex justify-between items-start">
+        <h4 className="font-bold text-slate-200">Step {index + 1}</h4>
+        <button
+          onClick={() => onRemove(step.id)}
+          className="p-1 rounded-full text-slate-500 hover:bg-red-900/50 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+          aria-label="Remove step"
+        >
+          <TrashIcon className="w-4 h-4" />
+        </button>
+      </div>
+      {step.contextSource && (
+        <div className="text-xs text-blue-300 bg-blue-900/50 border border-blue-500/30 px-2 py-1 rounded-md">
+          <strong>Context Used:</strong> Output from <em>{step.contextSource}</em>
+        </div>
+      )}
+      <blockquote className="border-l-4 border-blue-400 pl-3 text-sm italic text-slate-400">
+        {step.prompt}
+      </blockquote>
+      <div>
+        <p className="text-xs font-semibold uppercase text-slate-500 mb-1">Query</p>
+        <pre className="bg-black/50 p-2 rounded-md text-xs font-mono text-cyan-300 overflow-x-auto">
+          <code>{step.query}</code>
+        </pre>
+      </div>
     </div>
-);
+  );
+};
 
 interface NotebookPanelProps {
     steps: NotebookStep[];
     onClose: () => void;
     onExport: () => void;
     onClear: () => void;
+    onRemoveStep: (id: string) => void;
+    onAddNote: () => void;
+    onUpdateStep: (id: string, content: string) => void;
+    onSetEditing: (id: string, isEditing: boolean) => void;
 }
 
-const NotebookPanel: React.FC<NotebookPanelProps> = ({ steps, onClose, onExport, onClear }) => (
+const NotebookPanel: React.FC<NotebookPanelProps> = ({ steps, onClose, onExport, onClear, onRemoveStep, onAddNote, onUpdateStep, onSetEditing }) => (
     <>
       <div
         onClick={onClose}
         className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fade-in-fast"
         aria-hidden="true"
       ></div>
-      <aside id="tutorial-notebook-panel" className="fixed top-0 right-0 h-full w-full md:w-[400px] bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer">
+      <aside id="tutorial-notebook-panel" className="fixed top-0 right-0 h-full w-full md:w-[450px] bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer">
         <header className="flex items-center justify-between p-4 border-b border-slate-700 flex-shrink-0">
           <h3 className="text-lg font-semibold text-white flex items-center gap-3">
             <NotebookIcon className="w-5 h-5 text-blue-400" />
@@ -162,16 +227,28 @@ const NotebookPanel: React.FC<NotebookPanelProps> = ({ steps, onClose, onExport,
           </button>
         </header>
         <div className="flex-shrink-0 p-4 border-b border-slate-700 flex items-center justify-between gap-2">
-            <button onClick={onClear} disabled={steps.length === 0} className="flex items-center gap-2 px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><TrashIcon className="w-4 h-4"/>Clear</button>
+            <div className="flex items-center gap-2">
+                <button onClick={onAddNote} className="flex items-center gap-2 px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors"><PlusCircleIcon className="w-4 h-4"/>Add Note</button>
+                <button onClick={onClear} disabled={steps.length === 0} className="flex items-center gap-2 px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><TrashIcon className="w-4 h-4"/>Clear All</button>
+            </div>
             <button onClick={onExport} disabled={steps.length === 0} className="flex items-center gap-2 px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><DownloadIcon className="w-4 h-4"/>Export .ipynb</button>
         </div>
         <div className="flex-grow overflow-auto p-4 space-y-4">
           {steps.length > 0 ? (
-            steps.map((step, index) => <NotebookStepCard key={step.id} step={step} index={index} />)
+            steps.map((step, index) => (
+              <NotebookStepCard 
+                key={step.id} 
+                step={step} 
+                index={index} 
+                onRemove={onRemoveStep}
+                onUpdate={onUpdateStep}
+                onSetEditing={onSetEditing}
+              />
+            ))
           ) : (
             <div className="text-center text-slate-500 h-full flex flex-col items-center justify-center">
                 <p className="font-semibold">No steps recorded yet.</p>
-                <p className="text-sm">Successfully run a query to add it to the notebook.</p>
+                <p className="text-sm">Run a query or add a note to begin.</p>
             </div>
           )}
         </div>
@@ -438,6 +515,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
       const resultSample = Array.isArray(result) ? result.slice(0, 5) : result;
       const newStep: NotebookStep = {
         id: new Date().toISOString() + Math.random(),
+        type: 'query',
         prompt: lastSuccessfulPrompt || 'Query executed without a new prompt.',
         query: editableCode,
         resultSample: resultSample,
@@ -527,13 +605,38 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   // --- Notebook Handlers ---
   const handleExportNotebook = useCallback(() => {
     if (notebookSteps.length === 0) return;
+    // Turn off editing mode for all notes before exporting
+    const stepsToExport = notebookSteps.map(step => ({...step, isEditing: false }));
     const dbName = connectedDbInfo?.name;
-    const content = generateIpynbContent(notebookSteps, dbName);
+    const content = generateIpynbContent(stepsToExport, dbName);
     downloadFile(content, 'querypal-notebook.ipynb', 'application/json');
   }, [notebookSteps, connectedDbInfo]);
 
   const handleClearNotebook = () => {
       setNotebookSteps([]);
+  };
+
+  const handleRemoveNotebookStep = useCallback((stepId: string) => {
+    setNotebookSteps(prev => prev.filter(step => step.id !== stepId));
+  }, []);
+
+  const handleAddNoteStep = useCallback(() => {
+    const newNote: NotebookStep = {
+      id: new Date().toISOString() + Math.random(),
+      type: 'note',
+      prompt: '## New Note\n\nEdit this note content using markdown.',
+      isEditing: true, // Start in editing mode
+    };
+    // Turn off editing for all other notes
+    setNotebookSteps(prev => [...prev.map(s => ({...s, isEditing: false})), newNote]);
+  }, []);
+
+  const handleUpdateNotebookStep = (id: string, content: string) => {
+    setNotebookSteps(prev => prev.map(s => s.id === id ? { ...s, prompt: content } : s));
+  };
+  
+  const handleSetEditingStep = (id: string, isEditing: boolean) => {
+    setNotebookSteps(prev => prev.map(s => s.id === id ? { ...s, isEditing } : { ...s, isEditing: false }));
   };
 
   // --- Tutorial Demo Mode Logic ---
@@ -600,8 +703,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   // --- Demo Mode Notebook Panel ---
   const showNotebookPanel = isNotebookPanelOpen || isDemoModeForNotebookPanelStep;
   const demoNotebookSteps: NotebookStep[] = [
-      { id: 'demo-1', prompt: 'Find all users from Canada', query: "db['users'].find({'country': 'Canada'})", resultSample: mockUserFindResult.slice(0, 1) },
-      { id: 'demo-2', prompt: 'From those users, find the ones named Alice', query: "db['users'].find({'name': 'Alice'})", resultSample: mockUserFindResult.slice(0, 1), contextSource: "'users' collection" },
+      { id: 'demo-1', type: 'query', prompt: 'Find all users from Canada', query: "db['users'].find({'country': 'Canada'})", resultSample: mockUserFindResult.slice(0, 1) },
+      { id: 'demo-2', type: 'query', prompt: 'From those users, find the ones named Alice', query: "db['users'].find({'name': 'Alice'})", resultSample: mockUserFindResult.slice(0, 1), contextSource: "'users' collection" },
   ];
 
   const notebookPanelDrawer = showNotebookPanel ? createPortal(
@@ -610,6 +713,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
       onClose={() => setIsNotebookPanelOpen(false)}
       onExport={handleExportNotebook}
       onClear={handleClearNotebook}
+      onRemoveStep={handleRemoveNotebookStep}
+      onAddNote={handleAddNoteStep}
+      onUpdateStep={handleUpdateNotebookStep}
+      onSetEditing={handleSetEditingStep}
     />,
     document.body
   ) : null;

@@ -45,6 +45,12 @@ export const generateIpynbContent = (steps: NotebookStep[], dbName?: string): st
   ]);
 
   const cells = steps.flatMap((step, index) => {
+    // Handle 'note' type steps
+    if (step.type === 'note') {
+      return [createMarkdownCell(step.prompt)];
+    }
+
+    // Handle 'query' type steps (existing logic)
     const contextMarkdown = step.contextSource
       ? `This query used the output from **${step.contextSource}** as input.\n\n`
       : '';
@@ -55,7 +61,7 @@ export const generateIpynbContent = (steps: NotebookStep[], dbName?: string): st
       `> ${step.prompt}`
     ]);
 
-    const pythonQuery = step.query;
+    const pythonQuery = step.query || '# Missing query for this step';
 
     const queryCell = createCodeCell([
         `# Query for: "${step.prompt}"\n`,

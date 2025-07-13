@@ -100,8 +100,10 @@ export interface AnalysisResult {
  */
 export interface NotebookStep {
   id: string;
-  prompt: string;
-  query: string;
-  resultSample: any;
+  type: 'query' | 'note'; // Add type to distinguish steps
+  prompt: string; // For query: NL prompt. For note: markdown content.
+  query?: string; // Query code is optional now (for notes)
+  resultSample?: any; // Result sample is optional (for notes)
   contextSource?: string;
+  isEditing?: boolean; // Transient state for UI editing of notes
 }
