@@ -49,8 +49,8 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg p-6 space-y-4 animate-fade-in border border-slate-200 dark:border-slate-700">
       <div className="space-y-2">
-        <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <div className="flex items-center flex-wrap gap-4">
                 <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Generated & Editable Code</h3>
                 {historyCount > 1 && (
                     <div className="flex items-center gap-2 text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
@@ -74,7 +74,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
                     </div>
                 )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
                  {isWriteOperation ? (
                      <div className="text-xs text-red-800 dark:text-red-200 bg-red-100 dark:bg-red-900/50 border border-red-200 dark:border-red-500/30 px-2 py-1 rounded-md">
                         <strong>Warning:</strong> Write operation detected.

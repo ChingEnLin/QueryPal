@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import JsonDisplay from './JsonDisplay';
@@ -319,7 +318,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
         <div className="space-y-4 animate-fade-in">
             <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Query Result</h3>
             
-            <div id="tutorial-view-switcher" className="flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div id="tutorial-view-switcher" className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-1 flex-wrap">
                     {isWriteOpSummary && (
                        <button onClick={() => setViewMode('summary')} disabled={viewMode === 'summary' || isTableEditMode} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:cursor-not-allowed ${viewMode === 'summary' ? 'bg-blue-500 text-white shadow' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50'}`}><InfoIcon className="w-4 h-4" />Summary</button>

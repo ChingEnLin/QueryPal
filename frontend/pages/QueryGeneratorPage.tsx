@@ -49,16 +49,16 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
       return <><SpinnerIcon className="w-4 h-4" /> Clearing...</>;
     }
     if (cacheClearStatus === 'success') {
-      return <><CheckIcon className="w-4 h-4" /> Cache Cleared!</>;
+      return <><CheckIcon className="w-4 h-4" /> Cleared!</>;
     }
     if (cacheClearStatus === 'error') {
-      return <>Error Clearing</>;
+      return <>Error</>;
     }
     return <><RefreshIcon className="w-4 h-4" /> Clear Cache</>;
   };
 
   const getCacheButtonClasses = () => {
-    let baseClasses = "flex items-center justify-center gap-2 px-3 py-1.5 border text-xs font-medium rounded-md transition-all duration-300 disabled:cursor-not-allowed";
+    let baseClasses = "h-9 flex items-center justify-center gap-2 px-3 border text-sm font-medium rounded-md transition-all duration-300 disabled:cursor-not-allowed";
     if (cacheClearStatus === 'success') {
       return `${baseClasses} bg-green-100 border-green-300 text-green-700 dark:bg-green-900/50 dark:border-green-700 dark:text-green-300`;
     }
@@ -69,7 +69,7 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
   };
 
   return (
-    <header className="flex items-center justify-between mb-8">
+    <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div className="flex items-center space-x-4">
             <MongoIcon className="w-12 h-12 text-blue-500" />
             <div>
@@ -77,8 +77,8 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
                 <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base">Your AI-powered database assistant.</p>
             </div>
         </div>
-        <div className="flex items-center gap-2">
-          {name && <span className="text-slate-600 dark:text-slate-300 text-sm hidden md:block">Welcome, {name}</span>}
+        <div className="flex items-center gap-2 flex-wrap">
+          {name && <span className="text-slate-600 dark:text-slate-300 text-sm hidden sm:block">Welcome, {name}</span>}
           <div id="tutorial-header-actions" className="flex items-center gap-2">
             <button
                 onClick={onClearCache}
@@ -89,21 +89,21 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
             </button>
             <button
               onClick={toggleTheme}
-              className="p-2 border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               aria-label="Toggle theme"
             >
-              {theme === 'light' ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
+              {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
             </button>
             <button
                 onClick={onStartTutorial}
-                className="p-2 border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 aria-label="Start tutorial"
             >
-                <HelpIcon className="w-4 h-4" />
+                <HelpIcon className="w-5 h-5" />
             </button>
             <button
                 onClick={onLogout}
-                className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
+                className="h-9 px-4 flex items-center justify-center border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
             >
                 Sign Out
             </button>
@@ -892,7 +892,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
             </div>
 
             <div id="tutorial-results-area" className="mt-8">
-               <div className={`flex justify-between items-center mb-4 ${isQuerySectionDisabled ? 'hidden' : ''}`}>
+               <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 ${isQuerySectionDisabled ? 'hidden' : ''}`}>
                     <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300">
                         Query Output
                     </h3>

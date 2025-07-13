@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useMsal } from "@azure/msal-react";
 import { loginRequest } from "../authConfig";
@@ -16,7 +17,7 @@ interface LoginUIProps {
 
 const LoginUI: React.FC<LoginUIProps> = ({ onLogin, buttonText, ButtonIcon }) => (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col justify-center items-center p-4 text-slate-800 dark:text-slate-200">
-        <div className="max-w-md w-full mx-auto bg-white dark:bg-slate-800/50 dark:ring-1 dark:ring-slate-700 rounded-xl shadow-lg dark:shadow-black/20 p-8 text-center">
+        <div className="max-w-md w-full mx-auto bg-white dark:bg-slate-800/50 dark:ring-1 dark:ring-slate-700 rounded-xl shadow-lg dark:shadow-black/20 p-6 sm:p-8 text-center">
             <header className="flex flex-col items-center justify-center space-y-4 mb-8">
                 <MongoIcon className="w-16 h-16 text-blue-500" />
                 <div>

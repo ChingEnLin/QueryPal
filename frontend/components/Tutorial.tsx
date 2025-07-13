@@ -117,12 +117,12 @@ const TutorialControlBar: React.FC<{
     const progress = ((currentStep + 1) / totalSteps) * 100;
 
     return (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90vw] max-w-2xl bg-slate-800/80 backdrop-blur-lg text-white p-2 rounded-xl shadow-2xl border border-slate-700 z-[1002] flex items-center gap-4">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90vw] max-w-2xl bg-slate-800/80 backdrop-blur-lg text-white p-2 rounded-xl shadow-2xl border border-slate-700 z-[1002] flex items-center gap-2 sm:gap-4">
             {/* Progress Bar */}
             <div className="absolute top-0 left-0 h-full bg-blue-600/30 rounded-xl transition-all duration-300" style={{ width: `${progress}%` }}></div>
 
             <div className="relative">
-                <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors z-10 relative flex items-center gap-2">
+                <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="px-3 sm:px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors z-10 relative flex items-center gap-2">
                     Steps
                     <svg className={`w-4 h-4 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
@@ -141,13 +141,13 @@ const TutorialControlBar: React.FC<{
                 )}
             </div>
             
-            <div className="flex-grow flex items-center justify-center gap-4">
-                <button onClick={onPrev} disabled={currentStep === 0} className="px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors disabled:opacity-50 z-10 relative">Back</button>
+            <div className="flex-grow flex items-center justify-center gap-2 sm:gap-4">
+                <button onClick={onPrev} disabled={currentStep === 0} className="px-3 sm:px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors disabled:opacity-50 z-10 relative">Back</button>
                 <span className="font-mono text-sm z-10 relative">{currentStep + 1} / {totalSteps}</span>
-                <button onClick={onNext} disabled={currentStep === totalSteps - 1} className="px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors disabled:opacity-50 z-10 relative">Next</button>
+                <button onClick={onNext} disabled={currentStep === totalSteps - 1} className="px-3 sm:px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors disabled:opacity-50 z-10 relative">Next</button>
             </div>
 
-            <button onClick={onEnd} className="px-4 py-2 rounded-lg bg-red-600/50 hover:bg-red-600 transition-colors z-10 relative">End Tour</button>
+            <button onClick={onEnd} className="px-3 sm:px-4 py-2 rounded-lg bg-red-600/50 hover:bg-red-600 transition-colors z-10 relative">End Tour</button>
         </div>
     );
 };
