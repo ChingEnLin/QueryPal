@@ -147,7 +147,7 @@ const NotebookPanel: React.FC<NotebookPanelProps> = ({ steps, onClose, onExport,
         className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fade-in-fast"
         aria-hidden="true"
       ></div>
-      <aside className="fixed top-0 right-0 h-full w-full md:w-[400px] bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer">
+      <aside id="tutorial-notebook-panel" className="fixed top-0 right-0 h-full w-full md:w-[400px] bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer">
         <header className="flex items-center justify-between p-4 border-b border-slate-700 flex-shrink-0">
           <h3 className="text-lg font-semibold text-white flex items-center gap-3">
             <NotebookIcon className="w-5 h-5 text-blue-400" />
@@ -538,13 +538,18 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
 
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
-  const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 4 && tutorialStepIndex <= 7;
-  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 8;
-  const isDemoModeForNotebookStep = isTutorialActive && tutorialStepIndex === 9;
+  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 4;
+  const isDemoModeForRunStep = isTutorialActive && tutorialStepIndex === 5;
+  const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 6 && tutorialStepIndex <= 8;
+  const isDemoModeForContextActiveStep = isTutorialActive && tutorialStepIndex === 9;
+  const isDemoModeForNotebookButtonStep = isTutorialActive && tutorialStepIndex === 10;
+  const isDemoModeForNotebookPanelStep = isTutorialActive && tutorialStepIndex === 11;
+  
+  const demoActive = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForContextActiveStep || isDemoModeForDebugStep || isDemoModeForNotebookButtonStep || isDemoModeForNotebookPanelStep || isDemoModeForRunStep;
 
-  const isConnectedForRender = (connectedDbInfo && connectedResource) || isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep || isDemoModeForNotebookStep;
-  const dbInfoForRender = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep || isDemoModeForNotebookStep ? mockECommerceDbInfo : connectedDbInfo;
-  const accountNameForRender = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForDebugStep || isDemoModeForNotebookStep ? 'prod-ecommerce-db' : connectedAccountName;
+  const isConnectedForRender = (connectedDbInfo && connectedResource) || demoActive;
+  const dbInfoForRender = demoActive ? mockECommerceDbInfo : connectedDbInfo;
+  const accountNameForRender = demoActive ? 'prod-ecommerce-db' : connectedAccountName;
 
   const selectedCollectionForRender = isDemoModeForCollectionStep ? 'users' : selectedCollection;
   const collectionInfoForRender = isDemoModeForCollectionStep ? mockCollectionInfoMap.get('users')! : collectionInfo;
@@ -559,8 +564,11 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     return 'Generate Query';
   }, [isLoading, selectedCollection]);
 
+  // --- Demo Mode Context Banner ---
+  const showContextBanner = intermediateContext || isDemoModeForContextActiveStep;
+  const contextForRender = isDemoModeForContextActiveStep ? { data: mockUserFindResult.slice(0, 3), source: "'users' collection" } : intermediateContext;
 
-  const contextViewerDrawer = isContextViewerOpen && intermediateContext ? createPortal(
+  const contextViewerDrawer = isContextViewerOpen && contextForRender ? createPortal(
     <>
       <div
         onClick={() => setIsContextViewerOpen(false)}
@@ -582,16 +590,23 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
           </button>
         </header>
         <div className="flex-grow overflow-auto p-4">
-          <JsonDisplay data={intermediateContext.data} />
+          <JsonDisplay data={contextForRender.data} />
         </div>
       </aside>
     </>,
     document.body
   ) : null;
+  
+  // --- Demo Mode Notebook Panel ---
+  const showNotebookPanel = isNotebookPanelOpen || isDemoModeForNotebookPanelStep;
+  const demoNotebookSteps: NotebookStep[] = [
+      { id: 'demo-1', prompt: 'Find all users from Canada', query: "db['users'].find({'country': 'Canada'})", resultSample: mockUserFindResult.slice(0, 1) },
+      { id: 'demo-2', prompt: 'From those users, find the ones named Alice', query: "db['users'].find({'name': 'Alice'})", resultSample: mockUserFindResult.slice(0, 1), contextSource: "'users' collection" },
+  ];
 
-  const notebookPanelDrawer = isNotebookPanelOpen ? createPortal(
+  const notebookPanelDrawer = showNotebookPanel ? createPortal(
     <NotebookPanel
-      steps={notebookSteps}
+      steps={notebookSteps.length > 0 ? notebookSteps : (isDemoModeForNotebookPanelStep ? demoNotebookSteps : [])}
       onClose={() => setIsNotebookPanelOpen(false)}
       onExport={handleExportNotebook}
       onClear={handleClearNotebook}
@@ -728,15 +743,15 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
 
           {/* Query Generator */}
           <div id="tutorial-prompt-section" className={`bg-white dark:bg-slate-800 rounded-xl shadow-md p-6 transition-opacity duration-500 ${isQuerySectionDisabled ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-            {intermediateContext && (
-                <div className="relative bg-blue-50 dark:bg-slate-800/60 border border-blue-200 dark:border-blue-500/30 rounded-lg p-4 mb-6 animate-fade-in">
+            {showContextBanner && contextForRender && (
+                <div id="tutorial-context-banner" className="relative bg-blue-50 dark:bg-slate-800/60 border border-blue-200 dark:border-blue-500/30 rounded-lg p-4 mb-6 animate-fade-in">
                     <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                              <PinIcon className="w-6 h-6 text-blue-500 flex-shrink-0" />
                             <div>
                                 <h4 className="font-bold text-blue-800 dark:text-blue-300">Query Context Active</h4>
                                 <p className="text-sm text-blue-700 dark:text-blue-200/80">
-                                    Using results from <strong className="font-mono">{intermediateContext.source}</strong> ({Array.isArray(intermediateContext.data) ? intermediateContext.data.length : 1} items) as context for the next query.
+                                    Using results from <strong className="font-mono">{contextForRender.source}</strong> ({Array.isArray(contextForRender.data) ? contextForRender.data.length : 1} items) as context for the next query.
                                 </p>
                                 <button onClick={() => setIsContextViewerOpen(true)} className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-semibold mt-1">View Data</button>
                             </div>
@@ -785,17 +800,32 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                     </button>
                 </div>
 
-              {isLoading && !isDemoModeForDebugStep && !isDemoModeForResultsStep && <Loader />}
+              {isLoading && !isDemoModeForDebugStep && !isDemoModeForResultsStep && !isDemoModeForRunStep && <Loader />}
               
-              {error && !isDemoModeForDebugStep && !isDemoModeForResultsStep && (
+              {error && !isDemoModeForDebugStep && !isDemoModeForResultsStep && !isDemoModeForRunStep && (
                   <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg animate-fade-in dark:bg-red-900/50 dark:border-red-500/50 dark:text-red-300" role="alert">
                       <strong className="font-bold">Error: </strong>
                       <span className="block sm:inline">{error}</span>
                   </div>
               )}
 
+              {/* Tutorial Demo for Run & Edit Step */}
+              {isDemoModeForRunStep && (
+                <div className="space-y-8 animate-fade-in">
+                  <QueryDisplay
+                    code={mockFindUsersQuery.generated_code}
+                    onCodeChange={() => {}}
+                    onRunQuery={() => {}}
+                    isExecuting={false}
+                    historyCount={1}
+                    historyIndex={0}
+                    onNavigateHistory={() => {}}
+                  />
+                </div>
+              )}
+
               {/* Tutorial Demo for Results View */}
-              {isDemoModeForResultsStep && (
+              {(isDemoModeForResultsStep || isDemoModeForContextActiveStep) && (
                 <div className="space-y-8 animate-fade-in">
                   <QueryDisplay
                     code={mockFindUsersQuery.generated_code}
@@ -861,7 +891,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
               )}
 
               {/* Real results */}
-              {(!isLoading && !error && queryResult && !isDemoModeForResultsStep && !isDemoModeForDebugStep) && (
+              {(!isLoading && !error && queryResult && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep) && (
                 <div className="space-y-8">
                     <QueryDisplay
                         code={editableCode}
@@ -892,7 +922,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
               )}
               
               {/* Placeholder */}
-              {(!isLoading && !error && !queryResult && !isDemoModeForResultsStep && !isDemoModeForDebugStep) && (
+              {(!isLoading && !error && !queryResult && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep) && (
                 <div className="text-center text-slate-500 dark:text-slate-400 py-10 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg">
                   <p>{isQuerySectionDisabled ? 'Connect to a database to generate queries.' : 'Your generated query will appear here.'}</p>
                 </div>

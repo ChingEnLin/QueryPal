@@ -9,7 +9,7 @@ interface TutorialStep {
   targetId: string;
   title: string;
   content: string;
-  placement?: 'top' | 'bottom' | 'right' | 'left' | 'center';
+  placement?: 'top' | 'bottom' | 'right' | 'left' | 'center' | 'top-inside';
 }
 
 // Define all the steps for our guided tour
@@ -34,48 +34,60 @@ const tutorialSteps: TutorialStep[] = [
   {
     targetId: 'tutorial-prompt-section',
     title: '3. Generate a Query',
-    content: "Write a command in plain English, then click 'Generate Query'. You can also edit the generated code directly in the text area.",
+    content: "Write a command in plain English, then click 'Generate Query' to have the AI assistant create the code for you.",
+    placement: 'top',
+  },
+  {
+    targetId: 'tutorial-results-area',
+    title: '4. Debug with AI',
+    content: "If the AI makes a mistake, don't worry! After an error, click 'Debug with AI' and the assistant will analyze the problem and suggest a fix.",
+    placement: 'top',
+  },
+  {
+    targetId: 'tutorial-results-area',
+    title: '5. Run & Edit Query',
+    content: "Click 'Run Query' to execute the code against the database. You can also edit the code directly in the text area before running.",
     placement: 'top',
   },
   {
     targetId: 'tutorial-view-switcher',
-    title: '4. View Your Results',
-    content: "Your query results appear here. You can switch between a raw JSON view, an interactive Graph, and a powerful Table view.",
+    title: '6. View Your Results',
+    content: "After a successful run, your results appear here. You can switch between a raw JSON view, an interactive Graph, and a powerful Table view.",
     placement: 'top',
   },
   {
     targetId: 'tutorial-table-actions',
-    title: '5. Customize Your Table',
+    title: '7. Customize Your Table',
     content: "In table view, you can download the data as a CSV or enter 'Edit Mode' to remove columns, with undo/redo support. Your edits also apply to downloads and AI analysis.",
     placement: 'top',
   },
   {
     targetId: 'tutorial-view-switcher',
-    title: '6. Analyze with AI',
+    title: '8. Analyze with AI',
     content: "Let AI do the heavy lifting! Click 'Analyze' to get an instant summary of your data and an auto-generated chart to visualize key trends.",
     placement: 'top',
   },
   {
-    targetId: 'tutorial-view-switcher',
-    title: '7. Chain Queries with Context',
-    content: "Click 'Use as Context' (the pin icon) to use the current result set in your next query. This is great for multi-step questions.",
+    targetId: 'tutorial-context-banner',
+    title: '9. Chain Queries with Context',
+    content: "Click 'Use as Context' (the pin icon in result header) to use the current result set in your next query. This is great for multi-step questions.",
     placement: 'top',
   },
   {
-    targetId: 'tutorial-results-area',
-    title: '8. Debug with AI',
-    content: "If a query fails, don't worry! Click 'Debug with AI' and the assistant will analyze the error and provide a fix.",
+    targetId: 'tutorial-notebook-button',
+    title: '10. Export Your Workflow',
+    content: "Click 'View Notebook' to open the session history panel. From there, you can export it as a Jupyter Notebook (.ipynb) to share or reproduce your analysis.",
     placement: 'bottom',
   },
-  {
-    targetId: 'tutorial-notebook-button',
-    title: '9. Export Your Workflow',
-    content: "Click 'View Notebook' to see your entire query history. You can export it as a Jupyter Notebook (.ipynb) to share or reproduce your analysis.",
+   {
+    targetId: 'tutorial-notebook-panel',
+    title: '11. The Query Notebook',
+    content: 'This panel logs every successful query. From here, you can clear your session history or export the entire workflow as a reproducible Jupyter Notebook file.',
     placement: 'bottom',
   },
   {
     targetId: 'tutorial-header-actions',
-    title: '10. Manage Your Session',
+    title: '12. Manage Your Session',
     content: 'Here you can clear the cache to refresh resources, toggle dark mode, restart this tutorial, or sign out.',
     placement: 'bottom',
   },
@@ -93,6 +105,53 @@ interface TutorialProps {
     onStepChange: (index: number) => void;
 }
 
+const TutorialControlBar: React.FC<{
+    currentStep: number;
+    totalSteps: number;
+    onNext: () => void;
+    onPrev: () => void;
+    onJump: (step: number) => void;
+    onEnd: () => void;
+}> = ({ currentStep, totalSteps, onNext, onPrev, onJump, onEnd }) => {
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const progress = ((currentStep + 1) / totalSteps) * 100;
+
+    return (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90vw] max-w-2xl bg-slate-800/80 backdrop-blur-lg text-white p-2 rounded-xl shadow-2xl border border-slate-700 z-[1002] flex items-center gap-4">
+            {/* Progress Bar */}
+            <div className="absolute top-0 left-0 h-full bg-blue-600/30 rounded-xl transition-all duration-300" style={{ width: `${progress}%` }}></div>
+
+            <div className="relative">
+                <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors z-10 relative flex items-center gap-2">
+                    Steps
+                    <svg className={`w-4 h-4 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                {isMenuOpen && (
+                    <div className="absolute bottom-full mb-2 w-72 bg-slate-800 border border-slate-700 rounded-lg shadow-lg max-h-80 overflow-auto">
+                        {tutorialSteps.map((step, index) => (
+                            <button
+                                key={index}
+                                onClick={() => { onJump(index); setIsMenuOpen(false); }}
+                                className={`w-full text-left px-4 py-2 text-sm ${currentStep === index ? 'bg-blue-600 font-bold' : 'hover:bg-slate-700'}`}
+                            >
+                                {step.title}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+            
+            <div className="flex-grow flex items-center justify-center gap-4">
+                <button onClick={onPrev} disabled={currentStep === 0} className="px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors disabled:opacity-50 z-10 relative">Back</button>
+                <span className="font-mono text-sm z-10 relative">{currentStep + 1} / {totalSteps}</span>
+                <button onClick={onNext} disabled={currentStep === totalSteps - 1} className="px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors disabled:opacity-50 z-10 relative">Next</button>
+            </div>
+
+            <button onClick={onEnd} className="px-4 py-2 rounded-lg bg-red-600/50 hover:bg-red-600 transition-colors z-10 relative">End Tour</button>
+        </div>
+    );
+};
+
 const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) => {
   const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
@@ -108,8 +167,15 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
       }
   }, [isActive, stepIndex, onStepChange]);
 
-  const nextStep = () => setStepIndex(i => Math.min(i + 1, tutorialSteps.length - 1));
+  const nextStep = () => {
+    if (stepIndex < tutorialSteps.length - 1) {
+        setStepIndex(stepIndex + 1);
+    } else {
+        endTour();
+    }
+  };
   const prevStep = () => setStepIndex(i => Math.max(i - 1, 0));
+  const jumpToStep = (index: number) => setStepIndex(index);
   const endTour = () => {
     onClose();
     // After closing, reset to the first step for the next time it opens
@@ -122,6 +188,10 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
         return;
     };
     
+    // The notebook panel has a 400ms slide-in animation. We need to wait for it
+    // to finish before calculating its position for the highlight.
+    const delay = currentStep.targetId === 'tutorial-notebook-panel' ? 450 : 50;
+
     // For a smoother demo, we give the UI a moment to render the target element
     const timeoutId = setTimeout(() => {
       const targetElement = document.getElementById(currentStep?.targetId);
@@ -130,7 +200,7 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
       } else {
         setTargetRect(null); // for modal steps
       }
-    }, 50); // Small delay
+    }, delay);
 
     const updatePosition = () => {
       const targetElement = document.getElementById(currentStep?.targetId);
@@ -151,16 +221,8 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
   }, [isActive, currentStep]);
 
   const popoverPosition = useMemo((): React.CSSProperties => {
-    // For modal steps, all positioning is handled by CSS classes.
-    if (isModalStep) {
-        return {};
-    }
-    
-    // For non-modal steps, if we don't have the info yet,
-    // hide the popover to prevent it from flashing in the wrong spot.
-    if (!targetRect || !popoverRef.current) {
-        return { opacity: 0, pointerEvents: 'none' };
-    }
+    if (isModalStep) return {};
+    if (!targetRect || !popoverRef.current) return { opacity: 0, pointerEvents: 'none' };
     
     const popoverHeight = popoverRef.current.offsetHeight;
     const popoverWidth = popoverRef.current.offsetWidth;
@@ -171,6 +233,10 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
     switch (currentStep.placement) {
         case 'top':
             top = targetRect.top - popoverHeight - spacing;
+            left = targetRect.left + targetRect.width / 2 - popoverWidth / 2;
+            break;
+        case 'top-inside':
+            top = targetRect.top + spacing;
             left = targetRect.left + targetRect.width / 2 - popoverWidth / 2;
             break;
         case 'right':
@@ -188,7 +254,6 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
             break;
     }
     
-    // Boundary checks to prevent popover from going off-screen
     const margin = 10;
     top = Math.max(margin, Math.min(top, window.innerHeight - popoverHeight - margin));
     left = Math.max(margin, Math.min(left, window.innerWidth - popoverWidth - margin));
@@ -211,7 +276,6 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
       zIndex: 1000,
   } : {};
   
-
   const popoverContent = (
       <div className="flex flex-col h-full">
         {currentStep.targetId === 'modal' && stepIndex === 0 && (
@@ -221,34 +285,13 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
         )}
         <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">{currentStep.title}</h3>
         <p className="text-slate-600 dark:text-slate-300 flex-grow">{currentStep.content}</p>
-        <div className="mt-6 flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{stepIndex + 1} / {tutorialSteps.length}</span>
-            <div className="flex items-center gap-2">
-                {stepIndex > 0 && (
-                    <button
-                        onClick={prevStep}
-                        className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-                    >
-                        Back
-                    </button>
-                )}
-                <button
-                    onClick={stepIndex === tutorialSteps.length - 1 ? endTour : nextStep}
-                    className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-                >
-                    {stepIndex === tutorialSteps.length - 1 ? 'Finish' : 'Next'}
-                </button>
-            </div>
-        </div>
-    </div>
+      </div>
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-50">
-        {/* Highlight box creates the backdrop via its huge box-shadow */}
+    <div className="fixed inset-0 z-[100]">
         {!isModalStep && <div style={highlightStyle}></div>}
         
-        {/* Popover */}
         <div
             ref={popoverRef}
             style={popoverPosition}
@@ -265,7 +308,15 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
             {popoverContent}
         </div>
         
-        {/* A subtle backdrop for modal steps */}
+        <TutorialControlBar 
+            currentStep={stepIndex}
+            totalSteps={tutorialSteps.length}
+            onNext={nextStep}
+            onPrev={prevStep}
+            onJump={jumpToStep}
+            onEnd={endTour}
+        />
+
         {isModalStep && <div className="fixed inset-0 bg-black/40 animate-fade-in-fast z-[1000]"></div>}
          
         <style>{`

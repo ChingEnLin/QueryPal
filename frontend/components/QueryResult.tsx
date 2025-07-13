@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import JsonDisplay from './JsonDisplay';
@@ -157,8 +158,9 @@ const QueryResult: React.FC<QueryResultProps> = ({
   // Effect to control view mode during tutorial
   useEffect(() => {
       if (isTutorialActive) {
-          // Tutorial step 6 (index 5) is "Customize Your Table"
-          if (tutorialStepIndex === 5) { 
+          // "Customize Your Table" is at index 7. This ensures the table view
+          // and its controls are visible for that specific step.
+          if (tutorialStepIndex === 7) {
               setViewMode('table');
           } else {
               // Default to json for other result steps in the tutorial
