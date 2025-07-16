@@ -46,6 +46,7 @@ python -m venv venv
 source venv/bin/activate  # or venv\\Scripts\\activate on Windows
 pip install -r requirements.txt
 ```
+
 2. Add your Gemini API Key and Azure Entra ID credentials to the `.env` file:
 
 ```plaintext
@@ -55,6 +56,11 @@ AZURE_CLIENT_ID=your_azure_client_id
 AZURE_CLIENT_SECRET=your_azure_client_secret
 ARM_SCOPE=https://management.azure.com/.default
 GEMINI_API_KEY=your_google_gemini_api_key
+
+DB_USER=querypal-user
+DB_PASS=your_db_password
+DB_NAME=querypal
+DB_HOST=127.0.0.1
 ```
 
 3. Run the App
