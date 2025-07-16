@@ -225,10 +225,13 @@ Clears any server-side caches related to Azure resources.
     ```
 
 ---
+### User Data API (Saved Queries)
+
+---
 
 ### `GET /api/user/queries`
 
-Retrieves all saved queries for the authenticated user.
+Retrieves all saved queries owned by or shared with the authenticated user. The backend should use the user's identity from the token to determine which queries to return.
 
 -   **Success Response (200):** An array of `SavedQuery` objects.
     ```json
@@ -237,14 +240,18 @@ Retrieves all saved queries for the authenticated user.
             "id": "query-123",
             "name": "Find Active Canadian Users",
             "prompt": "Find all users from Canada with an 'active' status",
-            "code": "db['users'].find({'country': 'Canada', 'status': 'active'})"
+            "code": "db['users'].find({'country': 'Canada', 'status': 'active'})",
+            "ownerEmail": "user@example.com",
+            "sharedWith": ["colleague1@example.com"],
+            "lastModifiedBy": "user@example.com",
+            "updatedAt": "2023-10-26T10:00:00Z"
         }
     ]
     ```
 
 ### `POST /api/user/queries`
 
-Saves a new query for the user. The backend should generate a unique ID.
+Saves a new query for the user. The backend should generate a unique ID and set ownership fields.
 
 -   **Request Body:**
     ```json
@@ -254,25 +261,42 @@ Saves a new query for the user. The backend should generate a unique ID.
         "code": "The generated code to save."
     }
     ```
--   **Success Response (201):** The newly created `SavedQuery` object, including its new ID.
+-   **Success Response (201):** The newly created `SavedQuery` object. The backend is responsible for setting `id`, `ownerEmail`, `sharedWith` (as `[]`), `lastModifiedBy`, and `updatedAt`.
+    ```json
+     {
+        "id": "new-query-456",
+        "name": "New Saved Query",
+        "prompt": "The natural language prompt used.",
+        "code": "The generated code to save.",
+        "ownerEmail": "creator@example.com",
+        "sharedWith": [],
+        "lastModifiedBy": "creator@example.com",
+        "updatedAt": "2023-10-27T10:00:00Z"
+    }
+    ```
 
 ### `PUT /api/user/queries/{queryId}`
 
-Updates an existing saved query.
+Updates an existing saved query. Can be used to update the query content (`name`, `prompt`, `code`) or its sharing settings (`sharedWith`). The backend must verify that the authenticated user is either the owner or has been shared the query.
 
--   **Request Body:**
+-   **Request Body:** The full `SavedQuery` object with modifications.
     ```json
     {
+        "id": "query-123",
         "name": "Updated Query Name",
         "prompt": "Updated prompt text.",
-        "code": "Updated query code."
+        "code": "Updated query code.",
+        "ownerEmail": "user@example.com",
+        "sharedWith": ["colleague1@example.com", "colleague2@example.com"],
+        "lastModifiedBy": "user@example.com",
+        "updatedAt": "2023-10-26T10:00:00Z"
     }
     ```
--   **Success Response (200):** The updated `SavedQuery` object.
+-   **Success Response (200):** The updated `SavedQuery` object, with `lastModifiedBy` and `updatedAt` updated by the backend.
 
 ### `DELETE /api/user/queries/{queryId}`
 
-Deletes a saved query.
+Deletes a saved query. The backend must verify that the authenticated user is the owner of the query.
 
 -   **Success Response (204):** No content.
 

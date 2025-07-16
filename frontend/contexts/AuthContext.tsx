@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, ReactNode } from 'react';
 
 interface AuthUser {
   name: string;
+  email: string;
 }
 
 interface AuthContextType {
@@ -18,8 +19,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<AuthUser | null>(null);
 
   const login = () => {
-    // In bypass mode, simply simulate a successful login
-    setUser({ name: 'Developer User' });
+    // In bypass mode, simulate a successful login with an email
+    setUser({ name: 'Developer User', email: 'dev.user@example.com' });
     setIsAuthenticated(true);
   };
 

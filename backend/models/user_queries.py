@@ -1,11 +1,16 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime
 
 class SavedQuery(BaseModel):
     id: str
     name: str
     prompt: str
     code: str
+    ownerEmail: str
+    sharedWith: List[str]
+    lastModifiedBy: str
+    updatedAt: str  # ISO8601 string
 
 class SavedQueryCreate(BaseModel):
     name: str
@@ -16,3 +21,7 @@ class SavedQueryUpdate(BaseModel):
     name: str
     prompt: str
     code: str
+    ownerEmail: str
+    sharedWith: List[str]
+    lastModifiedBy: str
+    updatedAt: str

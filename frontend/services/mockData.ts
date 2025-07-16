@@ -208,24 +208,49 @@ export const mockAnalysisResult: AnalysisResult = {
 // --- Mock System Action Results ---
 export const mockCacheClearResult = { message: 'Cache cleared successfully.' };
 
-// --- Mock User Data ---
+// --- Mock User Data (with Sharing) ---
+const MOCK_USER_EMAIL = 'dev.user@example.com';
+const OTHER_USER_EMAIL = 'colleague@example.com';
+
 export const mockSavedQueries: SavedQuery[] = [
     {
         id: 'sq-1',
-        name: 'Active Canadian Users',
+        name: 'My Private Query: Active Canadian Users',
         prompt: 'Find all users from Canada who are active',
-        code: `db['users'].find({\n  "country": "Canada",\n  "status": "active"\n})`
+        code: `db['users'].find({'country': 'Canada', 'status': 'active'})`,
+        ownerEmail: MOCK_USER_EMAIL,
+        sharedWith: [],
+        lastModifiedBy: MOCK_USER_EMAIL,
+        updatedAt: '2023-10-26T10:00:00Z',
     },
     {
         id: 'sq-2',
-        name: 'Increase Electronics Prices',
+        name: 'My Shared Query: Increase Electronics Prices',
         prompt: 'Increase the price of all electronics by 10%',
-        code: `db['products'].update_many(\n  { "category": "Electronics" },\n  { "$mul": { "price": 1.1 } }\n)`
+        code: `db['products'].update_many({ "category": "Electronics" }, { "$mul": { "price": 1.1 } })`,
+        ownerEmail: MOCK_USER_EMAIL,
+        sharedWith: [OTHER_USER_EMAIL],
+        lastModifiedBy: MOCK_USER_EMAIL,
+        updatedAt: '2023-10-25T11:00:00Z',
     },
     {
         id: 'sq-3',
-        name: 'Recent Orders',
+        name: 'Query Shared By Colleague: Recent Orders',
         prompt: 'Find all orders from the last 7 days',
-        code: `db['orders'].find({\n  "orderDate": { "$gte": new Date(new Date().setDate(new Date().getDate() - 7)) }\n})`
+        code: `db['orders'].find({ "orderDate": { "$gte": new Date(new Date().setDate(new Date().getDate() - 7)) } })`,
+        ownerEmail: OTHER_USER_EMAIL,
+        sharedWith: [MOCK_USER_EMAIL, 'another.person@example.com'],
+        lastModifiedBy: OTHER_USER_EMAIL,
+        updatedAt: '2023-10-24T12:00:00Z',
+    },
+     {
+        id: 'sq-4',
+        name: 'Untouchable Secret Query',
+        prompt: 'This is a secret prompt',
+        code: `db.doSecretThing()`,
+        ownerEmail: 'boss@example.com',
+        sharedWith: ['team.lead@example.com'],
+        lastModifiedBy: 'boss@example.com',
+        updatedAt: '2023-10-23T13:00:00Z',
     }
 ];

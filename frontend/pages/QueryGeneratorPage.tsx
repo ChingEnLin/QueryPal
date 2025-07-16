@@ -33,6 +33,7 @@ import EditIcon from '../components/icons/EditIcon';
 import BookmarkIcon from '../components/icons/BookmarkIcon';
 import SavedQueriesPanel from '../components/SavedQueriesPanel';
 import SaveQueryDialog from '../components/SaveQueryDialog';
+import ShareQueryDialog from '../components/ShareQueryDialog';
 
 
 // --- Header Component ---
@@ -277,11 +278,12 @@ const NotebookPanel: React.FC<NotebookPanelProps> = ({ steps, onClose, onExport,
 
 export interface QueryGeneratorPageProps {
   name?: string;
+  email?: string;
   onLogout: () => void;
 }
 
 // --- Main Page Component ---
-const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout }) => {
+const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout }) => {
   const [userInput, setUserInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -348,6 +350,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const [isLoadingSavedQueries, setIsLoadingSavedQueries] = useState<boolean>(false);
   const [isSavedQueriesPanelOpen, setIsSavedQueriesPanelOpen] = useState<boolean>(false);
   const [saveDialogState, setSaveDialogState] = useState<{ isOpen: boolean; data?: Partial<SavedQuery> & { prompt: string; code: string }}>({ isOpen: false });
+  const [shareDialogState, setShareDialogState] = useState<{ isOpen: boolean; query?: SavedQuery }>({ isOpen: false });
   const [isSavingQuery, setIsSavingQuery] = useState(false);
 
 
@@ -692,7 +695,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setSaveDialogState({ isOpen: true, data: query });
   };
   
-  const handleSaveOrUpdateQuery = useCallback(async (data: Omit<SavedQuery, 'id'> | SavedQuery) => {
+  const handleSaveOrUpdateQuery = useCallback(async (data: Pick<SavedQuery, 'name' | 'prompt' | 'code'> | SavedQuery) => {
     setIsSavingQuery(true);
     try {
         if ('id' in data) {
@@ -701,7 +704,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
             setSavedQueries(prev => prev.map(q => q.id === updated.id ? updated : q));
         } else {
             // Create
-            const newQuery = await saveQuery(data);
+            const newQuery = await saveQuery(data as Pick<SavedQuery, 'name' | 'prompt' | 'code'>);
             setSavedQueries(prev => [...prev, newQuery]);
         }
         setSaveDialogState({ isOpen: false });
@@ -714,13 +717,16 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   }, []);
 
   const handleDeleteSavedQuery = useCallback(async (queryId: string) => {
+    // Optimistic delete
+    const originalQueries = savedQueries;
+    setSavedQueries(prev => prev.filter(q => q.id !== queryId));
     try {
         await deleteSavedQuery(queryId);
-        setSavedQueries(prev => prev.filter(q => q.id !== queryId));
     } catch(e) {
         console.error("Failed to delete query:", e);
+        setSavedQueries(originalQueries); // Revert on failure
     }
-  }, []);
+  }, [savedQueries]);
 
   const handleLoadSavedQuery = (query: SavedQuery) => {
     clearQueryState(); // Clear all results and errors
@@ -733,6 +739,26 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     setHistoryIndex(0);
     
     setIsSavedQueriesPanelOpen(false); // Close panel after loading
+  };
+
+  // --- Sharing Handlers ---
+  const handleOpenShareDialog = (query: SavedQuery) => {
+    setShareDialogState({ isOpen: true, query });
+  };
+
+  const handleUpdateSharing = async (queryToUpdate: SavedQuery) => {
+    // Optimistic update for a snappy UI
+    setSavedQueries(prev => prev.map(q => q.id === queryToUpdate.id ? queryToUpdate : q));
+    setShareDialogState({ isOpen: false }); // Close dialog immediately
+    
+    try {
+        // Now call the backend
+        await updateSavedQuery(queryToUpdate);
+    } catch (e) {
+        console.error("Failed to update sharing settings:", e);
+        // On failure, revert the change by re-fetching from the source of truth
+        fetchSavedQueries(); 
+    }
   };
 
 
@@ -827,7 +853,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
         onLoad={handleLoadSavedQuery}
         onEdit={handleEditSavedQuery}
         onDelete={handleDeleteSavedQuery}
+        onShare={handleOpenShareDialog}
         isLoading={isLoadingSavedQueries}
+        currentUserEmail={email}
     />,
     document.body
   ) : null;
@@ -839,6 +867,16 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
         onSave={handleSaveOrUpdateQuery}
         isSaving={isSavingQuery}
         initialData={saveDialogState.data!}
+    />,
+    document.body
+  ) : null;
+
+  const shareQueryDialog = shareDialogState.isOpen && shareDialogState.query ? createPortal(
+    <ShareQueryDialog
+        isOpen={shareDialogState.isOpen}
+        onClose={() => setShareDialogState({ isOpen: false })}
+        onSave={handleUpdateSharing}
+        query={shareDialogState.query}
     />,
     document.body
   ) : null;
@@ -1193,6 +1231,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
       {notebookPanelDrawer}
       {savedQueriesPanelDrawer}
       {saveQueryDialog}
+      {shareQueryDialog}
 
        <style>{`
           @keyframes fade-in {

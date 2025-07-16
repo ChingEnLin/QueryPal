@@ -109,11 +109,16 @@ export interface NotebookStep {
 }
 
 /**
- * Represents a query saved by the user for later use.
+ * Represents a query saved by the user for later use, now with sharing capabilities.
  */
 export interface SavedQuery {
     id: string;
     name: string;
     prompt: string;
     code: string;
+    // New fields for sharing and collaboration
+    ownerEmail: string;
+    sharedWith: string[];
+    lastModifiedBy: string;
+    updatedAt: string; // ISO 8601 timestamp
 }

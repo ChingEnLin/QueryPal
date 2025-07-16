@@ -8,11 +8,9 @@ import XIcon from './icons/XIcon';
 interface SaveQueryDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Omit<SavedQuery, 'id'> | SavedQuery) => void;
+  onSave: (data: Pick<SavedQuery, 'name' | 'prompt' | 'code'> | SavedQuery) => void;
   isSaving: boolean;
-  initialData: {
-    id?: string;
-    name?: string;
+  initialData: Partial<SavedQuery> & {
     prompt: string;
     code: string;
   };
@@ -42,7 +40,7 @@ const SaveQueryDialog: React.FC<SaveQueryDialogProps> = ({ isOpen, onClose, onSa
       return;
     }
     const saveData = isEditMode
-      ? { id: initialData.id!, name, prompt, code }
+      ? { ...(initialData as SavedQuery), name, prompt, code }
       : { name, prompt, code };
       
     onSave(saveData);

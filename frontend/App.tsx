@@ -12,12 +12,13 @@ const MsalAppFlow: React.FC = () => {
   const { instance, accounts } = useMsal();
   
   const name = accounts[0]?.name;
+  const email = accounts[0]?.username; // The username claim is typically the user's email/UPN
   const onLogout = () => instance.logoutRedirect({ postLogoutRedirectUri: "/" });
 
   return (
     <>
       {isAuthenticated ? (
-        <QueryGeneratorPage name={name} onLogout={onLogout} />
+        <QueryGeneratorPage name={name} email={email} onLogout={onLogout} />
       ) : (
         <LoginPage />
       )}
@@ -29,11 +30,12 @@ const MsalAppFlow: React.FC = () => {
 const BypassAppFlow: React.FC = () => {
   const { isAuthenticated, user, logout } = useAuth();
   const name = user?.name;
+  const email = user?.email;
   
   return (
     <>
       {isAuthenticated ? (
-        <QueryGeneratorPage name={name} onLogout={logout} />
+        <QueryGeneratorPage name={name} email={email} onLogout={logout} />
       ) : (
         <LoginPage />
       )}

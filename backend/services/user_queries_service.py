@@ -6,20 +6,42 @@ from typing import List
 import psycopg2
 from models.user_queries import SavedQuery, SavedQueryCreate, SavedQueryUpdate
 
-DB_NAME = env["DB_NAME"]
-DB_USER = env["DB_USER"]
-DB_PASS = env["DB_PASS"]
+
+DB_NAME = env.get("DB_NAME", "querypal")
+DB_USER = env.get("DB_USER", "postgres")
+DB_PASS = env.get("DB_PASS", "postgres")
 DB_HOST = env.get("DB_HOST", "127.0.0.1")
 DB_PORT = env.get("DB_PORT", "5432")
 
 def get_connection():
-    return psycopg2.connect(
+    conn = psycopg2.connect(
         dbname=DB_NAME,
         user=DB_USER,
         password=DB_PASS,
         host=DB_HOST,
         port=DB_PORT
     )
+    conn.autocommit = True
+    return conn
+
+# Ensure table exists with new schema
+def ensure_table():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS saved_queries (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        code TEXT NOT NULL,
+        owner_email TEXT NOT NULL,
+        shared_with TEXT NOT NULL,
+        last_modified_by TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """)
+    conn.close()
+ensure_table()
 
 def get_user_id_from_token(token: str) -> str:
     # Extract user email from Azure Entra ID JWT access token
@@ -40,41 +62,71 @@ def get_user_id_from_token(token: str) -> str:
 def get_saved_queries(user_id: str) -> List[SavedQuery]:
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT id, name, prompt, code FROM saved_queries WHERE user_id = %s", (user_id,))
+    # Return queries owned by or shared with user
+    c.execute("SELECT id, name, prompt, code, owner_email, shared_with, last_modified_by, updated_at FROM saved_queries WHERE owner_email = %s OR position(%s in shared_with) > 0", (user_id, user_id))
     rows = c.fetchall()
     conn.close()
-    return [SavedQuery(id=row[0], name=row[1], prompt=row[2], code=row[3]) for row in rows]
+    result = []
+    for row in rows:
+        shared_with = row[5].split(",") if row[5] else []
+        result.append(SavedQuery(
+            id=row[0], name=row[1], prompt=row[2], code=row[3],
+            ownerEmail=row[4], sharedWith=shared_with,
+            lastModifiedBy=row[6], updatedAt=row[7]
+        ))
+    return result
 
 def create_saved_query(user_id: str, data: SavedQueryCreate) -> SavedQuery:
+    import datetime
     query_id = str(uuid.uuid4())
+    now = datetime.datetime.utcnow().isoformat() + "Z"
     conn = get_connection()
     c = conn.cursor()
     c.execute(
-        "INSERT INTO saved_queries (id, user_id, name, prompt, code) VALUES (%s, %s, %s, %s, %s)",
-        (query_id, user_id, data.name, data.prompt, data.code)
+        "INSERT INTO saved_queries (id, name, prompt, code, owner_email, shared_with, last_modified_by, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (query_id, data.name, data.prompt, data.code, user_id, "", user_id, now)
     )
-    conn.commit()
     conn.close()
-    return SavedQuery(id=query_id, name=data.name, prompt=data.prompt, code=data.code)
+    return SavedQuery(id=query_id, name=data.name, prompt=data.prompt, code=data.code, ownerEmail=user_id, sharedWith=[], lastModifiedBy=user_id, updatedAt=now)
 
 def update_saved_query(user_id: str, query_id: str, data: SavedQueryUpdate) -> SavedQuery:
+    import datetime
+    # Only owner or shared user can update
     conn = get_connection()
     c = conn.cursor()
+    c.execute("SELECT owner_email, shared_with FROM saved_queries WHERE id = %s", (query_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Saved query not found")
+    owner_email, shared_with = row
+    shared_list = shared_with.split(",") if shared_with else []
+    if user_id != owner_email and user_id not in shared_list:
+        conn.close()
+        raise PermissionError("Not allowed to update this query")
+    now = datetime.datetime.utcnow().isoformat() + "Z"
     c.execute(
-        "UPDATE saved_queries SET name = %s, prompt = %s, code = %s WHERE id = %s AND user_id = %s",
-        (data.name, data.prompt, data.code, query_id, user_id)
+        "UPDATE saved_queries SET name = %s, prompt = %s, code = %s, shared_with = %s, last_modified_by = %s, updated_at = %s WHERE id = %s",
+        (data.name, data.prompt, data.code, ",".join(data.sharedWith), user_id, now, query_id)
     )
-    conn.commit()
-    c.execute("SELECT id, name, prompt, code FROM saved_queries WHERE id = %s AND user_id = %s", (query_id, user_id))
+    c.execute("SELECT id, name, prompt, code, owner_email, shared_with, last_modified_by, updated_at FROM saved_queries WHERE id = %s", (query_id,))
     row = c.fetchone()
     conn.close()
-    if not row:
-        raise ValueError("Saved query not found")
-    return SavedQuery(id=row[0], name=row[1], prompt=row[2], code=row[3])
+    shared_with = row[5].split(",") if row[5] else []
+    return SavedQuery(
+        id=row[0], name=row[1], prompt=row[2], code=row[3],
+        ownerEmail=row[4], sharedWith=shared_with,
+        lastModifiedBy=row[6], updatedAt=row[7]
+    )
 
 def delete_saved_query(user_id: str, query_id: str):
+    # Only owner can delete
     conn = get_connection()
     c = conn.cursor()
-    c.execute("DELETE FROM saved_queries WHERE id = %s AND user_id = %s", (query_id, user_id))
-    conn.commit()
+    c.execute("SELECT owner_email FROM saved_queries WHERE id = %s", (query_id,))
+    row = c.fetchone()
+    if not row or row[0] != user_id:
+        conn.close()
+        raise PermissionError("Not allowed to delete this query")
+    c.execute("DELETE FROM saved_queries WHERE id = %s", (query_id,))
     conn.close()
