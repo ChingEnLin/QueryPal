@@ -1,11 +1,12 @@
 import base64
+from os import environ as env
 import json
 import sqlite3
 import uuid
 from models.user_queries import SavedQuery, SavedQueryCreate, SavedQueryUpdate
 from typing import List
 
-DB_PATH = "querypal.db"
+DB_PATH = env.get("USER_QUERIES_DB_PATH", "querypal.db")
 
 # Initialize DB and table
 conn = sqlite3.connect(DB_PATH)

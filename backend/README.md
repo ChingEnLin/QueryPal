@@ -78,7 +78,10 @@ API docs will be available at:
 | POST   | /azure/account_details     | Get Account Details                 |
 | POST   | /azure/collection_info     | Get Collection Info                 |
 | POST   | /system/clear_cache        | Clear All Caches                    |
-
+| GET    | /user/queries                 | List all saved queries for user   |
+| POST   | /user/queries                 | Save a new query for user         |
+| PUT    | /user/queries/{queryId}       | Update an existing saved query    |
+| DELETE | /user/queries/{queryId}       | Delete a saved query              |
 
 ⸻
 
