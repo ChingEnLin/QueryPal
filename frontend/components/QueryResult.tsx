@@ -156,16 +156,17 @@ const QueryResult: React.FC<QueryResultProps> = ({
 
   // Effect to control view mode during tutorial
   useEffect(() => {
-      if (isTutorialActive) {
-          // "Customize Your Table" is at index 7. This ensures the table view
-          // and its controls are visible for that specific step.
-          if (tutorialStepIndex === 7) {
-              setViewMode('table');
-          } else {
-              // Default to json for other result steps in the tutorial
-              setViewMode('json');
-          }
-      }
+    if (isTutorialActive) {
+        // For the tutorial steps involving result inspection, we need to ensure the correct view is active.
+        // Step 7 "View Your Results" (index 7) can show the table.
+        // Step 8 "Customize Your Table" (index 8) MUST show the table for its target element to be visible.
+        if (tutorialStepIndex === 7 || tutorialStepIndex === 8) {
+            setViewMode('table');
+        } else {
+            // Default to json for other result steps in the tutorial
+            setViewMode('json');
+        }
+    }
   }, [isTutorialActive, tutorialStepIndex]);
 
   // --- Handlers for Table Editing ---

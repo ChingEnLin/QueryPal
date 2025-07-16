@@ -739,13 +739,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
   const isDemoModeForRunStep = isTutorialActive && tutorialStepIndex === 4;
-  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 5;
-  const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 6 && tutorialStepIndex <= 8;
-  const isDemoModeForContextActiveStep = isTutorialActive && tutorialStepIndex === 9;
-  const isDemoModeForNotebookButtonStep = isTutorialActive && tutorialStepIndex === 10;
-  const isDemoModeForNotebookPanelStep = isTutorialActive && tutorialStepIndex === 11;
+  const isDemoModeForSaveStep = isTutorialActive && tutorialStepIndex === 5;
+  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 6;
+  const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 7 && tutorialStepIndex <= 9;
+  const isDemoModeForContextActiveStep = isTutorialActive && tutorialStepIndex === 10;
+  const isDemoModeForNotebookButtonStep = isTutorialActive && tutorialStepIndex === 11;
+  const isDemoModeForNotebookPanelStep = isTutorialActive && tutorialStepIndex === 12;
   
-  const demoActive = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForContextActiveStep || isDemoModeForDebugStep || isDemoModeForNotebookButtonStep || isDemoModeForNotebookPanelStep || isDemoModeForRunStep;
+  const demoActive = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForContextActiveStep || isDemoModeForDebugStep || isDemoModeForNotebookButtonStep || isDemoModeForNotebookPanelStep || isDemoModeForRunStep || isDemoModeForSaveStep;
 
   const isConnectedForRender = (connectedDbInfo && connectedResource) || demoActive;
   const dbInfoForRender = demoActive ? mockECommerceDbInfo : connectedDbInfo;
@@ -1044,8 +1045,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                   </div>
               )}
 
-              {/* Tutorial Demo for Run & Edit Step */}
-              {isDemoModeForRunStep && (
+              {/* Tutorial Demo for Run, Edit & Save Steps */}
+              {(isDemoModeForRunStep || isDemoModeForSaveStep) && (
                 <div className="space-y-8 animate-fade-in">
                   <QueryDisplay
                     code={mockFindUsersQuery.generated_code}
@@ -1129,7 +1130,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
               )}
 
               {/* Real results */}
-              {(!isLoading && !error && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep) && (
+              {(!isLoading && !error && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep && !isDemoModeForSaveStep) && (
                 <div className="space-y-8">
                     {editableCode ? (
                         <>

@@ -49,7 +49,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
   const isRunButtonDisabled = isExecuting || (isWriteOperation && !allowWrite);
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg p-6 space-y-4 animate-fade-in border border-slate-200 dark:border-slate-700">
+    <div id="query-display-panel" className="bg-white dark:bg-slate-800 rounded-lg p-6 space-y-4 animate-fade-in border border-slate-200 dark:border-slate-700">
       <div className="space-y-4">
         {/* New Two-Row Header Layout */}
         <div className="flex flex-col gap-3">
@@ -60,6 +60,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
             </h3>
             <div className="flex items-center gap-3 flex-shrink-0">
                <button
+                    id="tutorial-save-button"
                     onClick={onSaveQuery}
                     disabled={!code}
                     className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
