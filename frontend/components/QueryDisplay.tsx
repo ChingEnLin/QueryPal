@@ -50,45 +50,16 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg p-6 space-y-4 animate-fade-in border border-slate-200 dark:border-slate-700">
-      <div className="space-y-2">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-            <div className="flex items-center flex-wrap gap-4">
-                <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Generated & Editable Code</h3>
-                {historyCount > 1 && (
-                    <div className="flex items-center gap-2 text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-                        <button
-                            onClick={() => onNavigateHistory('prev')}
-                            disabled={historyIndex <= 0}
-                            className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            aria-label="Previous query version"
-                            title="Previous query version"
-                        >
-                            <ArrowLeftIcon className="w-4 h-4" />
-                        </button>
-                        <span className="text-xs font-medium tabular-nums">Version {historyIndex + 1} of {historyCount}</span>
-                        <button
-                            onClick={() => onNavigateHistory('next')}
-                            disabled={historyIndex >= historyCount - 1}
-                            className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            aria-label="Next query version"
-                            title="Next query version"
-                        >
-                            <ArrowRightIcon className="w-4 h-4" />
-                        </button>
-                    </div>
-                )}
-            </div>
-            <div className="flex items-center gap-3 flex-wrap">
-                 {isWriteOperation ? (
-                     <div className="text-xs text-red-800 dark:text-red-200 bg-red-100 dark:bg-red-900/50 border border-red-200 dark:border-red-500/30 px-2 py-1 rounded-md">
-                        <strong>Warning:</strong> Write operation detected.
-                     </div>
-                 ) : (
-                    <div className="text-xs text-yellow-800 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-900/50 border border-yellow-200 dark:border-yellow-500/30 px-2 py-1 rounded-md">
-                        <strong>Warning:</strong> Review code before execution.
-                    </div>
-                 )}
-                <button
+      <div className="space-y-4">
+        {/* New Two-Row Header Layout */}
+        <div className="flex flex-col gap-3">
+          {/* Top Row: Title and primary actions */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+              Generated & Editable Code
+            </h3>
+            <div className="flex items-center gap-3 flex-shrink-0">
+               <button
                     onClick={onSaveQuery}
                     disabled={!code}
                     className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -107,6 +78,50 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
                     {isExecuting ? 'Running...' : 'Run Query'}
                 </button>
             </div>
+          </div>
+
+          {/* Bottom Row: History and warnings */}
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 min-h-[2rem]">
+            {/* Left side: History Navigator */}
+            <div className="w-full sm:w-auto flex justify-start">
+              {historyCount > 1 && (
+                <div className="flex items-center gap-2 text-slate-500 bg-slate-100 dark:bg-slate-700 dark:text-slate-400 px-2 py-1 rounded-full">
+                  <button
+                    onClick={() => onNavigateHistory('prev')}
+                    disabled={historyIndex <= 0}
+                    className="p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Previous query version"
+                    title="Previous query version"
+                  >
+                    <ArrowLeftIcon className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-medium tabular-nums">Version {historyIndex + 1} of {historyCount}</span>
+                  <button
+                    onClick={() => onNavigateHistory('next')}
+                    disabled={historyIndex >= historyCount - 1}
+                    className="p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Next query version"
+                    title="Next query version"
+                  >
+                    <ArrowRightIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {/* Right side: Warnings */}
+            <div className="w-full sm:w-auto flex justify-end">
+              {isWriteOperation ? (
+                  <div className="text-xs text-red-800 dark:text-red-200 bg-red-100 dark:bg-red-900/50 border border-red-200 dark:border-red-500/30 px-2 py-1 rounded-md">
+                    <strong>Warning:</strong> Write operation detected.
+                  </div>
+              ) : (
+                <div className="text-xs text-yellow-800 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-900/50 border border-yellow-200 dark:border-yellow-500/30 px-2 py-1 rounded-md">
+                    <strong>Warning:</strong> Review code before execution.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         
         <div className="bg-slate-800 dark:bg-black/30 rounded-md relative group">
