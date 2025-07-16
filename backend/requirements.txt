@@ -4,6 +4,7 @@ google-genai
 uvicorn
 pydantic
 python-dotenv
+psycopg2-binary
 requests
 pymongo
 msal
