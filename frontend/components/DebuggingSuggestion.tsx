@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import AiSparkleIcon from './icons/AiSparkleIcon';
 import ClipboardIcon from './icons/ClipboardIcon';
@@ -46,6 +47,7 @@ const DebuggingSuggestion: React.FC<DebuggingSuggestionProps> = ({ suggestion })
           onClick={handleCopy}
           className="p-2 bg-slate-200/50 dark:bg-slate-700/50 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-800 dark:hover:text-slate-100 transition-colors"
           aria-label="Copy suggestion"
+          title={copied ? 'Copied!' : 'Copy suggestion'}
         >
           {copied ? <CheckIcon className="w-4 h-4 text-blue-500" /> : <ClipboardIcon className="w-4 h-4" />}
         </button>

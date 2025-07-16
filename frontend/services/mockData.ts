@@ -1,4 +1,4 @@
-import { CosmosDBAccount, DbInfo, CollectionInfo, QueryResultData, DebuggingResult, AnalysisResult } from '../types';
+import { CosmosDBAccount, DbInfo, CollectionInfo, QueryResultData, DebuggingResult, AnalysisResult, SavedQuery } from '../types';
 
 // --- Helper to simulate network latency ---
 export const mockDelay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -207,3 +207,25 @@ export const mockAnalysisResult: AnalysisResult = {
 
 // --- Mock System Action Results ---
 export const mockCacheClearResult = { message: 'Cache cleared successfully.' };
+
+// --- Mock User Data ---
+export const mockSavedQueries: SavedQuery[] = [
+    {
+        id: 'sq-1',
+        name: 'Active Canadian Users',
+        prompt: 'Find all users from Canada who are active',
+        code: `db['users'].find({\n  "country": "Canada",\n  "status": "active"\n})`
+    },
+    {
+        id: 'sq-2',
+        name: 'Increase Electronics Prices',
+        prompt: 'Increase the price of all electronics by 10%',
+        code: `db['products'].update_many(\n  { "category": "Electronics" },\n  { "$mul": { "price": 1.1 } }\n)`
+    },
+    {
+        id: 'sq-3',
+        name: 'Recent Orders',
+        prompt: 'Find all orders from the last 7 days',
+        code: `db['orders'].find({\n  "orderDate": { "$gte": new Date(new Date().setDate(new Date().getDate() - 7)) }\n})`
+    }
+];

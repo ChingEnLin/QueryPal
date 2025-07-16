@@ -30,6 +30,7 @@ const LoginUI: React.FC<LoginUIProps> = ({ onLogin, buttonText, ButtonIcon }) =>
                 <button
                     onClick={onLogin}
                     className="w-full flex justify-center items-center gap-3 px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-violet-600 hover:bg-violet-700 disabled:bg-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.99]"
+                    title={buttonText}
                 >
                     <ButtonIcon className="w-6 h-6" />
                     {buttonText}

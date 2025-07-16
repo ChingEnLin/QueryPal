@@ -5,11 +5,13 @@ import CheckIcon from './icons/CheckIcon';
 import PlayIcon from './icons/PlayIcon';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import ArrowRightIcon from './icons/ArrowRightIcon';
+import BookmarkIcon from './icons/BookmarkIcon';
 
 interface QueryDisplayProps {
   code: string;
   onCodeChange: (newCode: string) => void;
   onRunQuery: () => void;
+  onSaveQuery: () => void;
   isExecuting: boolean;
   historyCount: number;
   historyIndex: number;
@@ -20,7 +22,7 @@ interface QueryDisplayProps {
 const WRITE_OPERATION_REGEX = /\.(insert_one|insert_many|update_one|update_many|replace_one|delete_one|delete_many|bulk_write|drop|drop_index|drop_indexes|create_index|create_indexes|rename_collection)\s*\(/i;
 
 
-const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQuery, isExecuting, historyCount, historyIndex, onNavigateHistory }) => {
+const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQuery, onSaveQuery, isExecuting, historyCount, historyIndex, onNavigateHistory }) => {
   const [copied, setCopied] = useState(false);
   const [allowWrite, setAllowWrite] = useState(false);
 
@@ -59,6 +61,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
                             disabled={historyIndex <= 0}
                             className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                             aria-label="Previous query version"
+                            title="Previous query version"
                         >
                             <ArrowLeftIcon className="w-4 h-4" />
                         </button>
@@ -68,6 +71,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
                             disabled={historyIndex >= historyCount - 1}
                             className="p-1 rounded-full hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                             aria-label="Next query version"
+                            title="Next query version"
                         >
                             <ArrowRightIcon className="w-4 h-4" />
                         </button>
@@ -85,9 +89,19 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
                     </div>
                  )}
                 <button
+                    onClick={onSaveQuery}
+                    disabled={!code}
+                    className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    title="Save query"
+                >
+                    <BookmarkIcon className="w-4 h-4" />
+                    <span>Save</span>
+                </button>
+                <button
                     onClick={onRunQuery}
                     disabled={isRunButtonDisabled}
                     className="flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
+                    title="Run the code against the connected database"
                 >
                     <PlayIcon className="w-4 h-4" />
                     {isExecuting ? 'Running...' : 'Run Query'}
@@ -106,6 +120,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
             onClick={handleCopy}
             className="absolute top-2 right-2 p-2 bg-slate-600/80 dark:bg-slate-700/80 rounded-md text-slate-300 hover:bg-slate-500 dark:hover:bg-slate-600 hover:text-white transition-all duration-200 opacity-0 group-hover:opacity-100 focus:opacity-100"
             aria-label="Copy code"
+            title={copied ? 'Copied!' : 'Copy code'}
           >
             {copied ? <CheckIcon className="w-4 h-4 text-blue-400" /> : <ClipboardIcon className="w-4 h-4" />}
           </button>
@@ -122,6 +137,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
                     role="switch"
                     aria-checked={allowWrite}
                     className={`relative inline-flex items-center h-6 rounded-full w-11 cursor-pointer transition-colors duration-200 ease-in-out ${allowWrite ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+                    title="Toggle to enable or disable execution of write operations"
                 >
                     <span
                         className={`inline-block w-4 h-4 transform bg-white dark:bg-slate-300 rounded-full transition-transform duration-200 ease-in-out ${allowWrite ? 'translate-x-6' : 'translate-x-1'}`}

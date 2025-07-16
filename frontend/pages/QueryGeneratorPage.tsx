@@ -3,8 +3,9 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { generateMongoQuery, debugMongoQuery, analyzeQueryResult } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
+import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
-import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep } from '../types';
+import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep, SavedQuery } from '../types';
 import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult } from '../services/mockData';
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
@@ -29,6 +30,9 @@ import DownloadIcon from '../components/icons/DownloadIcon';
 import TrashIcon from '../components/icons/TrashIcon';
 import PlusCircleIcon from '../components/icons/PlusCircleIcon';
 import EditIcon from '../components/icons/EditIcon';
+import BookmarkIcon from '../components/icons/BookmarkIcon';
+import SavedQueriesPanel from '../components/SavedQueriesPanel';
+import SaveQueryDialog from '../components/SaveQueryDialog';
 
 
 // --- Header Component ---
@@ -39,9 +43,10 @@ interface HeaderUIProps {
   isClearingCache: boolean;
   cacheClearStatus: 'idle' | 'success' | 'error';
   onStartTutorial: () => void;
+  onShowSavedQueries: () => void;
 }
 
-const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial }) => {
+const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial, onShowSavedQueries }) => {
   const { theme, toggleTheme } = useTheme();
 
   const getCacheButtonContent = () => {
@@ -81,9 +86,18 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
           {name && <span className="text-slate-600 dark:text-slate-300 text-sm hidden sm:block">Welcome, {name}</span>}
           <div id="tutorial-header-actions" className="flex items-center gap-2">
             <button
+                onClick={onShowSavedQueries}
+                className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                aria-label="Show saved queries"
+                title="View and manage your saved queries"
+            >
+                <BookmarkIcon className="w-5 h-5" />
+            </button>
+            <button
                 onClick={onClearCache}
                 disabled={isClearingCache || cacheClearStatus !== 'idle'}
                 className={getCacheButtonClasses()}
+                title="Clear server-side cache and refresh account list"
             >
                 {getCacheButtonContent()}
             </button>
@@ -91,6 +105,7 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
               onClick={toggleTheme}
               className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               aria-label="Toggle theme"
+              title="Toggle light/dark mode"
             >
               {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
             </button>
@@ -98,12 +113,14 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
                 onClick={onStartTutorial}
                 className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 aria-label="Start tutorial"
+                title="Start the guided tour"
             >
                 <HelpIcon className="w-5 h-5" />
             </button>
             <button
                 onClick={onLogout}
                 className="h-9 px-4 flex items-center justify-center border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
+                title="Sign out of the application"
             >
                 Sign Out
             </button>
@@ -133,15 +150,15 @@ const NotebookStepCard: React.FC<NotebookStepCardProps> = ({ step, index, onRemo
           <h4 className="font-bold text-slate-200">Note</h4>
           <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
             {step.isEditing ? (
-              <button onClick={handleSave} className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700">
+              <button onClick={handleSave} className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700" title="Save changes">
                 <CheckIcon className="w-3 h-3"/> Save
               </button>
             ) : (
-              <button onClick={() => onSetEditing(step.id, true)} className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-slate-600 text-slate-200 hover:bg-slate-500">
+              <button onClick={() => onSetEditing(step.id, true)} className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-slate-600 text-slate-200 hover:bg-slate-500" title="Edit note">
                 <EditIcon className="w-3 h-3"/> Edit
               </button>
             )}
-            <button onClick={() => onRemove(step.id)} className="p-1 rounded-full text-slate-500 hover:bg-red-900/50 hover:text-red-400" aria-label="Remove note">
+            <button onClick={() => onRemove(step.id)} className="p-1 rounded-full text-slate-500 hover:bg-red-900/50 hover:text-red-400" aria-label="Remove note" title="Remove step">
               <TrashIcon className="w-4 h-4" />
             </button>
           </div>
@@ -172,6 +189,7 @@ const NotebookStepCard: React.FC<NotebookStepCardProps> = ({ step, index, onRemo
           onClick={() => onRemove(step.id)}
           className="p-1 rounded-full text-slate-500 hover:bg-red-900/50 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
           aria-label="Remove step"
+          title="Remove step"
         >
           <TrashIcon className="w-4 h-4" />
         </button>
@@ -222,16 +240,17 @@ const NotebookPanel: React.FC<NotebookPanelProps> = ({ steps, onClose, onExport,
             onClick={onClose}
             className="p-1.5 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
             aria-label="Close notebook panel"
+            title="Close notebook"
           >
             <XIcon className="w-5 h-5" />
           </button>
         </header>
         <div className="flex-shrink-0 p-4 border-b border-slate-700 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-                <button onClick={onAddNote} className="flex items-center gap-2 px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors"><PlusCircleIcon className="w-4 h-4"/>Add Note</button>
-                <button onClick={onClear} disabled={steps.length === 0} className="flex items-center gap-2 px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><TrashIcon className="w-4 h-4"/>Clear All</button>
+                <button onClick={onAddNote} className="flex items-center gap-2 px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors" title="Add a new markdown note"><PlusCircleIcon className="w-4 h-4"/>Add Note</button>
+                <button onClick={onClear} disabled={steps.length === 0} className="flex items-center gap-2 px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" title="Clear all steps"><TrashIcon className="w-4 h-4"/>Clear All</button>
             </div>
-            <button onClick={onExport} disabled={steps.length === 0} className="flex items-center gap-2 px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><DownloadIcon className="w-4 h-4"/>Export .ipynb</button>
+            <button onClick={onExport} disabled={steps.length === 0} className="flex items-center gap-2 px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" title="Export as .ipynb notebook"><DownloadIcon className="w-4 h-4"/>Export .ipynb</button>
         </div>
         <div className="flex-grow overflow-auto p-4 space-y-4">
           {steps.length > 0 ? (
@@ -324,6 +343,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const [notebookSteps, setNotebookSteps] = useState<NotebookStep[]>([]);
   const [isNotebookPanelOpen, setIsNotebookPanelOpen] = useState<boolean>(false);
 
+  // --- State for Saved Queries ---
+  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
+  const [isLoadingSavedQueries, setIsLoadingSavedQueries] = useState<boolean>(false);
+  const [isSavedQueriesPanelOpen, setIsSavedQueriesPanelOpen] = useState<boolean>(false);
+  const [saveDialogState, setSaveDialogState] = useState<{ isOpen: boolean; data?: Partial<SavedQuery> & { prompt: string; code: string }}>({ isOpen: false });
+  const [isSavingQuery, setIsSavingQuery] = useState(false);
+
+
   const connectedAccountName = useMemo(() => {
     if (!connectedResource) return '';
     return azureAccounts.find(acc => acc.id === connectedResource.accountId)?.name ?? 'Unknown Account';
@@ -341,15 +368,29 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
         setIsLoadingAccounts(false);
       }
     }, []);
+  
+  const fetchSavedQueries = useCallback(async () => {
+    setIsLoadingSavedQueries(true);
+    try {
+        const queries = await getSavedQueries();
+        setSavedQueries(queries);
+    } catch(e) {
+        // Handle error silently in the UI for now
+        console.error("Failed to fetch saved queries:", e);
+    } finally {
+        setIsLoadingSavedQueries(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchAccounts();
+    fetchSavedQueries();
     // Check if the user has seen the tutorial before
     const hasSeenTutorial = localStorage.getItem('hasSeenTutorial');
     if (!hasSeenTutorial) {
       setIsTutorialActive(true);
     }
-  }, [fetchAccounts]);
+  }, [fetchAccounts, fetchSavedQueries]);
   
   const handleClearCache = useCallback(async () => {
       setIsClearingCache(true);
@@ -638,6 +679,62 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
   const handleSetEditingStep = (id: string, isEditing: boolean) => {
     setNotebookSteps(prev => prev.map(s => s.id === id ? { ...s, isEditing } : { ...s, isEditing: false }));
   };
+  
+  // --- Saved Queries Handlers ---
+  const handleOpenSaveDialog = () => {
+    setSaveDialogState({
+      isOpen: true,
+      data: { prompt: lastSuccessfulPrompt, code: editableCode }
+    });
+  };
+
+  const handleEditSavedQuery = (query: SavedQuery) => {
+    setSaveDialogState({ isOpen: true, data: query });
+  };
+  
+  const handleSaveOrUpdateQuery = useCallback(async (data: Omit<SavedQuery, 'id'> | SavedQuery) => {
+    setIsSavingQuery(true);
+    try {
+        if ('id' in data) {
+            // Update
+            const updated = await updateSavedQuery(data as SavedQuery);
+            setSavedQueries(prev => prev.map(q => q.id === updated.id ? updated : q));
+        } else {
+            // Create
+            const newQuery = await saveQuery(data);
+            setSavedQueries(prev => [...prev, newQuery]);
+        }
+        setSaveDialogState({ isOpen: false });
+    } catch(e) {
+        console.error("Failed to save or update query:", e);
+        // Maybe set an error in the dialog in the future
+    } finally {
+        setIsSavingQuery(false);
+    }
+  }, []);
+
+  const handleDeleteSavedQuery = useCallback(async (queryId: string) => {
+    try {
+        await deleteSavedQuery(queryId);
+        setSavedQueries(prev => prev.filter(q => q.id !== queryId));
+    } catch(e) {
+        console.error("Failed to delete query:", e);
+    }
+  }, []);
+
+  const handleLoadSavedQuery = (query: SavedQuery) => {
+    clearQueryState(); // Clear all results and errors
+    setUserInput(query.prompt);
+    setLastSuccessfulPrompt(query.prompt);
+    setEditableCode(query.code);
+    
+    // Set code history for the loaded query
+    setCodeHistory([query.code]);
+    setHistoryIndex(0);
+    
+    setIsSavedQueriesPanelOpen(false); // Close panel after loading
+  };
+
 
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
@@ -688,6 +785,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
             onClick={() => setIsContextViewerOpen(false)}
             className="p-1.5 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
             aria-label="Close context viewer"
+            title="Close context viewer"
           >
             <XIcon className="w-5 h-5" />
           </button>
@@ -721,6 +819,30 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
     document.body
   ) : null;
 
+  const savedQueriesPanelDrawer = isSavedQueriesPanelOpen ? createPortal(
+    <SavedQueriesPanel
+        onClose={() => setIsSavedQueriesPanelOpen(false)}
+        queries={savedQueries}
+        onLoad={handleLoadSavedQuery}
+        onEdit={handleEditSavedQuery}
+        onDelete={handleDeleteSavedQuery}
+        isLoading={isLoadingSavedQueries}
+    />,
+    document.body
+  ) : null;
+
+  const saveQueryDialog = saveDialogState.isOpen ? createPortal(
+    <SaveQueryDialog
+        isOpen={saveDialogState.isOpen}
+        onClose={() => setSaveDialogState({ isOpen: false })}
+        onSave={handleSaveOrUpdateQuery}
+        isSaving={isSavingQuery}
+        initialData={saveDialogState.data!}
+    />,
+    document.body
+  ) : null;
+
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
@@ -732,6 +854,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
             isClearingCache={isClearingCache}
             cacheClearStatus={cacheClearStatus}
             onStartTutorial={() => setIsTutorialActive(true)}
+            onShowSavedQueries={() => setIsSavedQueriesPanelOpen(true)}
         />
 
         <main className="space-y-8">
@@ -749,6 +872,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                   <button
                     onClick={handleDisconnect}
                     className="px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/50 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors"
+                    title="Disconnect from database"
                   >
                     Disconnect
                   </button>
@@ -770,6 +894,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                             key={col.name} 
                             onClick={() => handleCollectionClick(col.name)}
                             className={`text-xs font-mono px-3 py-1 rounded-full transition-all duration-200 ${selectedCollectionForRender === col.name ? 'bg-blue-500 text-white font-bold ring-2 ring-blue-300 dark:bg-blue-600 dark:ring-blue-500' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'}`}
+                            title={`View details for the ${col.name} collection`}
                         >
                             {col.name}
                          </button>
@@ -813,6 +938,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                                     onClick={() => handleSelectAccount(account.id)}
                                     disabled={isLoadingDatabases}
                                     className="w-full text-left font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
+                                    title={`Load databases for ${account.name}`}
                                 >
                                     <ServerIcon className="w-5 h-5 text-slate-500" />
                                     {account.name}
@@ -830,6 +956,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                                                         key={db.name}
                                                         onClick={() => handleConnectDatabase(db)}
                                                         className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
+                                                        title={`Connect to the ${db.name} database`}
                                                     >
                                                         {db.name}
                                                     </button>
@@ -860,10 +987,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                                 <p className="text-sm text-blue-700 dark:text-blue-200/80">
                                     Using results from <strong className="font-mono">{contextForRender.source}</strong> ({Array.isArray(contextForRender.data) ? contextForRender.data.length : 1} items) as context for the next query.
                                 </p>
-                                <button onClick={() => setIsContextViewerOpen(true)} className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-semibold mt-1">View Data</button>
+                                <button onClick={() => setIsContextViewerOpen(true)} className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-semibold mt-1" title="View the full data being used as context">View Data</button>
                             </div>
                         </div>
-                        <button onClick={() => setIntermediateContext(null)} className="p-1.5 rounded-full text-blue-600 dark:text-blue-400 hover:bg-blue-200/50 dark:hover:bg-blue-900/40">
+                        <button onClick={() => setIntermediateContext(null)} className="p-1.5 rounded-full text-blue-600 dark:text-blue-400 hover:bg-blue-200/50 dark:hover:bg-blue-900/40" title="Remove the active query context">
                             <XIcon className="w-4 h-4" />
                         </button>
                     </div>
@@ -886,6 +1013,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                 onClick={handleGenerateQueryClick}
                 disabled={isLoading || !userInput.trim() || isQuerySectionDisabled}
                 className="w-full flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.99]"
+                title="Generate MongoDB code from your natural language command"
               >
                 {generateButtonText}
               </button>
@@ -923,6 +1051,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                     code={mockFindUsersQuery.generated_code}
                     onCodeChange={() => {}}
                     onRunQuery={() => {}}
+                    onSaveQuery={() => {}}
                     isExecuting={false}
                     historyCount={1}
                     historyIndex={0}
@@ -938,6 +1067,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                     code={mockFindUsersQuery.generated_code}
                     onCodeChange={() => {}}
                     onRunQuery={() => {}}
+                    onSaveQuery={() => {}}
                     isExecuting={false}
                     historyCount={1}
                     historyIndex={0}
@@ -971,6 +1101,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
                     code={"db['users'].find({}).sor([('name', 1)])"}
                     onCodeChange={() => {}}
                     onRunQuery={() => {}}
+                    onSaveQuery={() => {}}
                     isExecuting={false}
                     historyCount={1}
                     historyIndex={0}
@@ -998,40 +1129,42 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
               )}
 
               {/* Real results */}
-              {(!isLoading && !error && queryResult && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep) && (
+              {(!isLoading && !error && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep) && (
                 <div className="space-y-8">
-                    <QueryDisplay
-                        code={editableCode}
-                        onCodeChange={setEditableCode}
-                        onRunQuery={handleRunQuery}
-                        isExecuting={isExecuting}
-                        historyCount={codeHistory.length}
-                        historyIndex={historyIndex}
-                        onNavigateHistory={handleNavigateHistory}
-                    />
-                    <QueryResult
-                        isExecuting={isExecuting}
-                        executionError={executionError}
-                        executionResult={executionResult}
-                        onDebug={handleDebugQuery}
-                        isDebugging={isDebugging}
-                        debuggingResult={debuggingResult}
-                        debugError={debugError}
-                        sourceCollection={querySourceCollection}
-                        onSetIntermediateContext={handleSetIntermediateContext}
-                        intermediateContext={intermediateContext}
-                        onAnalyze={handleAnalyzeQuery}
-                        isAnalyzing={isAnalyzing}
-                        analysisResult={analysisResult}
-                        analysisError={analysisError}
-                    />
-                </div>
-              )}
-              
-              {/* Placeholder */}
-              {(!isLoading && !error && !queryResult && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep) && (
-                <div className="text-center text-slate-500 dark:text-slate-400 py-10 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg">
-                  <p>{isQuerySectionDisabled ? 'Connect to a database to generate queries.' : 'Your generated query will appear here.'}</p>
+                    {editableCode ? (
+                        <>
+                            <QueryDisplay
+                                code={editableCode}
+                                onCodeChange={setEditableCode}
+                                onRunQuery={handleRunQuery}
+                                onSaveQuery={handleOpenSaveDialog}
+                                isExecuting={isExecuting}
+                                historyCount={codeHistory.length}
+                                historyIndex={historyIndex}
+                                onNavigateHistory={handleNavigateHistory}
+                            />
+                            <QueryResult
+                                isExecuting={isExecuting}
+                                executionError={executionError}
+                                executionResult={executionResult}
+                                onDebug={handleDebugQuery}
+                                isDebugging={isDebugging}
+                                debuggingResult={debuggingResult}
+                                debugError={debugError}
+                                sourceCollection={querySourceCollection}
+                                onSetIntermediateContext={handleSetIntermediateContext}
+                                intermediateContext={intermediateContext}
+                                onAnalyze={handleAnalyzeQuery}
+                                isAnalyzing={isAnalyzing}
+                                analysisResult={analysisResult}
+                                analysisError={analysisError}
+                            />
+                        </>
+                    ) : (
+                        <div className="text-center text-slate-500 dark:text-slate-400 py-10 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg">
+                            <p>{isQuerySectionDisabled ? 'Connect to a database to generate queries.' : 'Your generated query will appear here.'}</p>
+                        </div>
+                    )}
                 </div>
               )}
             </div>
@@ -1057,6 +1190,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, onLogout 
 
       {contextViewerDrawer}
       {notebookPanelDrawer}
+      {savedQueriesPanelDrawer}
+      {saveQueryDialog}
 
        <style>{`
           @keyframes fade-in {

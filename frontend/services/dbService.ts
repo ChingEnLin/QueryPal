@@ -1,6 +1,6 @@
 
 import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource } from '../types';
-import { msalInstance, loginRequest } from '@/authConfig';
+import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { 
     mockCosmosAccounts, 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { CollectionInfo } from '../types';
 import XIcon from './icons/XIcon';
@@ -103,6 +104,7 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onC
           onClick={onClose}
           className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
           aria-label="Close panel"
+          title="Close collection details"
         >
           <XIcon className="w-5 h-5" />
         </button>
@@ -140,6 +142,7 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onC
           className="w-full flex items-center gap-2 text-left text-slate-600 dark:text-slate-300 font-semibold p-1 -ml-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
           aria-expanded={isSchemaOpen}
           aria-controls={`schema-content-${info.name}`}
+          title={isSchemaOpen ? 'Collapse schema view' : 'Expand schema view'}
         >
           <FileJsonIcon className="w-5 h-5" />
           <span>Inferred Schema (from sample)</span>

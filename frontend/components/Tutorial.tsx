@@ -46,7 +46,7 @@ const tutorialSteps: TutorialStep[] = [
   {
     targetId: 'tutorial-results-area',
     title: '5. Debug with AI',
-    content: "In case of execution error, click 'Debug with AI' and the assistant will analyze the problem and suggest a fix.",
+    content: "In case of exection error, click 'Debug with AI' and the assistant will analyze the problem and suggest a fix.",
     placement: 'top',
   },
   {
@@ -122,7 +122,7 @@ const TutorialControlBar: React.FC<{
             <div className="absolute top-0 left-0 h-full bg-blue-600/30 rounded-xl transition-all duration-300" style={{ width: `${progress}%` }}></div>
 
             <div className="relative">
-                <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="px-3 sm:px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors z-10 relative flex items-center gap-2">
+                <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="px-3 sm:px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors z-10 relative flex items-center gap-2" title="Jump to a specific step">
                     Steps
                     <svg className={`w-4 h-4 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
@@ -142,12 +142,12 @@ const TutorialControlBar: React.FC<{
             </div>
             
             <div className="flex-grow flex items-center justify-center gap-2 sm:gap-4">
-                <button onClick={onPrev} disabled={currentStep === 0} className="px-3 sm:px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors disabled:opacity-50 z-10 relative">Back</button>
+                <button onClick={onPrev} disabled={currentStep === 0} className="px-3 sm:px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors disabled:opacity-50 z-10 relative" title="Go to the previous step">Back</button>
                 <span className="font-mono text-sm z-10 relative">{currentStep + 1} / {totalSteps}</span>
-                <button onClick={onNext} disabled={currentStep === totalSteps - 1} className="px-3 sm:px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors disabled:opacity-50 z-10 relative">Next</button>
+                <button onClick={onNext} disabled={currentStep === totalSteps - 1} className="px-3 sm:px-4 py-2 rounded-lg hover:bg-slate-700/80 transition-colors disabled:opacity-50 z-10 relative" title="Go to the next step">Next</button>
             </div>
 
-            <button onClick={onEnd} className="px-3 sm:px-4 py-2 rounded-lg bg-red-600/50 hover:bg-red-600 transition-colors z-10 relative">End Tour</button>
+            <button onClick={onEnd} className="px-3 sm:px-4 py-2 rounded-lg bg-red-600/50 hover:bg-red-600 transition-colors z-10 relative" title="Exit the tutorial">End Tour</button>
         </div>
     );
 };
@@ -302,6 +302,7 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
                 onClick={endTour}
                 className="absolute top-3 right-3 p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
                 aria-label="End tour"
+                title="End tour"
             >
                 <XIcon className="w-5 h-5"/>
             </button>

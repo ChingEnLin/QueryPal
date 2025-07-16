@@ -78,6 +78,7 @@ const Table: React.FC<TableProps> = ({ data, isEditMode, visibleHeaders, onDelet
                                         onClick={() => requestSort(key)}
                                         className="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white disabled:hover:text-inherit dark:disabled:hover:text-inherit"
                                         disabled={isEditMode}
+                                        title={`Sort by ${key}`}
                                     >
                                         {key}
                                         {getSortIcon(key)}
@@ -87,6 +88,7 @@ const Table: React.FC<TableProps> = ({ data, isEditMode, visibleHeaders, onDelet
                                             onClick={() => onDeleteColumn(key)}
                                             className="p-1 rounded-full text-slate-500 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/50"
                                             aria-label={`Delete ${key} column`}
+                                            title={`Delete ${key} column`}
                                         >
                                             <XIcon className="w-3 h-3"/>
                                         </button>

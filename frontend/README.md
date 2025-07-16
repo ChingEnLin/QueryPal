@@ -44,7 +44,7 @@ Your backend service must implement the following endpoints. All endpoints shoul
 
 ---
 
-### `GET /api/azure/azure_accounts`
+### `GET /api/azure/cosmos_accounts`
 
 Discovers the Cosmos DB accounts the user has access to.
 
@@ -210,7 +210,6 @@ Sends a query result to the AI for analysis and visualization suggestions.
       "chartOptions": { "...Chart.js options object" }
     }
     ```
-
 ---
 
 ### `POST /api/system/clear-cache`
@@ -224,6 +223,58 @@ Clears any server-side caches related to Azure resources.
       "message": "Cache cleared successfully."
     }
     ```
+
+---
+
+### `GET /api/user/queries`
+
+Retrieves all saved queries for the authenticated user.
+
+-   **Success Response (200):** An array of `SavedQuery` objects.
+    ```json
+    [
+        {
+            "id": "query-123",
+            "name": "Find Active Canadian Users",
+            "prompt": "Find all users from Canada with an 'active' status",
+            "code": "db['users'].find({'country': 'Canada', 'status': 'active'})"
+        }
+    ]
+    ```
+
+### `POST /api/user/queries`
+
+Saves a new query for the user. The backend should generate a unique ID.
+
+-   **Request Body:**
+    ```json
+    {
+        "name": "New Saved Query",
+        "prompt": "The natural language prompt used.",
+        "code": "The generated code to save."
+    }
+    ```
+-   **Success Response (201):** The newly created `SavedQuery` object, including its new ID.
+
+### `PUT /api/user/queries/{queryId}`
+
+Updates an existing saved query.
+
+-   **Request Body:**
+    ```json
+    {
+        "name": "Updated Query Name",
+        "prompt": "Updated prompt text.",
+        "code": "Updated query code."
+    }
+    ```
+-   **Success Response (200):** The updated `SavedQuery` object.
+
+### `DELETE /api/user/queries/{queryId}`
+
+Deletes a saved query.
+
+-   **Success Response (204):** No content.
 
 ---
 

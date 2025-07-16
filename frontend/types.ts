@@ -107,3 +107,13 @@ export interface NotebookStep {
   contextSource?: string;
   isEditing?: boolean; // Transient state for UI editing of notes
 }
+
+/**
+ * Represents a query saved by the user for later use.
+ */
+export interface SavedQuery {
+    id: string;
+    name: string;
+    prompt: string;
+    code: string;
+}
