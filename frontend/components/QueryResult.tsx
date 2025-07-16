@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import JsonDisplay from './JsonDisplay';
 import Table from './Table';
@@ -96,6 +97,11 @@ const QueryResult: React.FC<QueryResultProps> = ({
   const [columnHistory, setColumnHistory] = useState<string[][]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(0);
   
+  // --- State for Download Menu ---
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
+  const downloadButtonRef = useRef<HTMLDivElement>(null);
+
+
   // Memoize checks on the execution result
   const isWriteOpSummary = useMemo(() => isWriteSummary(executionResult), [executionResult]);
   const canBeTable = useMemo(() => isTableCompatible(executionResult), [executionResult]);
@@ -157,18 +163,41 @@ const QueryResult: React.FC<QueryResultProps> = ({
   // Effect to control view mode during tutorial
   useEffect(() => {
     if (isTutorialActive) {
-        // For the tutorial steps involving result inspection, we need to ensure the correct view is active.
         // Step 10 "View Your Results" (index 9) introduces the table.
         // Step 11 "Customize Your Table" (index 10) MUST show the table for its target element to be visible.
         if (tutorialStepIndex === 9 || tutorialStepIndex === 10) {
             setViewMode('table');
         } else {
-            // Default to json for other result steps in the tutorial.
-            // This is especially important for the debug step (index 8), which has no results.
             setViewMode('json');
         }
     }
   }, [isTutorialActive, tutorialStepIndex]);
+
+  // Effect to handle closing the download context menu from outside clicks or Esc key.
+  useEffect(() => {
+    if (!isDownloadMenuOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+            setIsDownloadMenuOpen(false);
+        }
+    };
+
+    const handleClickOutside = (event: MouseEvent) => {
+        if (downloadButtonRef.current && !downloadButtonRef.current.contains(event.target as Node)) {
+            setIsDownloadMenuOpen(false);
+        }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDownloadMenuOpen]);
+
 
   // --- Handlers for Table Editing ---
   const updateHistory = (newHeaders: string[]) => {
@@ -209,24 +238,54 @@ const QueryResult: React.FC<QueryResultProps> = ({
     onAnalyze(processedDataForActions);
   };
 
-  const handleDownloadCSV = () => {
+  const handleDownloadCSV = useCallback((separator: ',' | ';') => {
     if (!canBeTable) return;
+
+    // Special case for single-line semicolon export for email lists
+    if (separator === ';') {
+        const firstHeader = visibleHeaders[0];
+        if (!firstHeader) {
+            console.error("No visible columns to export for single-line format.");
+            return;
+        }
+        
+        const dataToExport = processedDataForActions as Record<string, any>[];
+        const singleLineData = dataToExport
+            .map(row => row[firstHeader])
+            .filter(value => value !== null && value !== undefined && String(value).trim() !== '')
+            .join(';');
+
+        const blob = new Blob([singleLineData], { type: 'text/plain;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `query_export_${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+        setIsDownloadMenuOpen(false);
+        return; 
+    }
+    
+    // Original logic for standard CSV export
     const headers = visibleHeaders;
-    const escapeCsvCell = (cell: any): string => {
+    const escapeCell = (cell: any): string => {
         if (cell === null || cell === undefined) return '';
         const str = (typeof cell === 'object') ? JSON.stringify(cell) : String(cell);
-        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        const needsQuotes = str.includes(separator) || str.includes('"') || str.includes('\n');
+
+        if (needsQuotes) {
             const escapedStr = str.replace(/"/g, '""');
             return `"${escapedStr}"`;
         }
         return str;
     };
     
-    const csvRows = [headers.join(',')];
+    const csvRows = [headers.map(h => escapeCell(h)).join(separator)];
     const dataToExport = processedDataForActions as Record<string, any>[];
     for (const row of dataToExport) {
-        const values = headers.map(header => escapeCsvCell(row[header]));
-        csvRows.push(values.join(','));
+        const values = headers.map(header => escapeCell(row[header]));
+        csvRows.push(values.join(separator));
     }
 
     const csvString = csvRows.join('\n');
@@ -240,7 +299,9 @@ const QueryResult: React.FC<QueryResultProps> = ({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
-  };
+
+    setIsDownloadMenuOpen(false);
+  }, [canBeTable, visibleHeaders, processedDataForActions]);
 
   if (isExecuting) {
     return (
@@ -278,7 +339,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
   }
   
   if (executionResult) {
-      const drawer = isGraphVisible ? createPortal(
+      const graphDrawer = isGraphVisible ? createPortal(
         <>
           <div onClick={() => setIsGraphVisible(false)} className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fade-in-fast" aria-hidden="true"></div>
           <aside className="fixed top-0 right-0 h-full w-full md:w-3/4 lg:w-2/3 bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer">
@@ -291,7 +352,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
         </>,
         document.body
       ) : null;
-      
+
       const renderTableActionsToolbar = () => {
         if (viewMode !== 'table' || !canBeTable) return null;
 
@@ -304,8 +365,39 @@ const QueryResult: React.FC<QueryResultProps> = ({
                         <button onClick={handleResetColumns} className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600" title="Restore all original columns"><RefreshIcon className="w-4 h-4"/>Reset Columns</button>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-2">
-                        <button onClick={handleDownloadCSV} disabled={isTableEditMode} className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Download table data as CSV"><DownloadIcon className="w-4 h-4"/><span>Download CSV</span></button>
+                   <div ref={downloadButtonRef} className="relative inline-flex rounded-md shadow-sm">
+                        <button
+                            type="button"
+                            onClick={() => handleDownloadCSV(',')}
+                            className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-l-md text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed focus:z-10 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            title="Download as CSV (comma-separated)"
+                            disabled={isTableEditMode}
+                        >
+                            <DownloadIcon className="w-4 h-4" />
+                            <span>Download CSV</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
+                            className="-ml-px relative inline-flex items-center px-2 py-1.5 rounded-r-md text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed focus:z-10 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            title="More download options"
+                            disabled={isTableEditMode}
+                        >
+                           <ChevronDownIcon className="w-4 h-4" />
+                        </button>
+
+                        {isDownloadMenuOpen && (
+                             <div className="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-slate-800 ring-1 ring-black ring-opacity-5 dark:ring-slate-600 focus:outline-none z-20">
+                                <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                                    <button onClick={() => handleDownloadCSV(',')} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700" role="menuitem">
+                                        CSV (Comma-separated)
+                                    </button>
+                                    <button onClick={() => handleDownloadCSV(';')} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700" role="menuitem">
+                                        TXT (Semicolon-separated)
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
                 
@@ -360,7 +452,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
                 {analysisResult && <AnalysisResultDisplay result={analysisResult} />}
             </div>
 
-            {drawer}
+            {graphDrawer}
 
             <style>{`
               @keyframes fade-in-fast { from { opacity: 0; } to { opacity: 1; } }
