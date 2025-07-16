@@ -157,7 +157,10 @@ const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({ onClose, queries,
                 className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fade-in-fast"
                 aria-hidden="true"
             ></div>
-            <aside className="fixed top-0 right-0 h-full w-full md:w-[450px] bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer">
+            <aside 
+                id="tutorial-saved-queries-panel"
+                className="fixed top-0 right-0 h-full w-full md:w-[450px] bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer"
+            >
                 <header className="flex items-center justify-between p-4 border-b border-slate-700 flex-shrink-0">
                     <h3 className="text-lg font-semibold text-white flex items-center gap-3">
                         <BookmarkIcon className="w-5 h-5 text-blue-400" />

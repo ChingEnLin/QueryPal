@@ -6,7 +6,7 @@ import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getColle
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
 import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep, SavedQuery } from '../types';
-import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult } from '../services/mockData';
+import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult, mockSavedQueries } from '../services/mockData';
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
 import Loader from '../components/Loader';
@@ -87,6 +87,7 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
           {name && <span className="text-slate-600 dark:text-slate-300 text-sm hidden sm:block">Welcome, {name}</span>}
           <div id="tutorial-header-actions" className="flex items-center gap-2">
             <button
+                id="tutorial-saved-queries-button"
                 onClick={onShowSavedQueries}
                 className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 aria-label="Show saved queries"
@@ -766,13 +767,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
   const isDemoModeForRunStep = isTutorialActive && tutorialStepIndex === 4;
   const isDemoModeForSaveStep = isTutorialActive && tutorialStepIndex === 5;
-  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 6;
-  const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 7 && tutorialStepIndex <= 9;
-  const isDemoModeForContextActiveStep = isTutorialActive && tutorialStepIndex === 10;
-  const isDemoModeForNotebookButtonStep = isTutorialActive && tutorialStepIndex === 11;
-  const isDemoModeForNotebookPanelStep = isTutorialActive && tutorialStepIndex === 12;
+  const isDemoModeForSavedQueriesPanelStep = isTutorialActive && tutorialStepIndex === 7; // Renumbered
+  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 8; // Renumbered
+  const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 9 && tutorialStepIndex <= 11; // Renumbered
+  const isDemoModeForContextActiveStep = isTutorialActive && tutorialStepIndex === 12; // Renumbered
+  const isDemoModeForNotebookButtonStep = isTutorialActive && tutorialStepIndex === 13; // Renumbered
+  const isDemoModeForNotebookPanelStep = isTutorialActive && tutorialStepIndex === 14; // Renumbered
   
-  const demoActive = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForContextActiveStep || isDemoModeForDebugStep || isDemoModeForNotebookButtonStep || isDemoModeForNotebookPanelStep || isDemoModeForRunStep || isDemoModeForSaveStep;
+  const demoActive = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForContextActiveStep || isDemoModeForDebugStep || isDemoModeForNotebookButtonStep || isDemoModeForNotebookPanelStep || isDemoModeForRunStep || isDemoModeForSaveStep || isDemoModeForSavedQueriesPanelStep;
 
   const isConnectedForRender = (connectedDbInfo && connectedResource) || demoActive;
   const dbInfoForRender = demoActive ? mockECommerceDbInfo : connectedDbInfo;
@@ -846,16 +848,17 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     document.body
   ) : null;
 
-  const savedQueriesPanelDrawer = isSavedQueriesPanelOpen ? createPortal(
+  const showSavedQueriesPanel = isSavedQueriesPanelOpen || isDemoModeForSavedQueriesPanelStep;
+  const savedQueriesPanelDrawer = showSavedQueriesPanel ? createPortal(
     <SavedQueriesPanel
         onClose={() => setIsSavedQueriesPanelOpen(false)}
-        queries={savedQueries}
+        queries={isDemoModeForSavedQueriesPanelStep ? mockSavedQueries : savedQueries}
         onLoad={handleLoadSavedQuery}
         onEdit={handleEditSavedQuery}
         onDelete={handleDeleteSavedQuery}
         onShare={handleOpenShareDialog}
-        isLoading={isLoadingSavedQueries}
-        currentUserEmail={email}
+        isLoading={isDemoModeForSavedQueriesPanelStep ? false : isLoadingSavedQueries}
+        currentUserEmail={email || 'dev.user@example.com'}
     />,
     document.body
   ) : null;

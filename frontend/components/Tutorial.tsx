@@ -46,55 +46,67 @@ const tutorialSteps: TutorialStep[] = [
   {
     targetId: 'tutorial-save-button',
     title: '5. Save Your Queries',
-    content: "Like a query? Click 'Save' to add it to your personal collection. You can access saved queries from the bookmark icon in the header.",
+    content: "Like a query? Click 'Save' to add it to your personal collection for later use.",
     placement: 'bottom',
   },
   {
+    targetId: 'tutorial-saved-queries-button',
+    title: '6. Access Saved Queries',
+    content: 'Click the bookmark icon in the header at any time to open your collection of saved and shared queries.',
+    placement: 'center',
+  },
+  {
+    targetId: 'tutorial-saved-queries-panel',
+    title: '7. Manage & Share Queries',
+    content: "This panel shows your saved queries and those shared with you. You can load, edit, and share your own queries with colleagues via email.",
+    placement: 'left',
+  },
+  {
     targetId: 'tutorial-results-area',
-    title: '6. Debug with AI',
-    content: "In case of exection error, click 'Debug with AI' and the assistant will analyze the problem and suggest a fix.",
+    title: '8. Debug with AI',
+    content: "In case of an execution error, click 'Debug with AI' and the assistant will analyze the problem and suggest a fix.",
     placement: 'top',
   },
   {
     targetId: 'tutorial-view-switcher',
-    title: '7. View Your Results',
+    title: '9. View Your Results',
     content: "After a successful run, your results appear here. You can switch between a raw JSON view, an interactive Graph, and a powerful Table view.",
     placement: 'top',
   },
   {
     targetId: 'tutorial-table-actions',
-    title: '8. Customize Your Table',
+    title: '10. Customize Your Table',
     content: "In table view, you can download the data as a CSV or enter 'Edit Mode' to remove columns, with undo/redo support. Your edits also apply to downloads and AI analysis.",
     placement: 'top',
   },
   {
     targetId: 'tutorial-view-switcher',
-    title: '9. Analyze with AI',
+    title: '11. Analyze with AI',
     content: "Let AI do the heavy lifting! Click 'Analyze' to get an instant summary of your data and an auto-generated chart to visualize key trends.",
     placement: 'top',
   },
   {
     targetId: 'tutorial-context-banner',
-    title: '10. Chain Queries with Context',
+    title: '12. Chain Queries with Context',
     content: "Click 'Use as Context' (the pin icon in result header) to use the current result set in your next query. This is great for multi-step questions.",
     placement: 'top',
   },
   {
     targetId: 'tutorial-notebook-button',
-    title: '11. Export Your Workflow',
+    title: '13. Export Your Workflow',
     content: "Click 'View Notebook' to open the session history panel. From there, you can export it as a Jupyter Notebook (.ipynb) to share or reproduce your analysis.",
     placement: 'bottom',
   },
    {
     targetId: 'tutorial-notebook-panel',
-    title: '12. The Query Notebook',
+    title: '14. The Query Notebook',
     content: 'This panel logs every successful query. From here, you can clear your session history or export the entire workflow as a reproducible Jupyter Notebook file.',
-    placement: 'bottom',
+    placement: 'left',
   },
   {
     targetId: 'tutorial-header-actions',
-    title: '13. Manage Your Session',
-    content: 'Here you can see saved querys, clear the cache to refresh resources, toggle dark mode, restart this tutorial, or sign out.',
+    title: '15. Manage Your Session',
+    content: 'Here you can view saved queries, clear the cache to refresh resources, toggle dark mode, restart this tutorial, or sign out.',
     placement: 'bottom',
   },
   {
@@ -194,9 +206,10 @@ const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, onStepChange }) 
         return;
     };
     
-    // The notebook panel has a 400ms slide-in animation. We need to wait for it
+    // Side panels have a 400ms slide-in animation. We need to wait for it
     // to finish before calculating its position for the highlight.
-    const delay = currentStep.targetId === 'tutorial-notebook-panel' ? 450 : 50;
+    const targetId = currentStep.targetId;
+    const delay = (targetId === 'tutorial-notebook-panel' || targetId === 'tutorial-saved-queries-panel') ? 450 : 50;
 
     // For a smoother demo, we give the UI a moment to render the target element
     const timeoutId = setTimeout(() => {

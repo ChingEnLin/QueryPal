@@ -158,12 +158,13 @@ const QueryResult: React.FC<QueryResultProps> = ({
   useEffect(() => {
     if (isTutorialActive) {
         // For the tutorial steps involving result inspection, we need to ensure the correct view is active.
-        // Step 7 "View Your Results" (index 7) can show the table.
-        // Step 8 "Customize Your Table" (index 8) MUST show the table for its target element to be visible.
-        if (tutorialStepIndex === 7 || tutorialStepIndex === 8) {
+        // Step 10 "View Your Results" (index 9) introduces the table.
+        // Step 11 "Customize Your Table" (index 10) MUST show the table for its target element to be visible.
+        if (tutorialStepIndex === 9 || tutorialStepIndex === 10) {
             setViewMode('table');
         } else {
-            // Default to json for other result steps in the tutorial
+            // Default to json for other result steps in the tutorial.
+            // This is especially important for the debug step (index 8), which has no results.
             setViewMode('json');
         }
     }
