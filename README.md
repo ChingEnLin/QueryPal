@@ -27,6 +27,7 @@ Azure Cosmos DB (especially MongoDB API) lacks a friendly interface to inspect a
 | Database Access  | Azure Cosmos DB (MongoDB API)                                               |
 | Cloud APIs       | Azure Resource Manager (ARM)                                                |
 | Auth Libraries   | MSAL (Python, JS)                                                           |
+| Database         | PostgreSQL (for user queries)                                               |
 
 ---
 
