@@ -6,8 +6,8 @@ def execute_mongo_query(connection_string: str, database: str, query: str):
     client = pymongo.MongoClient(connection_string)
     db = client[database]
     try:
-        # Evaluate the query string in the context of the db variable
-        query_result = eval(query, {"db": db})
+        # Evaluate the query string in the context of the db variable and ObjectId
+        query_result = eval(query, {"db": db, "ObjectId": ObjectId})
     except Exception as e:
         # Return the exception to be handled by the endpoint
         return {"error": str(e), "exception_type": type(e).__name__}
