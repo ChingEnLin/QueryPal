@@ -367,7 +367,15 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         const accounts = await getAzureCosmosAccounts();
         setAzureAccounts(accounts);
       } catch (e) {
-        setDbError("Could not load Azure accounts from server. Ensure the backend is running and you have permissions.");
+        if (e instanceof Error) {
+            if (e.message.includes('AuthorizationFailed') || e.message.includes('403')) {
+                setDbError("Permission Denied: You may not have the required permissions to list Azure resources. Please contact your administrator.");
+            } else {
+                setDbError("Could not load Azure accounts from server. Ensure the backend is running and you have permissions.");
+            }
+        } else {
+            setDbError("An unknown error occurred while fetching Azure accounts.");
+        }
       } finally {
         setIsLoadingAccounts(false);
       }
@@ -470,8 +478,15 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         const dbs = await getDatabasesForAccount(account.id);
         setAccountDatabases(dbs);
     } catch(e) {
-        if(e instanceof Error) setDbError(e.message);
-        else setDbError("Could not load databases for this account.");
+        if (e instanceof Error) {
+            if (e.message.includes('AuthorizationFailed') || e.message.includes('403')) {
+                setDbError("Permission Denied: You may not have the required Azure role (e.g., 'Cosmos DB Operator') to access databases for this account. Please check your permissions.");
+            } else {
+                setDbError(e.message);
+            }
+        } else {
+            setDbError("Could not load databases for this account.");
+        }
     } finally {
         setIsLoadingDatabases(false);
     }
@@ -570,8 +585,15 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       setCurrentQueryContextSource(null); // Reset after use
 
     } catch (e) {
-      if (e instanceof Error) setExecutionError(e.message);
-      else setExecutionError("An unknown error occurred while running the query.");
+        if (e instanceof Error) {
+            if (e.message.includes('AuthorizationFailed') || e.message.includes('403')) {
+                setExecutionError("Permission Denied: You do not have permission to execute queries against this database.");
+            } else {
+                setExecutionError(e.message);
+            }
+        } else {
+            setExecutionError("An unknown error occurred while running the query.");
+        }
     } finally {
       setIsExecuting(false);
     }
@@ -628,8 +650,15 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         const info = await getCollectionInfo(collectionName, connectedResource);
         setCollectionInfo(info);
     } catch (e) {
-        if (e instanceof Error) setCollectionInfoError(e.message);
-        else setCollectionInfoError("Failed to fetch collection details.");
+        if (e instanceof Error) {
+            if (e.message.includes('AuthorizationFailed') || e.message.includes('403')) {
+                setCollectionInfoError("Permission Denied: You do not have permission to view details for this collection.");
+            } else {
+                setCollectionInfoError(e.message);
+            }
+        } else {
+            setCollectionInfoError("Failed to fetch collection details.");
+        }
     } finally {
         setIsFetchingCollectionInfo(false);
     }
@@ -948,7 +977,11 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                  {showCollectionPanel && (
                     <div id="tutorial-collection-panel" className="mt-4">
                         {isFetchingCollectionInfo && !isDemoModeForCollectionStep && <div className="text-center p-4 text-slate-500 dark:text-slate-400">Fetching collection details...</div>}
-                        {collectionInfoError && !isDemoModeForCollectionStep && <p className="text-red-600 dark:text-red-400 text-sm mt-2">{collectionInfoError}</p>}
+                        {collectionInfoError && !isDemoModeForCollectionStep && (
+                            <div className="text-red-600 bg-red-50 border border-red-200 text-sm mt-4 p-3 rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
+                                {collectionInfoError}
+                            </div>
+                        )}
                         {collectionInfoForRender && selectedCollectionForRender === collectionInfoForRender.name && (
                             <CollectionActionPanel
                                 info={collectionInfoForRender}
@@ -990,7 +1023,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                                         {isLoadingDatabases ? (
                                              <div className="text-sm text-slate-500 dark:text-slate-400 py-2">Loading databases...</div>
                                         ): dbError ? (
-                                             <p className="text-red-600 dark:text-red-400 text-sm">{dbError}</p>
+                                             <div className="text-red-600 bg-red-50 border border-red-200 text-sm mt-2 p-3 rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
+                                                {dbError}
+                                             </div>
                                         ) : accountDatabases.length > 0 ? (
                                             <div className="flex flex-wrap gap-2">
                                                 {accountDatabases.map(db => (

@@ -67,6 +67,12 @@ export const getDatabasesForAccount = async (accountId: string): Promise<DbInfo[
   if (!USE_MSAL_AUTH) {
       console.log(`DEV MODE: Returning mock databases for account ID ${accountId}.`);
       await mockDelay(1000);
+
+      // Simulate authorization failure for the special 'dev-empty-db'
+      if (accountId.includes('dev-empty-db')) {
+          return Promise.reject(new Error('Failed to fetch connection string: 403 {"error":{"code":"AuthorizationFailed"}}'));
+      }
+      
       const dbs = mockDatabasesByAccountId.get(accountId);
       if (dbs) {
           return Promise.resolve(dbs);
