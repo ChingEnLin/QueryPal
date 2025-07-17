@@ -110,6 +110,12 @@ const tutorialSteps: TutorialStep[] = [
     placement: 'bottom',
   },
   {
+    targetId: 'tutorial-shortcuts-button',
+    title: '16. Power-User Shortcuts',
+    content: 'Speed up your workflow with keyboard shortcuts. Click here or press Cmd/Ctrl + / to see all available commands.',
+    placement: 'bottom',
+  },
+  {
     targetId: 'modal',
     title: "You're all set!",
     content: "That's it! Explore and see what you can build. You can restart this tour anytime by clicking the help icon in the header.",

@@ -34,6 +34,8 @@ import BookmarkIcon from '../components/icons/BookmarkIcon';
 import SavedQueriesPanel from '../components/SavedQueriesPanel';
 import SaveQueryDialog from '../components/SaveQueryDialog';
 import ShareQueryDialog from '../components/ShareQueryDialog';
+import KeyboardIcon from '../components/icons/KeyboardIcon';
+import ShortcutCheatsheet from '../components/ShortcutCheatsheet';
 
 
 // --- Header Component ---
@@ -45,9 +47,10 @@ interface HeaderUIProps {
   cacheClearStatus: 'idle' | 'success' | 'error';
   onStartTutorial: () => void;
   onShowSavedQueries: () => void;
+  onShowShortcuts: () => void;
 }
 
-const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial, onShowSavedQueries }) => {
+const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial, onShowSavedQueries, onShowShortcuts }) => {
   const { theme, toggleTheme } = useTheme();
 
   const getCacheButtonContent = () => {
@@ -110,6 +113,15 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
               title="Toggle light/dark mode"
             >
               {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
+            </button>
+            <button
+                id="tutorial-shortcuts-button"
+                onClick={onShowShortcuts}
+                className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                aria-label="Show keyboard shortcuts"
+                title="View Keyboard Shortcuts (⌘ + /)"
+            >
+                <KeyboardIcon className="w-5 h-5" />
             </button>
             <button
                 onClick={onStartTutorial}
@@ -354,6 +366,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [shareDialogState, setShareDialogState] = useState<{ isOpen: boolean; query?: SavedQuery }>({ isOpen: false });
   const [isSavingQuery, setIsSavingQuery] = useState(false);
 
+  // State for Keyboard Shortcuts
+  const [isShortcutCheatsheetOpen, setIsShortcutCheatsheetOpen] = useState(false);
+
 
   const connectedAccountName = useMemo(() => {
     if (!connectedResource) return '';
@@ -541,7 +556,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     }
   }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext]);
   
-  const handleGenerateQueryClick = () => {
+  const handleGenerateQueryClick = useCallback(() => {
     if (intermediateContext) {
         setCurrentQueryContextSource(intermediateContext.source);
     } else {
@@ -552,7 +567,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     // If a collection is selected, pass its info as context.
     // Otherwise, this will be undefined, and the query will be against the whole DB.
     handleGenerateQuery(userInput, collectionInfo ?? undefined);
-  };
+  }, [userInput, intermediateContext, selectedCollection, collectionInfo, handleGenerateQuery]);
 
   const handleRunQuery = useCallback(async () => {
     if (!editableCode.trim() || !connectedDbInfo || !connectedResource) {
@@ -690,8 +705,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       setNotebookSteps([]);
   };
 
-  const handleRemoveNotebookStep = useCallback((stepId: string) => {
-    setNotebookSteps(prev => prev.filter(step => step.id !== stepId));
+  const handleRemoveNotebookStep = useCallback((id: string) => {
+    setNotebookSteps(prev => prev.filter(step => step.id !== id));
   }, []);
 
   const handleAddNoteStep = useCallback(() => {
@@ -714,12 +729,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   };
   
   // --- Saved Queries Handlers ---
-  const handleOpenSaveDialog = () => {
+  const handleOpenSaveDialog = useCallback(() => {
+    if (!editableCode) return; // Don't open if there's no code to save
     setSaveDialogState({
       isOpen: true,
       data: { prompt: lastSuccessfulPrompt, code: editableCode }
     });
-  };
+  }, [editableCode, lastSuccessfulPrompt]);
 
   const handleEditSavedQuery = (query: SavedQuery) => {
     setSaveDialogState({ isOpen: true, data: query });
@@ -791,7 +807,6 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     }
   };
 
-
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
   const isDemoModeForRunStep = isTutorialActive && tutorialStepIndex === 4;
@@ -806,13 +821,59 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const demoActive = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForContextActiveStep || isDemoModeForDebugStep || isDemoModeForNotebookButtonStep || isDemoModeForNotebookPanelStep || isDemoModeForRunStep || isDemoModeForSaveStep || isDemoModeForSavedQueriesPanelStep;
 
   const isConnectedForRender = (connectedDbInfo && connectedResource) || demoActive;
+  const isQuerySectionDisabled = !isConnectedForRender;
+
+  // --- Global Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const isModifier = isMac ? event.metaKey : event.ctrlKey;
+
+        // Escape key to close modals/panels (topmost)
+        if (event.key === 'Escape') {
+            if (saveDialogState.isOpen) setSaveDialogState({ isOpen: false });
+            else if (shareDialogState.isOpen) setShareDialogState({ isOpen: false });
+            else if (isShortcutCheatsheetOpen) setIsShortcutCheatsheetOpen(false);
+            else if (isNotebookPanelOpen) setIsNotebookPanelOpen(false);
+            else if (isSavedQueriesPanelOpen) setIsSavedQueriesPanelOpen(false);
+            else if (isContextViewerOpen) setIsContextViewerOpen(false);
+            else if (isTutorialActive) setIsTutorialActive(false); // Also close tutorial
+            return;
+        }
+        
+        // Prevent shortcuts from firing while typing in dialogs/modals
+        const isTypingInDialog = (event.target as HTMLElement).closest('[role="dialog"]');
+        if (isTypingInDialog) return;
+
+        if (isModifier) {
+            // Cmd/Ctrl + S to Save
+            if (event.key === 's') {
+                event.preventDefault();
+                if (editableCode && !isQuerySectionDisabled) {
+                    handleOpenSaveDialog();
+                }
+            }
+
+            // Cmd/Ctrl + / to open shortcuts
+            if (event.key === '/') {
+                event.preventDefault();
+                setIsShortcutCheatsheetOpen(true);
+            }
+        }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [editableCode, isQuerySectionDisabled, handleOpenSaveDialog, saveDialogState.isOpen, shareDialogState.isOpen, isShortcutCheatsheetOpen, isNotebookPanelOpen, isSavedQueriesPanelOpen, isContextViewerOpen, isTutorialActive]);
+
   const dbInfoForRender = demoActive ? mockECommerceDbInfo : connectedDbInfo;
   const accountNameForRender = demoActive ? 'prod-ecommerce-db' : connectedAccountName;
 
   const selectedCollectionForRender = isDemoModeForCollectionStep ? 'users' : selectedCollection;
   const collectionInfoForRender = isDemoModeForCollectionStep ? mockCollectionInfoMap.get('users')! : collectionInfo;
   const showCollectionPanel = isDemoModeForCollectionStep || isFetchingCollectionInfo || (collectionInfo && selectedCollection === collectionInfo.name) || collectionInfoError;
-  const isQuerySectionDisabled = !isConnectedForRender;
   
   const generateButtonText = useMemo(() => {
     if (isLoading) return 'Generating...';
@@ -913,6 +974,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     document.body
   ) : null;
 
+  const shortcutCheatsheet = createPortal(
+      <ShortcutCheatsheet 
+          isOpen={isShortcutCheatsheetOpen}
+          onClose={() => setIsShortcutCheatsheetOpen(false)}
+      />,
+      document.body
+  );
+
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
@@ -926,6 +995,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
             cacheClearStatus={cacheClearStatus}
             onStartTutorial={() => setIsTutorialActive(true)}
             onShowSavedQueries={() => setIsSavedQueriesPanelOpen(true)}
+            onShowShortcuts={() => setIsShortcutCheatsheetOpen(true)}
         />
 
         <main className="space-y-8">
@@ -1082,6 +1152,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                 id="userInput"
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
+                    e.preventDefault();
+                    if (!isLoading && userInput.trim() && !isQuerySectionDisabled) {
+                      handleGenerateQueryClick();
+                    }
+                  }
+                }}
                 placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : (selectedCollection ? `Querying '${selectedCollection}'... e.g., 'Find all users from Canada'` : "e.g., 'Find all users from Canada and sort them by name'")}
                 className="w-full h-28 p-4 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none"
                 disabled={isLoading || isQuerySectionDisabled}
@@ -1090,7 +1168,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                 onClick={handleGenerateQueryClick}
                 disabled={isLoading || !userInput.trim() || isQuerySectionDisabled}
                 className="w-full flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.99]"
-                title="Generate MongoDB code from your natural language command"
+                title="Generate MongoDB code from your natural language command (⌘ + G)"
               >
                 {generateButtonText}
               </button>
@@ -1270,6 +1348,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       {savedQueriesPanelDrawer}
       {saveQueryDialog}
       {shareQueryDialog}
+      {shortcutCheatsheet}
 
        <style>{`
           @keyframes fade-in {

@@ -48,6 +48,16 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
 
   const isRunButtonDisabled = isExecuting || (isWriteOperation && !allowWrite);
 
+  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Run query on Cmd/Ctrl + Enter
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (!isRunButtonDisabled) {
+        onRunQuery();
+      }
+    }
+  };
+
   return (
     <div id="query-display-panel" className="bg-white dark:bg-slate-800 rounded-lg p-6 space-y-4 animate-fade-in border border-slate-200 dark:border-slate-700">
       <div className="space-y-4">
@@ -73,7 +83,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
                     onClick={onRunQuery}
                     disabled={isRunButtonDisabled}
                     className="flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
-                    title="Run the code against the connected database"
+                    title="Run the code against the connected database (⌘ + Enter)"
                 >
                     <PlayIcon className="w-4 h-4" />
                     {isExecuting ? 'Running...' : 'Run Query'}
@@ -129,6 +139,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
           <textarea
             value={code}
             onChange={(e) => onCodeChange(e.target.value)}
+            onKeyDown={handleEditorKeyDown}
             className="w-full h-48 bg-transparent text-cyan-300 p-4 font-mono text-sm overflow-x-auto resize-y border-2 border-slate-600 dark:border-slate-700 focus:border-blue-500 focus:ring-blue-500 rounded-md transition-colors"
             spellCheck="false"
           />
