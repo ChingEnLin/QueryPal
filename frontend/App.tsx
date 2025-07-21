@@ -1,10 +1,14 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useIsAuthenticated, useMsal } from "@azure/msal-react";
 import LoginPage from './pages/LoginPage';
 import QueryGeneratorPage from './pages/QueryGeneratorPage';
+import DataExplorerPage from './pages/DataExplorerPage'; // Import the new page
 import { useAuth } from './contexts/AuthContext';
 import { USE_MSAL_AUTH } from './app.config';
+import { SelectedResource, DbInfo } from './types';
+
+type PageView = 'queryGenerator' | 'dataExplorer';
 
 // Component for the real MSAL authentication flow
 const MsalAppFlow: React.FC = () => {
@@ -12,18 +16,32 @@ const MsalAppFlow: React.FC = () => {
   const { instance, accounts } = useMsal();
   
   const name = accounts[0]?.name;
-  const email = accounts[0]?.username; // The username claim is typically the user's email/UPN
+  const email = accounts[0]?.username;
   const onLogout = () => instance.logoutRedirect({ postLogoutRedirectUri: "/" });
 
-  return (
-    <>
-      {isAuthenticated ? (
-        <QueryGeneratorPage name={name} email={email} onLogout={onLogout} />
-      ) : (
-        <LoginPage />
-      )}
-    </>
-  );
+  const [page, setPage] = useState<PageView>('queryGenerator');
+  const [connection, setConnection] = useState<{ resource: SelectedResource, dbInfo: DbInfo, accountName: string } | null>(null);
+
+  if (!isAuthenticated) return <LoginPage />;
+
+  if (page === 'dataExplorer' && connection) {
+    return <DataExplorerPage 
+              connectedResource={connection.resource} 
+              dbInfo={connection.dbInfo}
+              accountName={connection.accountName}
+              onNavigateBack={() => setPage('queryGenerator')}
+           />;
+  }
+
+  return <QueryGeneratorPage 
+          name={name} 
+          email={email} 
+          onLogout={onLogout} 
+          onNavigateToExplorer={(conn) => {
+            setConnection(conn);
+            setPage('dataExplorer');
+          }}
+         />;
 };
 
 // Component for the local bypass authentication flow
@@ -31,16 +49,30 @@ const BypassAppFlow: React.FC = () => {
   const { isAuthenticated, user, logout } = useAuth();
   const name = user?.name;
   const email = user?.email;
+
+  const [page, setPage] = useState<PageView>('queryGenerator');
+  const [connection, setConnection] = useState<{ resource: SelectedResource, dbInfo: DbInfo, accountName: string } | null>(null);
   
-  return (
-    <>
-      {isAuthenticated ? (
-        <QueryGeneratorPage name={name} email={email} onLogout={logout} />
-      ) : (
-        <LoginPage />
-      )}
-    </>
-  );
+  if (!isAuthenticated) return <LoginPage />;
+
+  if (page === 'dataExplorer' && connection) {
+    return <DataExplorerPage 
+              connectedResource={connection.resource} 
+              dbInfo={connection.dbInfo}
+              accountName={connection.accountName}
+              onNavigateBack={() => setPage('queryGenerator')}
+           />;
+  }
+
+  return <QueryGeneratorPage 
+          name={name} 
+          email={email} 
+          onLogout={logout} 
+          onNavigateToExplorer={(conn) => {
+            setConnection(conn);
+            setPage('dataExplorer');
+          }}
+        />;
 };
 
 // App acts as a router to select the authentication flow.

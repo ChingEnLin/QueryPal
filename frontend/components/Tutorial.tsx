@@ -47,13 +47,13 @@ const tutorialSteps: TutorialStep[] = [
     targetId: 'tutorial-save-button',
     title: '5. Save Your Queries',
     content: "Like a query? Click 'Save' to add it to your personal collection for later use.",
-    placement: 'bottom',
+    placement: 'top',
   },
   {
-    targetId: 'tutorial-saved-queries-button',
-    title: '6. Access Saved Queries',
-    content: 'Click the bookmark icon in the header at any time to open your collection of saved and shared queries.',
-    placement: 'center',
+    targetId: 'user-menu-button',
+    title: '6. Access More Actions',
+    content: 'This menu consolidates actions like viewing saved queries, seeing shortcuts, and signing out.',
+    placement: 'bottom',
   },
   {
     targetId: 'tutorial-saved-queries-panel',
@@ -80,7 +80,7 @@ const tutorialSteps: TutorialStep[] = [
     placement: 'top',
   },
   {
-    targetId: 'tutorial-view-switcher',
+    targetId: 'tutorial-analyze-button',
     title: '11. Analyze with AI',
     content: "Let AI do the heavy lifting! Click 'Analyze' to get an instant summary of your data and an auto-generated chart to visualize key trends.",
     placement: 'top',
@@ -104,21 +104,9 @@ const tutorialSteps: TutorialStep[] = [
     placement: 'left',
   },
   {
-    targetId: 'tutorial-header-actions',
-    title: '15. Manage Your Session',
-    content: 'Here you can view saved queries, clear the cache to refresh resources, toggle dark mode, restart this tutorial, or sign out.',
-    placement: 'bottom',
-  },
-  {
-    targetId: 'tutorial-shortcuts-button',
-    title: '16. Power-User Shortcuts',
-    content: 'Speed up your workflow with keyboard shortcuts. Click here or press Cmd/Ctrl + / to see all available commands.',
-    placement: 'bottom',
-  },
-  {
     targetId: 'modal',
     title: "You're all set!",
-    content: "That's it! Explore and see what you can build. You can restart this tour anytime by clicking the help icon in the header.",
+    content: "That's it! Explore and see what you can build. You can restart this tour anytime by clicking the help icon in the user menu.",
   },
 ];
 

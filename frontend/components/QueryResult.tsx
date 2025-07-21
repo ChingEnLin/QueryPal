@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import JsonDisplay from './JsonDisplay';
@@ -424,7 +423,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap justify-end">
-                     <button onClick={handleAnalyzeClick} disabled={!isAnalyzable || isAnalyzing || !!analysisResult || isTableEditMode} className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Analyze result with AI"><BarChartIcon className="w-4 h-4" /><span>{isAnalyzing ? 'Analyzing...' : (analysisResult ? 'Analyzed' : 'Analyze')}</span></button>
+                     <button id="tutorial-analyze-button" onClick={handleAnalyzeClick} disabled={!isAnalyzable || isAnalyzing || !!analysisResult || isTableEditMode} className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Analyze result with AI"><BarChartIcon className="w-4 h-4" /><span>{isAnalyzing ? 'Analyzing...' : (analysisResult ? 'Analyzed' : 'Analyze')}</span></button>
                     <button onClick={handleSetContextClick} disabled={!canBeContext || isCurrentResultInContext || isTableEditMode} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border ${isCurrentResultInContext ? 'border-blue-500 bg-blue-500 text-white shadow' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600'} disabled:opacity-50 disabled:cursor-not-allowed`} title="Use this result as context for the next query"><PinIcon className="w-4 h-4" /><span>{isCurrentResultInContext ? 'Context Set' : 'Use as Context'}</span></button>
                     {viewMode === 'json' && (<button onClick={() => setIsJsonCollapsed(!isJsonCollapsed)} className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700" title={isJsonCollapsed ? 'Expand JSON view' : 'Collapse JSON view'}><ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${!isJsonCollapsed && 'rotate-180'}`} /></button>)}
                 </div>

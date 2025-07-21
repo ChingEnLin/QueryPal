@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { generateMongoQuery, debugMongoQuery, analyzeQueryResult } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
@@ -36,6 +36,92 @@ import SaveQueryDialog from '../components/SaveQueryDialog';
 import ShareQueryDialog from '../components/ShareQueryDialog';
 import KeyboardIcon from '../components/icons/KeyboardIcon';
 import ShortcutCheatsheet from '../components/ShortcutCheatsheet';
+import DataGridIcon from '../components/icons/DataGridIcon';
+import SignOutIcon from '../components/icons/SignOutIcon';
+import ChevronDownIcon from '../components/icons/ChevronDownIcon';
+
+
+// --- New User Menu Component for the Header ---
+const UserMenu: React.FC<{
+  name?: string;
+  onLogout: () => void;
+  onClearCache: () => void;
+  isClearingCache: boolean;
+  cacheClearStatus: 'idle' | 'success' | 'error';
+  onStartTutorial: () => void;
+  onShowSavedQueries: () => void;
+  onShowShortcuts: () => void;
+  isForcedOpen?: boolean;
+}> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial, onShowSavedQueries, onShowShortcuts, isForcedOpen }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const isMenuVisible = isOpen || isForcedOpen;
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuRef]);
+
+  const getCacheButtonContent = () => {
+      if (isClearingCache) return <><SpinnerIcon className="w-4 h-4" /> Clearing...</>;
+      if (cacheClearStatus === 'success') return <><CheckIcon className="w-4 h-4" /> Cleared!</>;
+      if (cacheClearStatus === 'error') return <>Error</>;
+      return <><RefreshIcon className="w-4 h-4" /> Clear Cache</>;
+  };
+  
+  return (
+    <div className="relative" ref={menuRef}>
+      <button 
+        id="user-menu-button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-1.5 h-9 px-3 border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+        title="Open user menu"
+      >
+        <span className="text-sm font-medium hidden sm:inline">{name || 'Menu'}</span>
+        <ChevronDownIcon className={`w-4 h-4 transition-transform ${isMenuVisible ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isMenuVisible && (
+        <div className="absolute top-full right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 animate-fade-in-fast">
+          <div className="p-2">
+            {name && (
+              <div className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 mb-2">
+                Signed in as <strong className="text-slate-700 dark:text-slate-200">{name}</strong>
+              </div>
+            )}
+            <button id="tutorial-saved-queries-button" onClick={() => { onShowSavedQueries(); setIsOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700">
+              <BookmarkIcon className="w-5 h-5" /> Saved Queries
+            </button>
+            <button id="tutorial-shortcuts-button" onClick={() => { onShowShortcuts(); setIsOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700">
+              <KeyboardIcon className="w-5 h-5" /> Keyboard Shortcuts
+            </button>
+            <button onClick={() => { onStartTutorial(); setIsOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700">
+              <HelpIcon className="w-5 h-5" /> Start Tutorial
+            </button>
+            
+            <div className="h-px bg-slate-200 dark:bg-slate-700 my-2"></div>
+
+            <button onClick={onClearCache} disabled={isClearingCache || cacheClearStatus !== 'idle'} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50">
+              {getCacheButtonContent()}
+            </button>
+
+            <div className="h-px bg-slate-200 dark:bg-slate-700 my-2"></div>
+            
+            <button onClick={() => { onLogout(); setIsOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/40">
+              <SignOutIcon className="w-5 h-5" /> Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 
 // --- Header Component ---
@@ -48,37 +134,16 @@ interface HeaderUIProps {
   onStartTutorial: () => void;
   onShowSavedQueries: () => void;
   onShowShortcuts: () => void;
+  onNavigateToExplorer: () => void;
+  isExplorerNavEnabled: boolean;
+  isUserMenuForcedOpen?: boolean;
 }
 
-const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial, onShowSavedQueries, onShowShortcuts }) => {
+const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial, onShowSavedQueries, onShowShortcuts, onNavigateToExplorer, isExplorerNavEnabled, isUserMenuForcedOpen }) => {
   const { theme, toggleTheme } = useTheme();
 
-  const getCacheButtonContent = () => {
-    if (isClearingCache) {
-      return <><SpinnerIcon className="w-4 h-4" /> Clearing...</>;
-    }
-    if (cacheClearStatus === 'success') {
-      return <><CheckIcon className="w-4 h-4" /> Cleared!</>;
-    }
-    if (cacheClearStatus === 'error') {
-      return <>Error</>;
-    }
-    return <><RefreshIcon className="w-4 h-4" /> Clear Cache</>;
-  };
-
-  const getCacheButtonClasses = () => {
-    let baseClasses = "h-9 flex items-center justify-center gap-2 px-3 border text-sm font-medium rounded-md transition-all duration-300 disabled:cursor-not-allowed";
-    if (cacheClearStatus === 'success') {
-      return `${baseClasses} bg-green-100 border-green-300 text-green-700 dark:bg-green-900/50 dark:border-green-700 dark:text-green-300`;
-    }
-    if (cacheClearStatus === 'error') {
-      return `${baseClasses} bg-red-100 border-red-300 text-red-700 dark:bg-red-900/50 dark:border-red-700 dark:text-red-300`;
-    }
-    return `${baseClasses} bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50`;
-  };
-
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+    <header id="tutorial-header-actions" className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div className="flex items-center space-x-4">
             <MongoIcon className="w-12 h-12 text-blue-500" />
             <div>
@@ -87,58 +152,35 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
             </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {name && <span className="text-slate-600 dark:text-slate-300 text-sm hidden sm:block">Welcome, {name}</span>}
-          <div id="tutorial-header-actions" className="flex items-center gap-2">
-            <button
-                id="tutorial-saved-queries-button"
-                onClick={onShowSavedQueries}
-                className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                aria-label="Show saved queries"
-                title="View and manage your saved queries"
-            >
-                <BookmarkIcon className="w-5 h-5" />
-            </button>
-            <button
-                onClick={onClearCache}
-                disabled={isClearingCache || cacheClearStatus !== 'idle'}
-                className={getCacheButtonClasses()}
-                title="Clear server-side cache and refresh account list"
-            >
-                {getCacheButtonContent()}
-            </button>
-            <button
-              onClick={toggleTheme}
-              className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-              aria-label="Toggle theme"
-              title="Toggle light/dark mode"
-            >
-              {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
-            </button>
-            <button
-                id="tutorial-shortcuts-button"
-                onClick={onShowShortcuts}
-                className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                aria-label="Show keyboard shortcuts"
-                title="View Keyboard Shortcuts (⌘ + /)"
-            >
-                <KeyboardIcon className="w-5 h-5" />
-            </button>
-            <button
-                onClick={onStartTutorial}
-                className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                aria-label="Start tutorial"
-                title="Start the guided tour"
-            >
-                <HelpIcon className="w-5 h-5" />
-            </button>
-            <button
-                onClick={onLogout}
-                className="h-9 px-4 flex items-center justify-center border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
-                title="Sign out of the application"
-            >
-                Sign Out
-            </button>
-          </div>
+          <button
+            onClick={onNavigateToExplorer}
+            disabled={!isExplorerNavEnabled}
+            className="h-9 flex items-center justify-center gap-2 px-3 border text-sm font-medium rounded-md transition-all duration-300 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Explore and manage data"
+          >
+            <DataGridIcon className="w-5 h-5" />
+            <span className="hidden md:inline">Data Explorer</span>
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            aria-label="Toggle theme"
+            title="Toggle light/dark mode"
+          >
+            {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
+          </button>
+          
+          <UserMenu
+            name={name}
+            onLogout={onLogout}
+            onClearCache={onClearCache}
+            isClearingCache={isClearingCache}
+            cacheClearStatus={cacheClearStatus}
+            onStartTutorial={onStartTutorial}
+            onShowSavedQueries={onShowSavedQueries}
+            onShowShortcuts={onShowShortcuts}
+            isForcedOpen={isUserMenuForcedOpen}
+          />
         </div>
     </header>
   );
@@ -293,10 +335,11 @@ export interface QueryGeneratorPageProps {
   name?: string;
   email?: string;
   onLogout: () => void;
+  onNavigateToExplorer: (connection: { resource: SelectedResource, dbInfo: DbInfo, accountName: string }) => void;
 }
 
 // --- Main Page Component ---
-const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout }) => {
+const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer }) => {
   const [userInput, setUserInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -353,6 +396,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   // State for tutorial
   const [isTutorialActive, setIsTutorialActive] = useState(false);
   const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
+  const [isUserMenuOpenForTutorial, setIsUserMenuOpenForTutorial] = useState(false);
+
 
   // State for notebook panel
   const [notebookSteps, setNotebookSteps] = useState<NotebookStep[]>([]);
@@ -418,6 +463,16 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       setIsTutorialActive(true);
     }
   }, [fetchAccounts, fetchSavedQueries]);
+
+  // Effect to manage tutorial state that affects the UI, like forcing menus open.
+  useEffect(() => {
+    // If the tutorial is active and on a step that targets an item inside the user menu, force it open.
+    if (isTutorialActive && tutorialStepIndex === 6) {
+        setIsUserMenuOpenForTutorial(true);
+    } else {
+        setIsUserMenuOpenForTutorial(false);
+    }
+  }, [isTutorialActive, tutorialStepIndex]);
   
   const handleClearCache = useCallback(async () => {
       setIsClearingCache(true);
@@ -807,16 +862,26 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     }
   };
 
+  const handleNavigateToExplorer = () => {
+    if (connectedResource && connectedDbInfo) {
+      onNavigateToExplorer({
+        resource: connectedResource,
+        dbInfo: connectedDbInfo,
+        accountName: connectedAccountName,
+      });
+    }
+  };
+
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
   const isDemoModeForRunStep = isTutorialActive && tutorialStepIndex === 4;
   const isDemoModeForSaveStep = isTutorialActive && tutorialStepIndex === 5;
-  const isDemoModeForSavedQueriesPanelStep = isTutorialActive && tutorialStepIndex === 7; // Renumbered
-  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 8; // Renumbered
-  const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 9 && tutorialStepIndex <= 11; // Renumbered
-  const isDemoModeForContextActiveStep = isTutorialActive && tutorialStepIndex === 12; // Renumbered
-  const isDemoModeForNotebookButtonStep = isTutorialActive && tutorialStepIndex === 13; // Renumbered
-  const isDemoModeForNotebookPanelStep = isTutorialActive && tutorialStepIndex === 14; // Renumbered
+  const isDemoModeForSavedQueriesPanelStep = isTutorialActive && tutorialStepIndex === 7;
+  const isDemoModeForDebugStep = isTutorialActive && tutorialStepIndex === 8;
+  const isDemoModeForResultsStep = isTutorialActive && tutorialStepIndex >= 9 && tutorialStepIndex <= 11;
+  const isDemoModeForContextActiveStep = isTutorialActive && tutorialStepIndex === 12;
+  const isDemoModeForNotebookButtonStep = isTutorialActive && tutorialStepIndex === 13;
+  const isDemoModeForNotebookPanelStep = isTutorialActive && tutorialStepIndex === 14;
   
   const demoActive = isDemoModeForCollectionStep || isDemoModeForResultsStep || isDemoModeForContextActiveStep || isDemoModeForDebugStep || isDemoModeForNotebookButtonStep || isDemoModeForNotebookPanelStep || isDemoModeForRunStep || isDemoModeForSaveStep || isDemoModeForSavedQueriesPanelStep;
 
@@ -996,6 +1061,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
             onStartTutorial={() => setIsTutorialActive(true)}
             onShowSavedQueries={() => setIsSavedQueriesPanelOpen(true)}
             onShowShortcuts={() => setIsShortcutCheatsheetOpen(true)}
+            onNavigateToExplorer={handleNavigateToExplorer}
+            isExplorerNavEnabled={!!connectedResource}
+            isUserMenuForcedOpen={isUserMenuOpenForTutorial}
         />
 
         <main className="space-y-8">
