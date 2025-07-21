@@ -39,3 +39,6 @@ deployment_note.txt
 # Database files
 *.sqlite3
 *.db
+
+# Temporary files
+development_plans.txt
