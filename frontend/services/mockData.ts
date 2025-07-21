@@ -254,3 +254,22 @@ export const mockSavedQueries: SavedQuery[] = [
         updatedAt: '2023-10-23T13:00:00Z',
     }
 ];
+
+// --- Mock Data for Data Explorer ---
+export const mockUsersDocuments: Record<string, any>[] = [
+    ...Array.from({ length: 30 }, (_, i) => {
+        const id = `60d5ec49f5a8a1e9c8d5c${800 + i}`;
+        const names = ['Liam', 'Olivia', 'Noah', 'Emma', 'Oliver', 'Ava', 'Elijah', 'Charlotte', 'William', 'Sophia'];
+        const countries = ['USA', 'Canada', 'UK', 'Australia', 'Germany'];
+        const statuses = ['active', 'inactive', 'pending'];
+        return {
+            _id: { $oid: id },
+            name: `${names[i % names.length]} ${i}`,
+            email: `${names[i % names.length].toLowerCase()}${i}@example.com`,
+            country: countries[i % countries.length],
+            status: statuses[i % statuses.length],
+            lastLogin: { $date: new Date(new Date().getTime() - Math.random() * 1e10).toISOString() },
+            profileViews: Math.floor(Math.random() * 1000)
+        };
+    })
+];

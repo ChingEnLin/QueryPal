@@ -125,6 +125,35 @@ Fetches detailed information for a specific collection.
     ```
 ---
 
+### `POST /api/data/documents`
+
+Fetches a paginated and searchable list of documents from a collection.
+
+-   **Request Body:**
+    ```json
+    {
+        "account_id": "/subscriptions/sub-id/resourceGroups/rg-prod/...",
+        "database_name": "ECommerce-DB",
+        "collection_name": "users",
+        "page": 1,
+        "limit": 20,
+        "search_term": "john" 
+    }
+    ```
+    - `search_term` is optional. The backend should perform a case-insensitive search across multiple fields if provided.
+
+-   **Success Response (200):** A paginated result object.
+    ```json
+    {
+        "documents": [ { "_id": "...", "name": "John Doe", ... } ],
+        "currentPage": 1,
+        "totalPages": 5,
+        "totalDocuments": 95
+    }
+    ```
+
+---
+
 ### `POST /api/query/nl2query`
 
 Generates a query using the Gemini API, providing database schema for context.

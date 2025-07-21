@@ -1,4 +1,5 @@
 
+
 /**
  * Represents a summarized view of a collection within a database.
  */
@@ -121,4 +122,14 @@ export interface SavedQuery {
     sharedWith: string[];
     lastModifiedBy: string;
     updatedAt: string; // ISO 8601 timestamp
+}
+
+/**
+ * Represents the response structure for a paginated list of documents.
+ */
+export interface PaginatedDocumentsResponse {
+    documents: Record<string, any>[];
+    currentPage: number;
+    totalPages: number;
+    totalDocuments: number;
 }

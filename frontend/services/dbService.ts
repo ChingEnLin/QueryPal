@@ -1,5 +1,6 @@
 
-import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource } from '../types';
+
+import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, PaginatedDocumentsResponse } from '../types';
 import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { 
@@ -10,7 +11,8 @@ import {
     mockProductUpdateResult,
     mockGenericExecutionResult,
     mockDelay,
-    mockCacheClearResult
+    mockCacheClearResult,
+    mockUsersDocuments
 } from './mockData';
 
 /**
@@ -260,5 +262,86 @@ export const clearSystemCache = async (): Promise<{ message: string }> => {
         throw new Error(errorMessage);
     }
     
+    return response.json();
+};
+
+
+/**
+ * Fetches documents from a specific collection with pagination and search.
+ * @param collectionName The name of the collection.
+ * @param resource The database account and name context.
+ * @param page The page number to fetch.
+ * @param limit The number of documents per page.
+ * @param searchTerm An optional term to filter documents by.
+ * @returns A promise resolving to a paginated list of documents.
+ */
+export const getDocuments = async (
+    collectionName: string, 
+    resource: SelectedResource, 
+    page: number, 
+    limit: number, 
+    searchTerm?: string
+): Promise<PaginatedDocumentsResponse> => {
+    // --- DEVELOPMENT MOCK ---
+    if (!USE_MSAL_AUTH) {
+        console.log(`DEV MODE: Fetching documents for ${collectionName}, page ${page}, search: "${searchTerm}"`);
+        await mockDelay(800);
+        
+        // To make the mock functional for any collection, we'll use the users documents as a sample for all.
+        const sourceDocs = mockUsersDocuments;
+        
+        const filteredDocs = searchTerm
+            ? sourceDocs.filter(doc => 
+                JSON.stringify(doc).toLowerCase().includes(searchTerm.toLowerCase())
+            )
+            : sourceDocs;
+
+        const totalDocuments = filteredDocs.length;
+        const totalPages = Math.ceil(totalDocuments / limit);
+        const startIndex = (page - 1) * limit;
+        const endIndex = startIndex + limit;
+        const documents = filteredDocs.slice(startIndex, endIndex);
+
+        return Promise.resolve({
+            documents,
+            currentPage: page,
+            totalPages,
+            totalDocuments,
+        });
+    }
+    // --- END DEVELOPMENT MOCK ---
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+        throw new Error("No signed-in user found.");
+    }
+
+    const tokenResponse = await msalInstance.acquireTokenSilent({
+        ...loginRequest,
+        account: accounts[0],
+    });
+    const accessToken = tokenResponse.accessToken;
+
+    const response = await fetch(`${API_BASE_URL}/data/documents`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+            account_id: resource.accountId,
+            database_name: resource.databaseName,
+            collection_name: collectionName,
+            page,
+            limit,
+            search_term: searchTerm,
+        }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || errorData.message || `Failed to fetch documents. Status: ${response.status}`;
+        throw new Error(errorMessage);
+    }
+
     return response.json();
 };
