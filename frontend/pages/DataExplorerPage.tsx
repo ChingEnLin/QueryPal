@@ -4,22 +4,24 @@ import { SelectedResource, DbInfo, BreadcrumbItem, CosmosDBAccount } from '../ty
 import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache } from '../services/dbService';
 import { extractSchemaTree, SchemaKeyNode } from '../utils/schemaUtils';
 import MongoIcon from '../components/icons/MongoIcon';
-import ArrowLeftIcon from '../components/icons/ArrowLeftIcon';
-import SpinnerIcon from '../components/icons/SpinnerIcon';
-import SearchIcon from '../components/icons/SearchIcon';
-import XIcon from '../components/icons/XIcon';
+import {
+    SpinnerIcon,
+    ChevronDownIcon,
+    ChevronRightIcon,
+    RefreshIcon,
+    ArrowUpwardIcon,
+    ArrowDownwardIcon,
+    SunIcon,
+    MoonIcon,
+    CheckIcon,
+    PinIcon,
+    TrashIcon,
+    ArrowLeftIcon,
+    SearchIcon,
+    XIcon
+} from '../components/icons/material-icons-imports';
 import JsonDisplay from '../components/JsonDisplay';
-import ChevronDownIcon from '../components/icons/ChevronDownIcon';
-import ChevronRightIcon from '../components/icons/ChevronRightIcon';
-import RefreshIcon from '../components/icons/RefreshIcon';
-import ArrowUpIcon from '../components/icons/ArrowUpIcon';
-import ArrowDownIcon from '../components/icons/ArrowDownIcon';
 import { useTheme } from '../contexts/ThemeContext';
-import SunIcon from '../components/icons/SunIcon';
-import MoonIcon from '../components/icons/MoonIcon';
-import CheckIcon from '../components/icons/CheckIcon';
-import PinIcon from '../components/icons/PinIcon';
-import TrashIcon from '../components/icons/TrashIcon';
 
 
 /**
@@ -422,7 +424,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
 
   const renderSortArrow = (key: 'name' | 'count') => {
     if (collectionSortKey !== key) return null;
-    return collectionSortOrder === 'asc' ? <ArrowUpIcon className="w-3 h-3" /> : <ArrowDownIcon className="w-3 h-3" />;
+    return collectionSortOrder === 'asc' ? <ArrowUpwardIcon className="w-3 h-3" /> : <ArrowDownwardIcon className="w-3 h-3" />;
   };
 
   const renderDocumentList = () => {

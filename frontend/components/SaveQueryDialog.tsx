@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { SavedQuery } from '../types';
-import SpinnerIcon from './icons/SpinnerIcon';
-import XIcon from './icons/XIcon';
+import { SpinnerIcon, XIcon } from './icons/material-icons-imports';
 
 interface SaveQueryDialogProps {
   isOpen: boolean;

@@ -10,35 +10,36 @@ import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUse
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
 import Loader from '../components/Loader';
-import MongoIcon from '../components/icons/MongoIcon';
-import DatabaseIcon from '../components/icons/DatabaseIcon';
-import ServerIcon from '../components/icons/ServerIcon';
-import CollectionActionPanel from '../components/CollectionActionPanel';
-import RefreshIcon from '../components/icons/RefreshIcon';
-import SpinnerIcon from '../components/icons/SpinnerIcon';
-import CheckIcon from '../components/icons/CheckIcon';
-import HelpIcon from '../components/icons/HelpIcon';
 import Tutorial from '../components/Tutorial';
-import { useTheme } from '../contexts/ThemeContext';
-import SunIcon from '../components/icons/SunIcon';
-import MoonIcon from '../components/icons/MoonIcon';
-import PinIcon from '../components/icons/PinIcon';
-import XIcon from '../components/icons/XIcon';
 import JsonDisplay from '../components/JsonDisplay';
-import NotebookIcon from '../components/icons/NotebookIcon';
-import DownloadIcon from '../components/icons/DownloadIcon';
-import TrashIcon from '../components/icons/TrashIcon';
-import PlusCircleIcon from '../components/icons/PlusCircleIcon';
-import EditIcon from '../components/icons/EditIcon';
-import BookmarkIcon from '../components/icons/BookmarkIcon';
+import CollectionActionPanel from '../components/CollectionActionPanel';
 import SavedQueriesPanel from '../components/SavedQueriesPanel';
 import SaveQueryDialog from '../components/SaveQueryDialog';
 import ShareQueryDialog from '../components/ShareQueryDialog';
-import KeyboardIcon from '../components/icons/KeyboardIcon';
 import ShortcutCheatsheet from '../components/ShortcutCheatsheet';
-import DataGridIcon from '../components/icons/DataGridIcon';
-import SignOutIcon from '../components/icons/SignOutIcon';
-import ChevronDownIcon from '../components/icons/ChevronDownIcon';
+import { useTheme } from '../contexts/ThemeContext';
+import MongoIcon from '../components/icons/MongoIcon';
+import {
+  XIcon,
+  RefreshIcon,
+  ServerIcon,
+  DatabaseIcon,
+  HelpIcon,
+  SunIcon,
+  MoonIcon,
+  CloudIcon,
+  PinIcon,
+  NotebookIcon,
+  DownloadIcon,
+  TrashIcon,
+  PlusCircleIcon,
+  EditIcon,
+  BookmarkIcon,
+  KeyboardIcon,
+  DataGridIcon,
+  SignOutIcon,
+  ChevronDownIcon
+} from '../components/icons/material-icons-imports';
 
 
 // --- New User Menu Component for the Header ---
@@ -1155,7 +1156,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                                     className="w-full text-left font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
                                     title={`Load databases for ${account.name}`}
                                 >
-                                    <ServerIcon className="w-5 h-5 text-slate-500" />
+                                    <CloudIcon className="w-5 h-5 text-slate-500" />
                                     {account.name}
                                </button>
                                {selectedAccountId === account.id && (

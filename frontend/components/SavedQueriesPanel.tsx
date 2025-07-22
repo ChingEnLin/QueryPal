@@ -1,12 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { SavedQuery } from '../types';
-import XIcon from './icons/XIcon';
-import BookmarkIcon from './icons/BookmarkIcon';
-import SpinnerIcon from './icons/SpinnerIcon';
-import EditIcon from './icons/EditIcon';
-import TrashIcon from './icons/TrashIcon';
-import ShareIcon from './icons/ShareIcon';
+import { XIcon, SpinnerIcon, EditIcon, BookmarkIcon, TrashIcon, ShareIcon } from './icons/material-icons-imports';
 
 interface SavedQueriesPanelProps {
     onClose: () => void;

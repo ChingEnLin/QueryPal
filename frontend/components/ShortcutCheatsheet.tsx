@@ -1,8 +1,7 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import XIcon from './icons/XIcon';
-import KeyboardIcon from './icons/KeyboardIcon';
+import { KeyboardIcon, XIcon } from './icons/material-icons-imports';
 
 interface ShortcutCheatsheetProps {
   isOpen: boolean;

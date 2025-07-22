@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { SavedQuery } from '../types';
-import SpinnerIcon from './icons/SpinnerIcon';
-import XIcon from './icons/XIcon';
-import PlusCircleIcon from './icons/PlusCircleIcon';
-import TrashIcon from './icons/TrashIcon';
+import { SpinnerIcon, XIcon, PlusCircleIcon, TrashIcon } from './icons/material-icons-imports';
 
 interface ShareQueryDialogProps {
   isOpen: boolean;

@@ -1,8 +1,6 @@
 
 import React, { useState } from 'react';
-import AiSparkleIcon from './icons/AiSparkleIcon';
-import ClipboardIcon from './icons/ClipboardIcon';
-import CheckIcon from './icons/CheckIcon';
+import { AiSparkleIcon, ClipboardIcon, CheckIcon } from './icons/material-icons-imports';
 
 interface DebuggingSuggestionProps {
   suggestion: string;

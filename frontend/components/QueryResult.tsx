@@ -3,26 +3,28 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import JsonDisplay from './JsonDisplay';
 import Table from './Table';
-import JsonIcon from './icons/JsonIcon';
-import TableIcon from './icons/TableIcon';
-import ChevronDownIcon from './icons/ChevronDownIcon';
-import GraphIcon from './icons/GraphIcon';
 import JsonCrackViewer from './JsonCrackViewer';
-import XIcon from './icons/XIcon';
 import WriteSummaryDisplay from './WriteSummaryDisplay';
-import InfoIcon from './icons/InfoIcon';
-import AiSparkleIcon from './icons/AiSparkleIcon';
 import DebuggingSuggestion from './DebuggingSuggestion';
-import SpinnerIcon from './icons/SpinnerIcon';
-import PinIcon from './icons/PinIcon';
-import DownloadIcon from './icons/DownloadIcon';
 import { AnalysisResult } from '../types';
 import AnalysisResultDisplay from './AnalysisResultDisplay';
-import BarChartIcon from './icons/BarChartIcon';
-import EditIcon from './icons/EditIcon';
-import UndoIcon from './icons/UndoIcon';
-import RedoIcon from './icons/RedoIcon';
-import RefreshIcon from './icons/RefreshIcon';
+import {
+  JsonIcon,
+  TableIcon,
+  ChevronDownIcon,
+  GraphIcon,
+  XIcon,
+  InfoIcon,
+  AiSparkleIcon,
+  SpinnerIcon,
+  PinIcon,
+  DownloadIcon,
+  BarChartIcon,
+  EditIcon,
+  UndoIcon,
+  RedoIcon,
+  RefreshIcon
+} from './icons/material-icons-imports';
 
 interface QueryResultProps {
   isExecuting: boolean;

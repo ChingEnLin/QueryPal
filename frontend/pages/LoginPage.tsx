@@ -3,10 +3,9 @@ import React from 'react';
 import { useMsal } from "@azure/msal-react";
 import { loginRequest } from "../authConfig";
 import MongoIcon from '../components/icons/MongoIcon';
-import MicrosoftIcon from '../components/icons/MicrosoftIcon';
 import { USE_MSAL_AUTH } from '../app.config';
 import { useAuth } from '../contexts/AuthContext';
-import UserIcon from '../components/icons/UserIcon';
+import { UserIcon, MicrosoftIcon } from '../components/icons/material-icons-imports';
 
 // --- UI Component (Shared) ---
 interface LoginUIProps {

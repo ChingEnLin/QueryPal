@@ -1,8 +1,6 @@
 
 import React, { useState } from 'react';
-import CheckIcon from './icons/CheckIcon';
-import ClipboardIcon from './icons/ClipboardIcon';
-import ChevronDownIcon from './icons/ChevronDownIcon';
+import { CheckIcon, ChevronDownIcon, ClipboardIcon } from './icons/material-icons-imports';
 
 // A single, recursive component to render all parts of the JSON object.
 const JsonNode: React.FC<{

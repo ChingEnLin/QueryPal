@@ -3,7 +3,7 @@ import React from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, PolarAreaController, RadarController, DoughnutController, PieController, BarController, LineController, ScatterController, BubbleController } from 'chart.js';
 import { Chart } from 'react-chartjs-2';
 import { AnalysisResult } from '../types';
-import AiSparkleIcon from './icons/AiSparkleIcon';
+import { AiSparkleIcon } from './icons/material-icons-imports';
 import { useTheme } from '../contexts/ThemeContext';
 
 // Register all necessary Chart.js components

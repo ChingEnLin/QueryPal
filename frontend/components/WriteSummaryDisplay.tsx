@@ -1,11 +1,6 @@
 
 import React from 'react';
-import CheckIcon from './icons/CheckIcon';
-import FilterIcon from './icons/FilterIcon';
-import EditIcon from './icons/EditIcon';
-import PlusCircleIcon from './icons/PlusCircleIcon';
-import TrashIcon from './icons/TrashIcon';
-import TagIcon from './icons/TagIcon';
+import { CheckIcon, FilterIcon, EditIcon, PlusCircleIcon, TagIcon, TrashIcon } from './icons/material-icons-imports';
 
 interface WriteSummaryDisplayProps {
   data: Record<string, any>;

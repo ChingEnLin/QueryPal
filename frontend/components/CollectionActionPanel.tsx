@@ -1,11 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { CollectionInfo } from '../types';
-import XIcon from './icons/XIcon';
-import InfoIcon from './icons/InfoIcon';
-import IndexIcon from './icons/IndexIcon';
-import FileJsonIcon from './icons/FileJsonIcon';
-import ChevronDownIcon from './icons/ChevronDownIcon';
+import { XIcon, InfoIcon, ChevronDownIcon, IndexIcon, FileJsonIcon } from './icons/material-icons-imports';
 
 // --- New Schema Viewer Components ---
 

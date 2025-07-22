@@ -1,11 +1,13 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import ClipboardIcon from './icons/ClipboardIcon';
-import CheckIcon from './icons/CheckIcon';
-import PlayIcon from './icons/PlayIcon';
-import ArrowLeftIcon from './icons/ArrowLeftIcon';
-import ArrowRightIcon from './icons/ArrowRightIcon';
-import BookmarkIcon from './icons/BookmarkIcon';
+import { 
+  CheckIcon,
+  ClipboardIcon,
+  PlayIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  BookmarkIcon,
+ } from './icons/material-icons-imports';
 
 interface QueryDisplayProps {
   code: string;

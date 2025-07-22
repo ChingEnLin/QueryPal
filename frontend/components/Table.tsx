@@ -1,8 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import ArrowUpIcon from './icons/ArrowUpIcon';
-import ArrowDownIcon from './icons/ArrowDownIcon';
-import XIcon from './icons/XIcon';
+import { ArrowUpwardIcon, ArrowDownwardIcon, XIcon } from './icons/material-icons-imports';
 
 interface TableProps {
   data: Record<string, any>[];
@@ -53,7 +51,7 @@ const Table: React.FC<TableProps> = ({ data, isEditMode, visibleHeaders, onDelet
         if (!sortConfig || sortConfig.key !== key) {
             return null;
         }
-        return sortConfig.direction === 'asc' ? <ArrowUpIcon className="w-3 h-3" /> : <ArrowDownIcon className="w-3 h-3" />;
+        return sortConfig.direction === 'asc' ? <ArrowUpwardIcon className="w-3 h-3" /> : <ArrowDownwardIcon className="w-3 h-3" />;
     }
 
     const renderCell = (item: any) => {

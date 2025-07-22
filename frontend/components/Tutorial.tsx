@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import XIcon from './icons/XIcon';
+import { XIcon } from './icons/material-icons-imports';
 import MongoIcon from './icons/MongoIcon';
 
 // Define the structure of a tutorial step
