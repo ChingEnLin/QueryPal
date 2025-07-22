@@ -18,6 +18,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import SunIcon from '../components/icons/SunIcon';
 import MoonIcon from '../components/icons/MoonIcon';
 import CheckIcon from '../components/icons/CheckIcon';
+import PinIcon from '../components/icons/PinIcon';
+import TrashIcon from '../components/icons/TrashIcon';
 
 
 /**
@@ -58,6 +60,11 @@ interface DataExplorerPageProps {
   availableDbs: DbInfo[];
   availableAccounts: CosmosDBAccount[];
   onNavigateBack: () => void;
+}
+
+interface PinnedDocument {
+  doc: Record<string, any>;
+  collectionName: string;
 }
 
 /**
@@ -126,11 +133,21 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
   // --- Navigation State ---
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
 
+  // --- Pinned Documents State ---
+  const [pinnedDocuments, setPinnedDocuments] = useState<PinnedDocument[]>([]);
+  const [isPinnedDrawerOpen, setIsPinnedDrawerOpen] = useState(false);
+  const prevPinnedCount = useRef(pinnedDocuments.length);
+
   // --- Theme State ---
   const { theme, toggleTheme } = useTheme();
 
   // --- Cache State ---
   const [cacheClearStatus, setCacheClearStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  
+  const getDocId = (doc: Record<string, any>): string => {
+    const id = doc?._id?.$oid || doc?._id;
+    return String(id ?? JSON.stringify(doc)); // Fallback for docs without ID
+  };
 
   // --- Helper to reset state ---
   const resetExplorerState = useCallback(() => {
@@ -149,6 +166,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     setIsFetchingSchema(false);
     setSelectedDocument(null);
     setBreadcrumbs([]);
+    // Do not reset pinned documents here, as they should persist across DB/collection changes.
   }, []);
   
   // Debounce search input
@@ -173,6 +191,42 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+  
+  // --- Pinned Documents Handlers ---
+  const isDocumentPinned = useCallback((doc: Record<string, any>): boolean => {
+      if (!doc) return false;
+      const docId = getDocId(doc);
+      return pinnedDocuments.some(pinned => getDocId(pinned.doc) === docId);
+  }, [pinnedDocuments]);
+
+  const handleTogglePin = useCallback((docToPin: Record<string, any>, collectionName: string) => {
+      if (!docToPin || !collectionName) return;
+
+      const docId = getDocId(docToPin);
+      const alreadyPinned = pinnedDocuments.some(p => getDocId(p.doc) === docId);
+
+      if (alreadyPinned) {
+          setPinnedDocuments(prev => prev.filter(p => getDocId(p.doc) !== docId));
+      } else {
+          setPinnedDocuments(prev => [...prev, { doc: docToPin, collectionName }]);
+      }
+  }, [pinnedDocuments]);
+
+  const handleClearAllPins = () => {
+      setPinnedDocuments([]);
+  };
+
+  useEffect(() => {
+      // Automatically open the drawer when a new document is pinned, but allow the user to close it.
+      if (pinnedDocuments.length > prevPinnedCount.current) {
+          setIsPinnedDrawerOpen(true);
+      }
+      // If all documents are unpinned, close the drawer automatically.
+      if (pinnedDocuments.length === 0) {
+          setIsPinnedDrawerOpen(false);
+      }
+      prevPinnedCount.current = pinnedDocuments.length;
+  }, [pinnedDocuments]);
 
   const fetchDocuments = useCallback(async () => {
     if (!selectedCollection || !currentResource) {
@@ -410,16 +464,25 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
       <div className="flex flex-col h-full">
         <div className={`flex-grow overflow-y-auto ${isLoading ? 'opacity-50' : ''}`}>
           <ul className="divide-y divide-slate-200 dark:divide-slate-700">
-            {documents.map((doc, i) => {
-                const docId = doc._id?.$oid || doc._id || `doc-index-${i}`;
-                const isSelected = selectedDocument && (selectedDocument._id?.$oid || selectedDocument._id) === (doc._id?.$oid || doc._id);
+            {documents.map((doc) => {
+                const docId = getDocId(doc);
+                const isSelected = selectedDocument && getDocId(selectedDocument) === docId;
+                const isPinned = isDocumentPinned(doc);
+
                 return (
-                    <li key={docId}>
+                    <li key={docId} className={`flex items-center justify-between transition-colors ${isSelected ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}>
                         <button
-                          onClick={() => setSelectedDocument(doc)}
-                          className={`w-full text-left p-3 text-sm transition-colors ${isSelected ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                            onClick={() => setSelectedDocument(doc)}
+                            className="flex-grow text-left p-3 text-sm"
                         >
                             <p className="font-mono text-slate-800 dark:text-slate-200 truncate" title={String(doc._id?.$oid || doc._id)}>{String(doc._id?.$oid || doc._id)}</p>
+                        </button>
+                        <button
+                            onClick={() => handleTogglePin(doc, selectedCollection!)}
+                            className={`p-2 mr-2 rounded-full transition-colors ${isPinned ? 'text-blue-500 hover:bg-blue-200/50 dark:hover:bg-blue-900/40' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                            title={isPinned ? 'Unpin document' : 'Pin document'}
+                        >
+                            <PinIcon className={`w-5 h-5 ${isPinned ? 'fill-current' : ''}`} />
                         </button>
                     </li>
                 );
@@ -483,10 +546,70 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     );
   }
 
-  const getDocId = (doc: Record<string, any>): string => {
-    const id = doc?._id?.$oid || doc?._id;
-    return String(id ?? 'N/A');
-  }
+  const PinnedDrawer = () => (
+    <div 
+        className="fixed bottom-0 left-0 right-0 z-30 transition-transform duration-300 ease-in-out" 
+        style={{ transform: isPinnedDrawerOpen ? 'translateY(0)' : 'translateY(calc(100% - 49px))' }}
+        aria-hidden={!isPinnedDrawerOpen}
+    >
+        <div className="bg-white dark:bg-slate-800 border-t-2 border-blue-500 shadow-[0_-4px_15px_rgba(0,0,0,0.1)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+            <button
+                onClick={() => setIsPinnedDrawerOpen(!isPinnedDrawerOpen)}
+                className="w-full flex items-center justify-between p-3 text-left"
+                aria-expanded={isPinnedDrawerOpen}
+            >
+                <div className="flex items-center gap-3">
+                    <PinIcon className="w-5 h-5 text-blue-500" />
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                        Pinned Documents ({pinnedDocuments.length})
+                    </h3>
+                </div>
+                <div className="flex items-center gap-4">
+                    {pinnedDocuments.length > 0 && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleClearAllPins(); }}
+                            className="flex items-center gap-2 px-3 py-1.5 border border-red-300 dark:border-red-500/50 text-xs font-medium rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40"
+                            title="Clear all pinned documents"
+                        >
+                            <TrashIcon className="w-4 h-4" /> Clear All
+                        </button>
+                    )}
+                    <ChevronDownIcon className={`w-6 h-6 text-slate-500 dark:text-slate-400 transition-transform duration-300 ${isPinnedDrawerOpen ? 'rotate-180' : ''}`} />
+                </div>
+            </button>
+            <div className="h-[40vh] bg-slate-100 dark:bg-slate-900 overflow-y-auto">
+                {pinnedDocuments.length > 0 ? (
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {pinnedDocuments.map(({ doc, collectionName }) => (
+                            <div key={getDocId(doc)} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-fade-in-fast">
+                                <header className="p-3 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center flex-shrink-0">
+                                    <div>
+                                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{collectionName}</p>
+                                        <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate" title={getDocId(doc)}>{getDocId(doc)}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleTogglePin(doc, collectionName)}
+                                        className="p-1.5 rounded-full text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                                        title="Unpin document"
+                                    >
+                                        <XIcon className="w-4 h-4" />
+                                    </button>
+                                </header>
+                                <div className="p-3 flex-grow overflow-y-auto">
+                                    <JsonDisplay data={doc} onObjectIdClick={handleObjectIdClick} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
+                        Pin documents to compare them here.
+                    </div>
+                )}
+            </div>
+        </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
@@ -679,8 +802,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
             <div className="p-4 space-y-4">
               <header className="flex justify-between items-center">
                  <div className="flex items-center gap-4">
-                  <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Editor</h2>
-                   <button
+                    <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Editor</h2>
+                    <button
                         onClick={handleClearDocCache}
                         disabled={cacheClearStatus !== 'idle'}
                         className="flex items-center gap-2 px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-xs font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -691,6 +814,16 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                         {cacheClearStatus === 'error' && <><XIcon className="w-4 h-4 text-red-500" /><span>Error</span></>}
                         {cacheClearStatus === 'idle' && <>Clear Cache</>}
                     </button>
+                    {selectedDocument && (
+                        <button
+                            onClick={() => handleTogglePin(selectedDocument, selectedCollection!)}
+                            className={`flex items-center gap-2 px-3 py-1.5 border text-xs font-medium rounded-md transition-colors ${isDocumentPinned(selectedDocument) ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                            title={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
+                        >
+                            <PinIcon className={`w-4 h-4 ${isDocumentPinned(selectedDocument) ? 'fill-current' : ''}`} />
+                            <span>{isDocumentPinned(selectedDocument) ? 'Pinned' : 'Pin'}</span>
+                        </button>
+                    )}
                 </div>
                 {selectedDocument && <button onClick={() => { setSelectedDocument(null); setBreadcrumbs([]); }} className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Close document view"><XIcon className="w-4 h-4"/></button>}
               </header>
@@ -716,6 +849,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
             </div>
           </div>
         </main>
+        {pinnedDocuments.length > 0 && <PinnedDrawer />}
       </div>
       <style>{`
           @keyframes fade-in-fast { 
