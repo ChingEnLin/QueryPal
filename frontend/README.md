@@ -189,6 +189,20 @@ Finds a single document by its `_id` by searching across a list of collections. 
 
 ---
 
+### `POST /api/data/clear_documents_cache`
+
+Clears the server-side cache used for the `find_by_id` endpoint. This is useful if linked data becomes stale.
+
+-   **Request Body:** None.
+-   **Success Response (200):** A confirmation message.
+    ```json
+    {
+      "message": "Document lookup cache cleared successfully."
+    }
+    ```
+
+---
+
 ### `POST /api/query/nl2query`
 
 Generates a query using the Gemini API, providing database schema for context.

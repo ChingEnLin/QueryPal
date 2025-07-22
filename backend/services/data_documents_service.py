@@ -9,15 +9,12 @@ import re
 from cachetools import TTLCache, cached
 
 # Caches: 10 min TTL, 100 max entries
-_fetch_documents_cache = TTLCache(maxsize=100, ttl=600)
 _find_by_id_cache = TTLCache(maxsize=100, ttl=600)
 
 ALL_DOCUMENTS_CACHES = [
-    _fetch_documents_cache,
     _find_by_id_cache
 ]
 
-@cached(_fetch_documents_cache)
 def fetch_documents(connection_string: str, database_name: str, collection_name: str, page: int, limit: int, filter: dict = None) -> DataDocumentsResponse:
     client = MongoClient(connection_string)
     db = client[database_name]

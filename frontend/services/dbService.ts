@@ -13,6 +13,7 @@ import {
     mockGenericExecutionResult,
     mockDelay,
     mockCacheClearResult,
+    mockDocCacheClearResult,
     mockUsersDocuments,
     mockProductsDocuments,
     mockOrdersCollectionInfo
@@ -443,5 +444,43 @@ export const findDocumentById = async (
         throw new Error(errorMessage);
     }
 
+    return response.json();
+};
+
+/**
+ * Clears the server-side cache for document lookups (`find_by_id`).
+ * @returns A promise that resolves with a confirmation message.
+ */
+export const clearDocumentsCache = async (): Promise<{ message: string }> => {
+    // --- DEVELOPMENT MOCK ---
+    if (!USE_MSAL_AUTH) {
+        console.log("DEV MODE: Simulating document cache clear.");
+        await mockDelay(700);
+        return Promise.resolve(mockDocCacheClearResult);
+    }
+    // --- END DEVELOPMENT MOCK ---
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+        throw new Error("No signed-in user found.");
+    }
+
+    const tokenResponse = await msalInstance.acquireTokenSilent({
+        ...loginRequest,
+        account: accounts[0],
+    });
+
+    const response = await fetch(`${API_BASE_URL}/system/clear_documents_cache`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${tokenResponse.accessToken}`,
+        },
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || errorData.message || `Failed to clear document cache. Status: ${response.status}`;
+        throw new Error(errorMessage);
+    }
+    
     return response.json();
 };

@@ -335,7 +335,7 @@ export interface QueryGeneratorPageProps {
   name?: string;
   email?: string;
   onLogout: () => void;
-  onNavigateToExplorer: (connection: { resource: SelectedResource, dbInfo: DbInfo, accountName: string }) => void;
+  onNavigateToExplorer: (connection: { resource: SelectedResource; dbInfo: DbInfo; accountName: string; availableDbs: DbInfo[], availableAccounts: CosmosDBAccount[] }) => void;
 }
 
 // --- Main Page Component ---
@@ -868,6 +868,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         resource: connectedResource,
         dbInfo: connectedDbInfo,
         accountName: connectedAccountName,
+        availableDbs: accountDatabases,
+        availableAccounts: azureAccounts,
       });
     }
   };

@@ -6,7 +6,7 @@ import QueryGeneratorPage from './pages/QueryGeneratorPage';
 import DataExplorerPage from './pages/DataExplorerPage'; // Import the new page
 import { useAuth } from './contexts/AuthContext';
 import { USE_MSAL_AUTH } from './app.config';
-import { SelectedResource, DbInfo } from './types';
+import { SelectedResource, DbInfo, CosmosDBAccount } from './types';
 
 type PageView = 'queryGenerator' | 'dataExplorer';
 
@@ -20,15 +20,17 @@ const MsalAppFlow: React.FC = () => {
   const onLogout = () => instance.logoutRedirect({ postLogoutRedirectUri: "/" });
 
   const [page, setPage] = useState<PageView>('queryGenerator');
-  const [connection, setConnection] = useState<{ resource: SelectedResource, dbInfo: DbInfo, accountName: string } | null>(null);
+  const [connection, setConnection] = useState<{ resource: SelectedResource; dbInfo: DbInfo; accountName: string; availableDbs: DbInfo[]; availableAccounts: CosmosDBAccount[] } | null>(null);
 
   if (!isAuthenticated) return <LoginPage />;
 
   if (page === 'dataExplorer' && connection) {
     return <DataExplorerPage 
-              connectedResource={connection.resource} 
-              dbInfo={connection.dbInfo}
+              initialResource={connection.resource}
+              initialDbInfo={connection.dbInfo}
               accountName={connection.accountName}
+              availableDbs={connection.availableDbs}
+              availableAccounts={connection.availableAccounts}
               onNavigateBack={() => setPage('queryGenerator')}
            />;
   }
@@ -51,15 +53,17 @@ const BypassAppFlow: React.FC = () => {
   const email = user?.email;
 
   const [page, setPage] = useState<PageView>('queryGenerator');
-  const [connection, setConnection] = useState<{ resource: SelectedResource, dbInfo: DbInfo, accountName: string } | null>(null);
+  const [connection, setConnection] = useState<{ resource: SelectedResource; dbInfo: DbInfo; accountName: string; availableDbs: DbInfo[]; availableAccounts: CosmosDBAccount[] } | null>(null);
   
   if (!isAuthenticated) return <LoginPage />;
 
   if (page === 'dataExplorer' && connection) {
     return <DataExplorerPage 
-              connectedResource={connection.resource} 
-              dbInfo={connection.dbInfo}
+              initialResource={connection.resource}
+              initialDbInfo={connection.dbInfo}
               accountName={connection.accountName}
+              availableDbs={connection.availableDbs}
+              availableAccounts={connection.availableAccounts}
               onNavigateBack={() => setPage('queryGenerator')}
            />;
   }

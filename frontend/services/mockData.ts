@@ -211,6 +211,8 @@ export const mockAnalysisResult: AnalysisResult = {
 
 // --- Mock System Action Results ---
 export const mockCacheClearResult = { message: 'Cache cleared successfully.' };
+export const mockDocCacheClearResult = { message: 'Document lookup cache cleared successfully.' };
+
 
 // --- Mock User Data (with Sharing) ---
 const MOCK_USER_EMAIL = 'dev.user@example.com';

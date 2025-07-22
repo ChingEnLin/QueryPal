@@ -97,7 +97,7 @@ const JsonNode: React.FC<{
         {renderHeader('[', ']', nodeValue.length)}
         {isExpanded && (
           <>
-            <div className="pl-6 border-l border-slate-600/30 dark:border-slate-700/50 ml-2">
+            <div className="pl-6 border-l border-slate-200 dark:border-slate-700 ml-2">
               {nodeValue.map((item, index) => (
                 <div key={index}>
                   <JsonNode nodeValue={item} onObjectIdClick={onObjectIdClick} parentKeyContext={parentKeyContext} />
@@ -128,7 +128,7 @@ const JsonNode: React.FC<{
         {renderHeader('{', '}', keys.length)}
         {isExpanded && (
           <>
-            <div className="pl-6 border-l border-slate-600/30 dark:border-slate-700/50 ml-2">
+            <div className="pl-6 border-l border-slate-200 dark:border-slate-700 ml-2">
               {keys.map((key, index) => (
                 <div key={key}>
                   <JsonNode nodeValue={nodeValue[key]} nodeKey={key} onObjectIdClick={onObjectIdClick} parentKeyContext={key} />
@@ -201,19 +201,19 @@ const JsonDisplay: React.FC<JsonDisplayProps> = ({ data, onObjectIdClick }) => {
   };
 
   return (
-    <div className="bg-slate-800 dark:bg-black/30 rounded-md relative group ring-1 ring-slate-700 dark:ring-slate-700">
-      <pre className="text-sm p-4 overflow-x-auto font-mono text-slate-300">
+    <div className="bg-white dark:bg-slate-800 rounded-md relative group ring-1 ring-slate-200 dark:ring-slate-700">
+      <pre className="text-sm p-4 overflow-x-auto font-mono text-slate-900 dark:text-slate-100">
         <code>
           <JsonNode nodeValue={data} isRoot onObjectIdClick={onObjectIdClick} />
         </code>
       </pre>
       <button
         onClick={handleCopy}
-        className="absolute top-2 right-2 p-2 bg-slate-600/80 dark:bg-slate-700/80 rounded-md text-slate-300 hover:bg-slate-500 dark:hover:bg-slate-600 hover:text-white transition-all duration-200 opacity-0 group-hover:opacity-100 focus:opacity-100"
+        className="absolute top-2 right-2 p-2 bg-slate-100/80 dark:bg-slate-700/80 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 hover:text-slate-800 dark:hover:text-white transition-all duration-200 opacity-0 group-hover:opacity-100 focus:opacity-100"
         aria-label="Copy JSON result"
         title={copied ? 'Copied!' : 'Copy raw JSON'}
       >
-        {copied ? <CheckIcon className="w-4 h-4 text-blue-400" /> : <ClipboardIcon className="w-4 h-4" />}
+        {copied ? <CheckIcon className="w-4 h-4 text-blue-500" /> : <ClipboardIcon className="w-4 h-4" />}
       </button>
     </div>
   );
