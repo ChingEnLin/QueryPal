@@ -133,3 +133,19 @@ export interface PaginatedDocumentsResponse {
     totalPages: number;
     totalDocuments: number;
 }
+
+/**
+ * Represents the response for finding a document by its ID across collections.
+ */
+export interface FoundDocumentResponse {
+    document: Record<string, any>;
+    collectionName: string;
+}
+
+/**
+ * Represents a single item in the Data Explorer's breadcrumb trail.
+ */
+export interface BreadcrumbItem {
+    collectionName: string;
+    document: Record<string, any>;
+}

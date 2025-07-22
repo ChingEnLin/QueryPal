@@ -155,6 +155,37 @@ Fetches a paginated and searchable list of documents from a collection.
         "totalDocuments": 95
     }
     ```
+---
+
+### `POST /api/data/find_by_id`
+
+Finds a single document by its `_id` by searching across a list of collections. The backend can use this list and the optional `key_context` to intelligently search for the referenced document.
+
+-   **Request Body:**
+    ```json
+    {
+        "account_id": "/subscriptions/sub-id/resourceGroups/rg-prod/...",
+        "database_name": "ECommerce-DB",
+        "collection_names": ["users", "products", "orders"],
+        "document_id": "60d5ec49f5a8a1e9c8d5c8a1",
+        "key_context": "userId"
+    }
+    ```
+    - `key_context` (string, optional): The name of the field where the ID was found. The backend can use this as a hint (e.g., for a Gemini prompt) to determine which collection is most likely to contain the document.
+
+-   **Success Response (200):** The found document and the name of the collection it was found in.
+    ```json
+    {
+        "document": { "_id": { "$oid": "60d5ec49f5a8a1e9c8d5c8a1" }, "name": "John Doe", ... },
+        "collectionName": "users"
+    }
+    ```
+-   **Error Response (404):** If the document is not found.
+    ```json
+    {
+        "detail": "Document with ID '60d5ec49f5a8a1e9c8d5c8a1' not found in any of the provided collections."
+    }
+    ```
 
 ---
 

@@ -1,6 +1,7 @@
 
 
-import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, PaginatedDocumentsResponse } from '../types';
+
+import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, PaginatedDocumentsResponse, FoundDocumentResponse } from '../types';
 import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { 
@@ -12,7 +13,9 @@ import {
     mockGenericExecutionResult,
     mockDelay,
     mockCacheClearResult,
-    mockUsersDocuments
+    mockUsersDocuments,
+    mockProductsDocuments,
+    mockOrdersCollectionInfo
 } from './mockData';
 
 /**
@@ -292,7 +295,13 @@ export const getDocuments = async (
             return path.split('.').reduce((o, k) => (o && o[k] !== undefined) ? o[k] : null, obj);
         };
 
-        const sourceDocs = mockUsersDocuments;
+        const sourceDocs = collectionName === 'users'
+            ? mockUsersDocuments
+            : collectionName === 'products'
+            ? mockProductsDocuments
+            : collectionName === 'orders'
+            ? [mockOrdersCollectionInfo.sampleDocument]
+            : [];
         
         const filteredDocs = filter && filter.value
             ? sourceDocs.filter(doc => {
@@ -351,6 +360,86 @@ export const getDocuments = async (
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData.detail || errorData.message || `Failed to fetch documents. Status: ${response.status}`;
+        throw new Error(errorMessage);
+    }
+
+    return response.json();
+};
+
+/**
+ * Finds a single document by its ID, searching across all provided collections.
+ * @param documentId The string representation of the document's ObjectId.
+ * @param resource The database account and name context.
+ * @param collectionNames An array of collection names to search within.
+ * @param keyContext An optional hint (the field name) for smarter searching on the backend.
+ * @returns A promise that resolves with the found document and its collection name.
+ */
+export const findDocumentById = async (
+    documentId: string,
+    resource: SelectedResource,
+    collectionNames: string[],
+    keyContext?: string
+): Promise<FoundDocumentResponse> => {
+    // --- DEVELOPMENT MOCK ---
+    if (!USE_MSAL_AUTH) {
+        console.log(`DEV MODE: Finding document with ID ${documentId} (context: ${keyContext}) across collections.`);
+        await mockDelay(700);
+        
+        // Prioritize search based on keyContext hint
+        const lowerKeyContext = keyContext?.toLowerCase() ?? '';
+        if (lowerKeyContext.includes('product') || lowerKeyContext.includes('item')) {
+            const productDoc = mockProductsDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
+            if (productDoc) return Promise.resolve({ document: productDoc, collectionName: 'products' });
+        }
+        if (lowerKeyContext.includes('user') || lowerKeyContext.includes('patient')) {
+            const userDoc = mockUsersDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
+            if (userDoc) return Promise.resolve({ document: userDoc, collectionName: 'users' });
+        }
+
+        // Fallback: search all mock collections if context hint fails
+        const userDoc = mockUsersDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
+        if (userDoc) return Promise.resolve({ document: userDoc, collectionName: 'users' });
+        
+        const productDoc = mockProductsDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
+        if (productDoc) return Promise.resolve({ document: productDoc, collectionName: 'products' });
+
+        if ((mockOrdersCollectionInfo.sampleDocument._id?.$oid ?? mockOrdersCollectionInfo.sampleDocument._id) === documentId) {
+             return Promise.resolve({ document: mockOrdersCollectionInfo.sampleDocument, collectionName: 'orders' });
+        }
+        
+        return Promise.reject(new Error(`Document with ID '${documentId}' not found in any mock collections.`));
+    }
+    // --- END DEVELOPMENT MOCK ---
+    
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+        throw new Error("No signed-in user found.");
+    }
+
+    const tokenResponse = await msalInstance.acquireTokenSilent({
+        ...loginRequest,
+        account: accounts[0],
+    });
+    const accessToken = tokenResponse.accessToken;
+
+    const response = await fetch(`${API_BASE_URL}/data/find_by_id`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+            account_id: resource.accountId,
+            database_name: resource.databaseName,
+            collection_names: collectionNames,
+            document_id: documentId,
+            key_context: keyContext, // Pass the context hint to the backend
+        }),
+    });
+    
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || errorData.message || `Failed to find document. Status: ${response.status}`;
         throw new Error(errorMessage);
     }
 

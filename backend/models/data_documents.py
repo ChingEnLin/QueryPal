@@ -19,3 +19,14 @@ class DataDocumentsResponse(BaseModel):
     currentPage: int
     totalPages: int
     totalDocuments: int
+
+class FindByIdRequest(BaseModel):
+    account_id: str
+    database_name: str
+    collection_names: List[str]
+    document_id: str
+    key_context: Optional[str] = None
+
+class FindByIdResponse(BaseModel):
+    document: Dict[str, Any]
+    collectionName: str

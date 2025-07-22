@@ -1,8 +1,9 @@
 
 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { SelectedResource, DbInfo, CollectionInfo } from '../types';
-import { getDocuments, getCollectionInfo } from '../services/dbService';
+import { SelectedResource, DbInfo, BreadcrumbItem } from '../types';
+import { getDocuments, getCollectionInfo, findDocumentById } from '../services/dbService';
 import { extractSchemaTree, SchemaKeyNode } from '../utils/schemaUtils';
 import MongoIcon from '../components/icons/MongoIcon';
 import ArrowLeftIcon from '../components/icons/ArrowLeftIcon';
@@ -11,6 +12,7 @@ import SearchIcon from '../components/icons/SearchIcon';
 import XIcon from '../components/icons/XIcon';
 import JsonDisplay from '../components/JsonDisplay';
 import ChevronDownIcon from '../components/icons/ChevronDownIcon';
+import ChevronRightIcon from '../components/icons/ChevronRightIcon';
 import RefreshIcon from '../components/icons/RefreshIcon';
 import ArrowUpIcon from '../components/icons/ArrowUpIcon';
 import ArrowDownIcon from '../components/icons/ArrowDownIcon';
@@ -49,8 +51,8 @@ const RenderOptions: React.FC<{ nodes: SchemaKeyNode[], level: number }> = ({ no
 const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, dbInfo, accountName, onNavigateBack }) => {
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Record<string, any>[]>([]);
-  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
-  const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -71,6 +73,9 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
   // State for collection sorting
   const [collectionSortKey, setCollectionSortKey] = useState<'name' | 'count'>('name');
   const [collectionSortOrder, setCollectionSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // --- State for Click-Through Linking ---
+  const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
   
   // Debounce search input
   useEffect(() => {
@@ -97,8 +102,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
       return;
     }
 
-    setIsLoadingDocuments(true);
-    setDocumentsError(null);
+    setIsLoading(true);
+    setError(null);
     try {
       const response = await getDocuments(
         selectedCollection,
@@ -111,19 +116,21 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
       setTotalPages(response.totalPages);
       setTotalDocuments(response.totalDocuments);
     } catch (e) {
-      if (e instanceof Error) setDocumentsError(e.message);
-      else setDocumentsError("An unknown error occurred while fetching documents.");
+      if (e instanceof Error) setError(e.message);
+      else setError("An unknown error occurred while fetching documents.");
       setDocuments([]);
       setTotalPages(1);
       setTotalDocuments(0);
     } finally {
-      setIsLoadingDocuments(false);
+      setIsLoading(false);
     }
   }, [selectedCollection, connectedResource, currentPage, filterKey, debouncedFilterValue]);
   
   useEffect(() => {
+      // Don't auto-fetch if we are in a breadcrumb trail, as the document is already loaded
+      if (breadcrumbs.length > 0 && selectedDocument) return;
       fetchDocuments();
-  }, [fetchDocuments]);
+  }, [fetchDocuments, breadcrumbs.length, selectedDocument]);
 
   const fetchSchemaForCollection = useCallback(async (collectionName: string) => {
     if (!collectionName) return;
@@ -149,6 +156,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
     setFilterValue('');
     setFilterKey('all');
     setSelectedDocument(null);
+    setBreadcrumbs([]); // Reset breadcrumbs when manually changing collection
     await fetchSchemaForCollection(collectionName);
   }, [fetchSchemaForCollection]);
 
@@ -157,7 +165,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
 
     // Give user immediate feedback by clearing old data/selection
     setSelectedDocument(null);
-    setDocumentsError(null);
+    setError(null);
+    setBreadcrumbs([]); // Refreshing clears the navigation trail
 
     // Re-fetch both schema and documents for the current state
     fetchSchemaForCollection(selectedCollection);
@@ -208,13 +217,49 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
     });
   }, [dbInfo.collections, collectionSortKey, collectionSortOrder]);
 
+  const handleObjectIdClick = useCallback(async (objectId: string, keyContext?: string) => {
+    if (!selectedDocument || !selectedCollection) return;
+    setIsLoading(true);
+    setError(null);
+
+    const currentBreadcrumb: BreadcrumbItem = {
+      collectionName: selectedCollection,
+      document: selectedDocument
+    };
+
+    try {
+      const collectionNames = dbInfo.collections.map(c => c.name);
+      const result = await findDocumentById(objectId, connectedResource, collectionNames, keyContext);
+      
+      setBreadcrumbs(prev => [...prev, currentBreadcrumb]);
+      setSelectedCollection(result.collectionName);
+      setSelectedDocument(result.document);
+      await fetchSchemaForCollection(result.collectionName);
+    } catch(e) {
+      if (e instanceof Error) setError(e.message);
+      else setError("An unknown error occurred while finding the document.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedDocument, selectedCollection, connectedResource, dbInfo.collections, fetchSchemaForCollection]);
+
+  const handleBreadcrumbClick = useCallback(async (index: number) => {
+    const targetState = breadcrumbs[index];
+    const newBreadcrumbs = breadcrumbs.slice(0, index);
+
+    setBreadcrumbs(newBreadcrumbs);
+    setSelectedCollection(targetState.collectionName);
+    setSelectedDocument(targetState.document);
+    await fetchSchemaForCollection(targetState.collectionName);
+  }, [breadcrumbs, fetchSchemaForCollection]);
+
   const renderSortArrow = (key: 'name' | 'count') => {
     if (collectionSortKey !== key) return null;
     return collectionSortOrder === 'asc' ? <ArrowUpIcon className="w-3 h-3" /> : <ArrowDownIcon className="w-3 h-3" />;
   };
 
   const renderDocumentList = () => {
-    if (isLoadingDocuments && documents.length === 0) {
+    if (isLoading && documents.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
           <SpinnerIcon className="w-8 h-8" />
@@ -223,10 +268,10 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
       );
     }
     
-    if (documentsError) {
+    if (error && !isLoading) {
         return (
             <div className="p-4 text-red-600 bg-red-50 border border-red-200 text-sm rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
-                {documentsError}
+                {error}
             </div>
         );
     }
@@ -239,7 +284,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
       );
     }
 
-    if (documents.length === 0 && !isLoadingDocuments) {
+    if (documents.length === 0 && !isLoading) {
       return (
         <div className="text-center text-slate-500 dark:text-slate-400 py-10">
           <p>No documents found.</p>
@@ -250,7 +295,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
 
     return (
       <div className="flex flex-col h-full">
-        <div className={`flex-grow overflow-y-auto ${isLoadingDocuments ? 'opacity-50' : ''}`}>
+        <div className={`flex-grow overflow-y-auto ${isLoading ? 'opacity-50' : ''}`}>
           <ul className="divide-y divide-slate-200 dark:divide-slate-700">
             {documents.map((doc, i) => {
                 const docId = doc._id?.$oid || doc._id || `doc-index-${i}`;
@@ -270,7 +315,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
         </div>
         {/* Pagination Controls */}
         <div className="flex-shrink-0 p-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage <= 1 || isLoadingDocuments} className="px-3 py-1 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage <= 1 || isLoading} className="px-3 py-1 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
                 Previous
             </button>
             <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -281,13 +326,13 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
                     onChange={handlePageInputChange}
                     onKeyDown={handlePageInputSubmit}
                     onBlur={handlePageInputSubmit}
-                    disabled={isLoadingDocuments || totalPages <= 1}
+                    disabled={isLoading || totalPages <= 1}
                     className="w-12 text-center bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md text-sm text-slate-900 dark:text-slate-100 disabled:opacity-50"
                     aria-label="Current page"
                 />
                 <span>of {totalPages}</span>
             </div>
-             <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages || isLoadingDocuments} className="px-3 py-1 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
+             <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages || isLoading} className="px-3 py-1 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
                 Next
             </button>
         </div>
@@ -296,31 +341,38 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
   };
 
   const renderEditorPanel = () => {
+    if (isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
+                <SpinnerIcon className="w-8 h-8" />
+            </div>
+        )
+    }
+    if (error && selectedCollection) {
+        return (
+            <div className="p-4 text-red-600 bg-red-50 border border-red-200 text-sm rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
+                {error}
+            </div>
+        );
+    }
     if (!selectedDocument) {
       return (
         <div className="text-center text-slate-500 dark:text-slate-400 py-10">
-          <p>Select a document to view and edit it here.</p>
+          <p>Select a document to view it here.</p>
         </div>
       );
     }
-    const docId = selectedDocument._id?.$oid || selectedDocument._id || 'N/A';
+    
     return (
       <div className="animate-fade-in-fast space-y-4">
-        <header className="flex justify-between items-center">
-            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider truncate">
-              Document: <span className="font-mono ml-1">{String(docId)}</span>
-            </h3>
-            <button 
-                onClick={() => setSelectedDocument(null)} 
-                className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                title="Close document view"
-            >
-                <XIcon className="w-4 h-4"/>
-            </button>
-        </header>
-        <JsonDisplay data={selectedDocument} />
+        <JsonDisplay data={selectedDocument} onObjectIdClick={handleObjectIdClick}/>
       </div>
     );
+  }
+
+  const getDocId = (doc: Record<string, any>): string => {
+    const id = doc?._id?.$oid || doc?._id;
+    return String(id ?? 'N/A');
   }
 
   return (
@@ -402,11 +454,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
                     </h2>
                     <button
                         onClick={handleRefresh}
-                        disabled={!selectedCollection || isLoadingDocuments || isFetchingSchema}
+                        disabled={!selectedCollection || isLoading || isFetchingSchema}
                         className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Refresh documents and schema"
                     >
-                        <RefreshIcon className={`w-4 h-4 ${(isLoadingDocuments || isFetchingSchema) ? 'animate-spin' : ''}`} />
+                        <RefreshIcon className={`w-4 h-4 ${(isLoading || isFetchingSchema) ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
                 <div className="space-y-2">
@@ -443,8 +495,29 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ connectedResource, 
 
           {/* Column 3: Document Editor */}
           <div className="w-2/4 xl:w-3/5 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
-            <div className="p-4">
-              <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4">Editor</h2>
+            <div className="p-4 space-y-4">
+              <header className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Editor</h2>
+                {selectedDocument && <button onClick={() => { setSelectedDocument(null); setBreadcrumbs([]); }} className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Close document view"><XIcon className="w-4 h-4"/></button>}
+              </header>
+
+              {/* Breadcrumbs */}
+              {breadcrumbs.length > 0 && selectedDocument && (
+                <div className="flex items-center flex-wrap gap-1 text-sm text-slate-500 dark:text-slate-400 p-2 bg-slate-200 dark:bg-slate-800 rounded-md">
+                    {breadcrumbs.map((crumb, i) => (
+                        <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
+                            <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline hover:text-blue-500 dark:hover:text-blue-400 truncate max-w-[20ch]">
+                                <span className="font-semibold">{crumb.collectionName}</span>
+                                <span className="font-mono"> / {getDocId(crumb.document)}</span>
+                            </button>
+                            <ChevronRightIcon className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                        </React.Fragment>
+                    ))}
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[20ch]">
+                        {selectedCollection} / <span className="font-mono">{getDocId(selectedDocument)}</span>
+                    </span>
+                </div>
+              )}
                {renderEditorPanel()}
             </div>
           </div>

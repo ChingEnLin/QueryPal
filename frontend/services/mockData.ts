@@ -90,18 +90,22 @@ const mockProductsCollectionInfo: CollectionInfo = {
     },
 };
 
-const mockOrdersCollectionInfo: CollectionInfo = {
+export const mockOrdersCollectionInfo: CollectionInfo = {
     name: 'orders',
     documentCount: 500,
     averageDocumentSize: '3.1 KB',
     indexes: ['_id_', 'userId_1', 'orderDate_1'],
     sampleDocument: {
         _id: { $oid: '60d5ec49f5a8a1e9c8d5c8a3'},
-        userId: { $oid: '60d5ec49f5a8a1e9c8d5c8a1' },
+        userId: { $oid: '60d5ec49f5a8a1e9c8d5c800' }, // Reference to a mock user
         orderDate: { $date: '2023-10-25T14:30:00Z' },
         total: 75.50,
         items: [
             { productId: { $oid: '60d5ec49f5a8a1e9c8d5c8a2' }, quantity: 2},
+        ],
+        relatedProductIds: [
+            "60d5ec49f5a8a1e9c8d5c8a2",
+            "60d5ec49f5a8a1e9c8d5c8b2"
         ]
     }
 };
@@ -272,4 +276,31 @@ export const mockUsersDocuments: Record<string, any>[] = [
             profileViews: Math.floor(Math.random() * 1000)
         };
     })
+];
+
+export const mockProductsDocuments: Record<string, any>[] = [
+    {
+        _id: { $oid: '60d5ec49f5a8a1e9c8d5c8a2'},
+        name: 'Wireless Mouse',
+        sku: 'WM-101',
+        price: 25.99,
+        category: 'Electronics',
+        stock: 150,
+    },
+    {
+        _id: { $oid: '60d5ec49f5a8a1e9c8d5c8b2'},
+        name: 'Mechanical Keyboard',
+        sku: 'MK-202',
+        price: 129.99,
+        category: 'Electronics',
+        stock: 75,
+    },
+    {
+        _id: { $oid: '60d5ec49f5a8a1e9c8d5c8c3'},
+        name: '4K Monitor',
+        sku: 'MON-4K-300',
+        price: 499.50,
+        category: 'Monitors',
+        stock: 40,
+    }
 ];
