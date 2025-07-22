@@ -272,7 +272,7 @@ export const clearSystemCache = async (): Promise<{ message: string }> => {
  * @param resource The database account and name context.
  * @param page The page number to fetch.
  * @param limit The number of documents per page.
- * @param searchTerm An optional term to filter documents by.
+ * @param filter An optional object with key and value to filter documents by.
  * @returns A promise resolving to a paginated list of documents.
  */
 export const getDocuments = async (
@@ -280,20 +280,31 @@ export const getDocuments = async (
     resource: SelectedResource, 
     page: number, 
     limit: number, 
-    searchTerm?: string
+    filter?: { key: string, value: string }
 ): Promise<PaginatedDocumentsResponse> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
-        console.log(`DEV MODE: Fetching documents for ${collectionName}, page ${page}, search: "${searchTerm}"`);
+        console.log(`DEV MODE: Fetching documents for ${collectionName}, page ${page}, filter:`, filter);
         await mockDelay(800);
         
-        // To make the mock functional for any collection, we'll use the users documents as a sample for all.
+        // Helper to access nested properties by a dot-notation string
+        const getNestedValue = (obj: any, path: string): any => {
+            return path.split('.').reduce((o, k) => (o && o[k] !== undefined) ? o[k] : null, obj);
+        };
+
         const sourceDocs = mockUsersDocuments;
         
-        const filteredDocs = searchTerm
-            ? sourceDocs.filter(doc => 
-                JSON.stringify(doc).toLowerCase().includes(searchTerm.toLowerCase())
-            )
+        const filteredDocs = filter && filter.value
+            ? sourceDocs.filter(doc => {
+                const searchVal = filter.value.toLowerCase();
+                if (filter.key === 'all') {
+                    // Global search
+                    return JSON.stringify(doc).toLowerCase().includes(searchVal);
+                }
+                // Targeted field search
+                const value = getNestedValue(doc, filter.key);
+                return value !== null && String(value).toLowerCase().includes(searchVal);
+            })
             : sourceDocs;
 
         const totalDocuments = filteredDocs.length;
@@ -333,7 +344,7 @@ export const getDocuments = async (
             collection_name: collectionName,
             page,
             limit,
-            search_term: searchTerm,
+            filter: filter && filter.value ? filter : undefined,
         }),
     });
 

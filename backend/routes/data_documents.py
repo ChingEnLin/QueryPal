@@ -22,5 +22,5 @@ def get_documents(
         collection_name=body.collection_name,
         page=body.page,
         limit=body.limit,
-        search_term=body.search_term,
+        filter=body.filter.dict() if body.filter else None,
     )

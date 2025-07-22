@@ -1,13 +1,18 @@
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
+
+class DataDocumentsFilter(BaseModel):
+    key: str
+    value: str
+
 class DataDocumentsRequest(BaseModel):
     account_id: str
     database_name: str
     collection_name: str
     page: int = 1
     limit: int = 20
-    search_term: Optional[str] = None
+    filter: Optional[DataDocumentsFilter] = None
 
 class DataDocumentsResponse(BaseModel):
     documents: List[Dict[str, Any]]

@@ -137,15 +137,19 @@ Fetches a paginated and searchable list of documents from a collection.
         "collection_name": "users",
         "page": 1,
         "limit": 20,
-        "search_term": "john" 
+        "filter": {
+            "key": "country",
+            "value": "Canada"
+        }
     }
     ```
-    - `search_term` is optional. The backend should perform a case-insensitive search across multiple fields if provided.
+    - `filter` is optional. If provided, the backend should perform a case-insensitive search.
+    - `filter.key` can be `"all"` for a global search, or a specific field name (e.g., `"country"`, `"user.address.city"`).
 
 -   **Success Response (200):** A paginated result object.
     ```json
     {
-        "documents": [ { "_id": "...", "name": "John Doe", ... } ],
+        "documents": [ { "_id": "...", "name": "John Doe", "country": "Canada", ... } ],
         "currentPage": 1,
         "totalPages": 5,
         "totalDocuments": 95
