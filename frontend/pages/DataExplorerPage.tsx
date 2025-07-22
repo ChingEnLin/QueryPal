@@ -472,7 +472,10 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                 const isPinned = isDocumentPinned(doc);
 
                 return (
-                    <li key={docId} className={`flex items-center justify-between transition-colors ${isSelected ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}>
+                    <li
+                        key={docId}
+                        className={`flex items-center justify-between transition-colors group ${isSelected ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                    >
                         <button
                             onClick={() => setSelectedDocument(doc)}
                             className="flex-grow text-left p-3 text-sm"
@@ -481,10 +484,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                         </button>
                         <button
                             onClick={() => handleTogglePin(doc, selectedCollection!)}
-                            className={`p-2 mr-2 rounded-full transition-colors ${isPinned ? 'text-blue-500 hover:bg-blue-200/50 dark:hover:bg-blue-900/40' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                            className={`p-2 mr-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isPinned ? 'text-blue-500 hover:bg-blue-200/50 dark:hover:bg-blue-900/40' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'} ${!isPinned ? 'opacity-0 group-hover:opacity-100' : ''}`}
                             title={isPinned ? 'Unpin document' : 'Pin document'}
+                            aria-label={isPinned ? 'Unpin document' : 'Pin document'}
                         >
-                            <PinIcon className={`w-5 h-5 ${isPinned ? 'fill-current' : ''}`} />
+                            <PinIcon className={`w-5 h-5 ${isPinned ? 'fill-current' : 'stroke-current'} transition-colors`} />
                         </button>
                     </li>
                 );
@@ -817,14 +821,18 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                         {cacheClearStatus === 'idle' && <>Clear Cache</>}
                     </button>
                     {selectedDocument && (
-                        <button
-                            onClick={() => handleTogglePin(selectedDocument, selectedCollection!)}
-                            className={`flex items-center gap-2 px-3 py-1.5 border text-xs font-medium rounded-md transition-colors ${isDocumentPinned(selectedDocument) ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-                            title={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
-                        >
-                            <PinIcon className={`w-4 h-4 ${isDocumentPinned(selectedDocument) ? 'fill-current' : ''}`} />
-                            <span>{isDocumentPinned(selectedDocument) ? 'Pinned' : 'Pin'}</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-slate-400 dark:text-slate-500">ID:</span>
+                            <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{getDocId(selectedDocument)}</span>
+                            <button
+                                onClick={() => handleTogglePin(selectedDocument, selectedCollection!)}
+                                className={`ml-2 p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isDocumentPinned(selectedDocument) ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                title={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
+                                aria-label={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
+                            >
+                                <PinIcon className={`w-5 h-5 ${isDocumentPinned(selectedDocument) ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                            </button>
+                        </div>
                     )}
                 </div>
                 {selectedDocument && <button onClick={() => { setSelectedDocument(null); setBreadcrumbs([]); }} className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Close document view"><XIcon className="w-4 h-4"/></button>}
