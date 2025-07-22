@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 
 class DataDocumentsFilter(BaseModel):
     key: str
-    value: str
+    value: Any  # Can be str, int, etc. depending on the field type
 
 class DataDocumentsRequest(BaseModel):
     account_id: str

@@ -284,7 +284,7 @@ export const getDocuments = async (
     resource: SelectedResource, 
     page: number, 
     limit: number, 
-    filter?: { key: string, value: string }
+    filter?: { key: string, value: any }
 ): Promise<PaginatedDocumentsResponse> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
@@ -304,16 +304,27 @@ export const getDocuments = async (
             ? [mockOrdersCollectionInfo.sampleDocument]
             : [];
         
-        const filteredDocs = filter && filter.value
+        const filteredDocs = (filter && filter.value !== null && filter.value !== undefined && filter.value !== '')
             ? sourceDocs.filter(doc => {
-                const searchVal = filter.value.toLowerCase();
+                const searchVal = filter.value;
                 if (filter.key === 'all') {
-                    // Global search
-                    return JSON.stringify(doc).toLowerCase().includes(searchVal);
+                    // Global search: convert search value to string and do a substring search
+                    const searchTerm = String(searchVal).toLowerCase();
+                    return JSON.stringify(doc).toLowerCase().includes(searchTerm);
                 }
+                
                 // Targeted field search
-                const value = getNestedValue(doc, filter.key);
-                return value !== null && String(value).toLowerCase().includes(searchVal);
+                const docValue = getNestedValue(doc, filter.key);
+
+                if (docValue === null || docValue === undefined) return false;
+
+                // if search value is a string, do case-insensitive contains.
+                if (typeof searchVal === 'string') {
+                    return String(docValue).toLowerCase().includes(searchVal.toLowerCase());
+                }
+                
+                // for other types, do an exact match
+                return docValue === searchVal;
             })
             : sourceDocs;
 
@@ -354,7 +365,7 @@ export const getDocuments = async (
             collection_name: collectionName,
             page,
             limit,
-            filter: filter && filter.value ? filter : undefined,
+            filter: filter && (filter.value !== '' && filter.value !== null && filter.value !== undefined) ? filter : undefined,
         }),
     });
 

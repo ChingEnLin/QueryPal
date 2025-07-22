@@ -28,7 +28,7 @@ def get_documents(
         collection_name=body.collection_name,
         page=body.page,
         limit=body.limit,
-        filter=body.filter.dict() if body.filter else None,
+        filter=body.filter.model_dump() if body.filter else None,
     )
 
 

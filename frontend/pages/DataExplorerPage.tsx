@@ -20,6 +20,37 @@ import MoonIcon from '../components/icons/MoonIcon';
 import CheckIcon from '../components/icons/CheckIcon';
 
 
+/**
+ * Attempts to convert a string filter value into a more specific type (boolean, number).
+ * This allows for precise filtering on non-string fields.
+ * @param value The raw string value from the filter input.
+ * @returns The coerced value (boolean, number) or the original string.
+ */
+const getCoercedFilterValue = (value: string): any => {
+    const trimmedValue = value.trim();
+
+    // Don't convert empty string to 0
+    if (trimmedValue === '') {
+        return value;
+    }
+
+    if (trimmedValue.toLowerCase() === 'true') {
+        return true;
+    }
+    if (trimmedValue.toLowerCase() === 'false') {
+        return false;
+    }
+    
+    // Check if it's a valid number representation.
+    // isFinite is crucial to reject partially-valid numbers like "1.2.3" or "42px".
+    if (!isNaN(Number(trimmedValue)) && isFinite(Number(trimmedValue))) {
+        return Number(trimmedValue);
+    }
+
+    return value; // Return original string if no conversion was possible.
+};
+
+
 interface DataExplorerPageProps {
   initialResource: SelectedResource;
   initialDbInfo: DbInfo;
@@ -152,7 +183,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     setIsLoading(true);
     setError(null);
     try {
-      const response = await getDocuments(selectedCollection, currentResource, currentPage, 20, { key: filterKey, value: debouncedFilterValue });
+      const processedValue = getCoercedFilterValue(debouncedFilterValue);
+      const response = await getDocuments(selectedCollection, currentResource, currentPage, 20, { key: filterKey, value: processedValue });
       setDocuments(response.documents);
       setTotalPages(response.totalPages);
       setTotalDocuments(response.totalDocuments);

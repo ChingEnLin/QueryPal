@@ -34,8 +34,8 @@ def fetch_documents(connection_string: str, database_name: str, collection_name:
                 if or_clauses:
                     query = {"$or": or_clauses}
         else:
-            # If key contains '_id', treat value as ObjectId
-            if '_id' in key:
+            # If key is '_id', treat value as ObjectId
+            if key == "_id":
                 try:
                     query = {'_id': ObjectId(value)}
                 except Exception:
@@ -43,7 +43,10 @@ def fetch_documents(connection_string: str, database_name: str, collection_name:
                     query = {key: value}
             else:
                 # Support dot notation for nested fields
-                query = {key: {"$regex": re.escape(value), "$options": "i"}}
+                if isinstance(value, str):
+                    query = {key: {"$regex": re.escape(value), "$options": "i"}}
+                else:
+                    query = {key: value}
     total_documents = collection.count_documents(query)
     total_pages = max(1, (total_documents + limit - 1) // limit)
     skip = (page - 1) * limit
