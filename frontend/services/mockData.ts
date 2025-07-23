@@ -306,3 +306,39 @@ export const mockProductsDocuments: Record<string, any>[] = [
         stock: 40,
     }
 ];
+
+/**
+ * Simulates updating a document in a collection for development mode.
+ * @param collection The name of the collection.
+ * @param id The document ID.
+ * @param content The updated document content.
+ * @returns A promise resolving to a mock result object.
+ */
+export async function mockUpdateDocument(collection: string, id: string, content: any) {
+  await mockDelay(600);
+  // Simulate update in mock data arrays
+  let updated = false;
+  if (collection === 'users') {
+    const idx = mockUsersDocuments.findIndex(doc => (doc._id?.$oid ?? doc._id) === id);
+    if (idx !== -1) {
+      mockUsersDocuments[idx] = { ...mockUsersDocuments[idx], ...content };
+      updated = true;
+    }
+  } else if (collection === 'products') {
+    const idx = mockProductsDocuments.findIndex(doc => (doc._id?.$oid ?? doc._id) === id);
+    if (idx !== -1) {
+      mockProductsDocuments[idx] = { ...mockProductsDocuments[idx], ...content };
+      updated = true;
+    }
+  } else if (collection === 'orders') {
+    if ((mockOrdersCollectionInfo.sampleDocument._id?.$oid ?? mockOrdersCollectionInfo.sampleDocument._id) === id) {
+      mockOrdersCollectionInfo.sampleDocument = { ...mockOrdersCollectionInfo.sampleDocument, ...content };
+      updated = true;
+    }
+  }
+  if (updated) {
+    return { message: 'Document updated successfully (mock).' };
+  } else {
+    throw new Error('Mock: Document not found for update.');
+  }
+}

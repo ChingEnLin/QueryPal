@@ -155,6 +155,32 @@ Fetches a paginated and searchable list of documents from a collection.
         "totalDocuments": 95
     }
     ```
+
+---
+
+### `PUT /api/data/documents`
+
+Update a document in the specified collection by its ID. The request body should contain the updated document fields. Returns the updated document on success.
+
+- **Method:** PUT
+- **URL Params:**
+  - `collection` (string): Name of the collection
+  - `content` (object): The document content to update
+  - `id` (string): Document ID
+- **Body:** JSON object with updated fields (partial or full document)
+
+#### Example
+```
+PUT /api/data/documents
+{
+  "name": "New Name",
+  "email": "new@email.com"
+}
+```
+
+- **Success Response (200):** The updated document object
+- **Error Response (400/404):** Error message
+
 ---
 
 ### `POST /api/data/find_by_id`

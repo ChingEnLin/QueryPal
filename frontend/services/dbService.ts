@@ -1,6 +1,4 @@
 
-
-
 import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, PaginatedDocumentsResponse, FoundDocumentResponse } from '../types';
 import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
@@ -16,7 +14,8 @@ import {
     mockDocCacheClearResult,
     mockUsersDocuments,
     mockProductsDocuments,
-    mockOrdersCollectionInfo
+    mockOrdersCollectionInfo,
+    mockUpdateDocument
 } from './mockData';
 
 /**
@@ -495,3 +494,30 @@ export const clearDocumentsCache = async (): Promise<{ message: string }> => {
     
     return response.json();
 };
+
+/**
+ * Updates a document in the backend or mock data (DEV mode).
+ * @param collection The name of the collection.
+ * @param id The document ID.
+ * @param content The updated document content.
+ * @returns A promise resolving to the update result.
+ */
+export async function updateDocument(collection: string, id: string, content: any) {
+  // --- DEVELOPMENT MOCK ---
+  if (!USE_MSAL_AUTH) {
+    return mockUpdateDocument(collection, id, content);
+  }
+  // --- END DEVELOPMENT MOCK ---
+  const response = await fetch('/api/documents', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ collection, id, content }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to update document.');
+  }
+  return response.json();
+}

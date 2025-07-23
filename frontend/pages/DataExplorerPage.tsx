@@ -18,9 +18,11 @@ import {
     TrashIcon,
     ArrowLeftIcon,
     SearchIcon,
-    XIcon
+    XIcon,
+    EditIcon
 } from '../components/icons/material-icons-imports';
 import JsonDisplay from '../components/JsonDisplay';
+import DocumentEditView from '../components/DocumentDetailView';
 import { useTheme } from '../contexts/ThemeContext';
 
 
@@ -522,20 +524,22 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     );
   };
 
+  const [editMode, setEditMode] = useState(false);
+
   const renderEditorPanel = () => {
     if (isLoading && !selectedDocument) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
-                <SpinnerIcon className="w-8 h-8" />
-            </div>
-        )
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
+          <SpinnerIcon className="w-8 h-8" />
+        </div>
+      );
     }
     if (error && selectedCollection) {
-        return (
-            <div className="p-4 text-red-600 bg-red-50 border border-red-200 text-sm rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
-                {error}
-            </div>
-        );
+      return (
+        <div className="p-4 text-red-600 bg-red-50 border border-red-200 text-sm rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
+          {error}
+        </div>
+      );
     }
     if (!selectedDocument) {
       return (
@@ -544,10 +548,25 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
         </div>
       );
     }
-    
     return (
-      <div className={`space-y-4 ${isLoading ? 'opacity-50' : 'animate-fade-in-fast'}`}>
-        <JsonDisplay data={selectedDocument} onObjectIdClick={handleObjectIdClick}/>
+      <div className={`space-y-4 ${isLoading ? 'opacity-50' : 'animate-fade-in-fast'}`}> 
+        {/* Toolbar for edit/view mode */}
+        {/* Toolbar removed: Pin/Edit/Cancel now handled in header ID row */}
+        {/* Read-only view */}
+        {!editMode && (
+          <div className="bg-slate-100 dark:bg-slate-800 rounded p-3 text-xs overflow-x-auto text-slate-800 dark:text-slate-100">
+            <JsonDisplay data={selectedDocument} onObjectIdClick={handleObjectIdClick}/>
+          </div>
+        )}
+        {/* Edit mode: render DocumentEditView */}
+        {editMode && (
+          <DocumentEditView
+            document={selectedDocument}
+            collection={selectedCollection}
+            docId={getDocId(selectedDocument)}
+            loading={isLoading}
+          />
+        )}
       </div>
     );
   }
@@ -812,13 +831,14 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                     <button
                         onClick={handleClearDocCache}
                         disabled={cacheClearStatus !== 'idle'}
-                        className="flex items-center gap-2 px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-xs font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
                         title="Clear the server cache for linked document lookups"
+                        aria-label="Clear cache"
                     >
-                        {cacheClearStatus === 'loading' && <><SpinnerIcon className="w-4 h-4" /><span>Clearing...</span></>}
-                        {cacheClearStatus === 'success' && <><CheckIcon className="w-4 h-4 text-green-500" /><span>Cleared!</span></>}
-                        {cacheClearStatus === 'error' && <><XIcon className="w-4 h-4 text-red-500" /><span>Error</span></>}
-                        {cacheClearStatus === 'idle' && <>Clear Cache</>}
+                        {cacheClearStatus === 'loading' && <SpinnerIcon className="w-5 h-5 animate-spin" />}
+                        {cacheClearStatus === 'success' && <CheckIcon className="w-5 h-5 text-green-500" />}
+                        {cacheClearStatus === 'error' && <XIcon className="w-5 h-5 text-red-500" />}
+                        {cacheClearStatus === 'idle' && <RefreshIcon className="w-5 h-5" />}
                     </button>
                     {selectedDocument && (
                         <div className="flex items-center gap-2">
@@ -832,6 +852,28 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                             >
                                 <PinIcon className={`w-5 h-5 ${isDocumentPinned(selectedDocument) ? 'fill-current' : 'stroke-current'} transition-colors`} />
                             </button>
+                            {!editMode && (
+                              <button
+                                className="p-2 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                onClick={() => setEditMode(true)}
+                                disabled={isLoading}
+                                title="Edit document"
+                                aria-label="Edit document"
+                              >
+                                <EditIcon className="w-5 h-5" />
+                              </button>
+                            )}
+                            {editMode && (
+                              <button
+                                className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                                onClick={() => setEditMode(false)}
+                                disabled={isLoading}
+                                title="Cancel edit"
+                                aria-label="Cancel edit"
+                              >
+                                <XIcon className="w-5 h-5" />
+                              </button>
+                            )}
                         </div>
                     )}
                 </div>
