@@ -4,9 +4,10 @@ from models.data_documents import (
     DataDocumentsRequest,
     DataDocumentsResponse,
     FindByIdRequest,
-    FindByIdResponse
+    FindByIdResponse,
+    UpdateDocumentRequest
 )
-from services.data_documents_service import find_document_by_id, fetch_documents
+from services.data_documents_service import find_document_by_id, fetch_documents, update_document
 from services.azure_auth import exchange_token_obo
 from services.azure_cosmos_resources import get_connection_string
 
@@ -30,6 +31,30 @@ def get_documents(
         limit=body.limit,
         filter=body.filter.model_dump() if body.filter else None,
     )
+
+@router.put("/documents", response_model=dict)
+def put_update_document(
+    body: UpdateDocumentRequest = Body(...),
+    authorization: str = Header(...)
+):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    user_token = authorization.replace("Bearer ", "")
+    access_token = exchange_token_obo(user_token)
+    connection_string = get_connection_string(body.account_id, access_token)
+    updated_doc = update_document(
+        connection_string=connection_string,
+        database_name=body.database_name,
+        collection_name=body.collection,
+        document_id=body.id,
+        content=body.content
+    )
+    if updated_doc:
+        # Convert ObjectId to $oid format for JSON compatibility
+        if '_id' in updated_doc and isinstance(updated_doc['_id'], ObjectId):
+            updated_doc['_id'] = {'$oid': str(updated_doc['_id'])}
+        return updated_doc
+    raise HTTPException(status_code=404, detail=f"Document with ID '{body.id}' not found or not updated.")
 
 
 @router.post("/find_by_id", response_model=FindByIdResponse)

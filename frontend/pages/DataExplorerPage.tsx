@@ -561,6 +561,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
         {/* Edit mode: render DocumentEditView */}
         {editMode && (
           <DocumentEditView
+            accountId={currentResource.accountId}
+            databaseName={currentResource.databaseName}
             document={selectedDocument}
             collection={selectedCollection}
             docId={getDocId(selectedDocument)}

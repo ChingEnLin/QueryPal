@@ -1,4 +1,3 @@
-
 from typing import Tuple, Optional
 from pymongo import MongoClient
 from models.data_documents import DataDocumentsRequest, DataDocumentsResponse
@@ -99,3 +98,20 @@ def find_document_by_id(connection_string: str, database_name: str, collection_n
         if doc:
             return doc, collection_name
     return None, None
+
+def update_document(connection_string: str, database_name: str, collection_name: str, document_id: str, content: dict) -> dict:
+    client = MongoClient(connection_string)
+    db = client[database_name]
+    collection = db[collection_name]
+    # Try to update the document by _id
+    try:
+        content.pop('_id', None)  # Remove _id if present in content
+        result = collection.update_one({'_id': ObjectId(document_id)}, {'$set': content})
+        if result.matched_count == 0:
+            return None
+        updated_doc = collection.find_one({'_id': ObjectId(document_id)})
+        if updated_doc:
+            updated_doc['_id'] = ObjectId(updated_doc['_id'])
+        return updated_doc
+    except Exception as e:
+        return None

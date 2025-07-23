@@ -1,4 +1,3 @@
-
 import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, PaginatedDocumentsResponse, FoundDocumentResponse } from '../types';
 import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
@@ -502,18 +501,31 @@ export const clearDocumentsCache = async (): Promise<{ message: string }> => {
  * @param content The updated document content.
  * @returns A promise resolving to the update result.
  */
-export async function updateDocument(collection: string, id: string, content: any) {
+export async function updateDocument(accountId: string, databaseName: string, collection: string, id: string, content: any) {
   // --- DEVELOPMENT MOCK ---
   if (!USE_MSAL_AUTH) {
     return mockUpdateDocument(collection, id, content);
   }
   // --- END DEVELOPMENT MOCK ---
-  const response = await fetch('/api/documents', {
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) {
+    throw new Error("No signed-in user found.");
+  }
+  const tokenResponse = await msalInstance.acquireTokenSilent({
+    ...loginRequest,
+    account: accounts[0],
+  });
+  const accessToken = tokenResponse.accessToken;
+  const response = await fetch(`${API_BASE_URL}/data/documents`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ collection, id, content }),
+    body: JSON.stringify({ 
+        account_id: accountId,
+        database_name: databaseName,
+        collection, id, content }),
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

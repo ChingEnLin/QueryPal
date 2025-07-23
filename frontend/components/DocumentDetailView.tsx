@@ -6,6 +6,8 @@ import { updateDocument } from '../services/dbService';
 
 
 interface DocumentEditViewProps {
+  accountId?: string;
+  databaseName?: string;
   document: Record<string, any>;
   collection: string | null;
   docId: string;
@@ -13,7 +15,7 @@ interface DocumentEditViewProps {
   onCancel?: () => void;
 }
 
-const DocumentEditView: React.FC<DocumentEditViewProps> = ({ document, collection, docId, loading, onCancel }) => {
+const DocumentEditView: React.FC<DocumentEditViewProps> = ({ accountId, databaseName, document, collection, docId, loading, onCancel }) => {
   const [jsonValue, setJsonValue] = useState(JSON.stringify(document, null, 2));
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const { theme } = useTheme();
@@ -22,7 +24,7 @@ const DocumentEditView: React.FC<DocumentEditViewProps> = ({ document, collectio
     try {
       const parsed = JSON.parse(jsonValue);
       if (!collection || !docId) throw new Error('Missing collection or document ID');
-      await updateDocument(collection, docId, parsed);
+      await updateDocument(accountId, databaseName, collection, docId, parsed);
       setFeedback({ type: 'success', message: 'Document saved successfully.' });
       if (onCancel) onCancel();
     } catch (e: any) {
