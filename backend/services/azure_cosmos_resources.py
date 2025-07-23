@@ -4,10 +4,10 @@ import pymongo
 import bson
 
 # Cache with max 100 entries and 10-minute TTL
-_cosmos_list_cache = TTLCache(maxsize=5, ttl=600)
-_connection_string_cache = TTLCache(maxsize=5, ttl=600)
-_database_info_cache = TTLCache(maxsize=50, ttl=600)
-_collection_info_cache = TTLCache(maxsize=100, ttl=600)
+_cosmos_list_cache = TTLCache(maxsize=5, ttl=3600)
+_connection_string_cache = TTLCache(maxsize=5, ttl=3600)
+_database_info_cache = TTLCache(maxsize=50, ttl=3600)
+_collection_info_cache = TTLCache(maxsize=100, ttl=3600)
 
 ALL_CACHES = [
     _connection_string_cache,
