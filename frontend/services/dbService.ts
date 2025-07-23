@@ -533,3 +533,41 @@ export async function updateDocument(accountId: string, databaseName: string, co
   }
   return response.json();
 }
+
+/**
+ * Fetches a single document by its ID from the backend.
+ * @param accountId The resource ID of the account.
+ * @param databaseName The name of the database.
+ * @param collectionName The name of the collection.
+ * @param documentId The ID of the document to fetch.
+ * @returns A promise that resolves with the document data.
+ */
+export async function getSingleDocument(accountId: string, databaseName: string, collectionName: string, documentId: string) {
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) {
+    throw new Error("No signed-in user found.");
+  }
+  const tokenResponse = await msalInstance.acquireTokenSilent({
+    ...loginRequest,
+    account: accounts[0],
+  });
+  const accessToken = tokenResponse.accessToken;
+  const response = await fetch(`${API_BASE_URL}/data/document`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      account_id: accountId,
+      database_name: databaseName,
+      collection_name: collectionName,
+      document_id: documentId,
+    }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to fetch document.');
+  }
+  return response.json();
+}

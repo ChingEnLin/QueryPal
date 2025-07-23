@@ -31,9 +31,16 @@ class FindByIdResponse(BaseModel):
     document: Dict[str, Any]
     collectionName: str
 
+
 class UpdateDocumentRequest(BaseModel):
     account_id: str
     database_name: str
     collection: str
     id: str
     content: Dict[str, Any]
+
+class SingleDocumentRequest(BaseModel):
+    account_id: str
+    database_name: str
+    collection_name: str
+    document_id: str

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { Button } from '@mui/material';
+import { Button, CircularProgress } from '@mui/material';
 import MonacoEditor from '@monaco-editor/react';
-import { updateDocument } from '../services/dbService';
+import { updateDocument, getSingleDocument } from '../services/dbService';
 
 
 interface DocumentEditViewProps {
@@ -13,34 +13,45 @@ interface DocumentEditViewProps {
   docId: string;
   loading?: boolean;
   onCancel?: () => void;
+  onSave?: () => void | Promise<void>;
 }
 
-const DocumentEditView: React.FC<DocumentEditViewProps> = ({ accountId, databaseName, document, collection, docId, loading, onCancel }) => {
+const DocumentEditView: React.FC<DocumentEditViewProps> = ({ accountId, databaseName, document, collection, docId, loading, onCancel, onSave }) => {
   const [jsonValue, setJsonValue] = useState(JSON.stringify(document, null, 2));
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const { theme } = useTheme();
+  const [currentDoc, setCurrentDoc] = useState(document);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
+    setIsSaving(true);
     try {
       const parsed = JSON.parse(jsonValue);
       if (!collection || !docId) throw new Error('Missing collection or document ID');
       await updateDocument(accountId, databaseName, collection, docId, parsed);
-      setFeedback({ type: 'success', message: 'Document saved successfully.' });
+      // Fetch the latest document after update
+      if (accountId && databaseName && collection && docId) {
+        const refreshed = await getSingleDocument(accountId, databaseName, collection, docId);
+        setCurrentDoc(refreshed);
+        setJsonValue(JSON.stringify(refreshed, null, 2));
+      }
+      setFeedback({ type: 'success', message: 'Document saved and refreshed.' });
+      if (onSave) await onSave();
       if (onCancel) onCancel();
     } catch (e: any) {
       setFeedback({ type: 'error', message: e?.message || 'Invalid JSON or failed to save.' });
+    } finally {
+      setIsSaving(false);
     }
   };
-
-  // ...existing code...
 
   return (
     <div className="relative p-4 rounded-lg shadow bg-white dark:bg-slate-900">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Edit Document</h3>
         <div className="flex gap-2">
-          <Button variant="contained" color="success" size="small" onClick={handleSave} disabled={loading}>
-            Save
+          <Button variant="contained" color="success" size="small" onClick={handleSave} disabled={loading || isSaving} startIcon={isSaving ? <CircularProgress size={18} color="inherit" /> : undefined}>
+            {isSaving ? 'Saving...' : 'Save'}
           </Button>
         </div>
       </div>

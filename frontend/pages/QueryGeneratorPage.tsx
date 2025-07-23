@@ -21,7 +21,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import MongoIcon from '../components/icons/MongoIcon';
 import {
   XIcon,
-  RefreshIcon,
+  CachedIcon,
   ServerIcon,
   DatabaseIcon,
   HelpIcon,
@@ -75,7 +75,7 @@ const UserMenu: React.FC<{
       if (isClearingCache) return <><SpinnerIcon className="w-4 h-4" /> Clearing...</>;
       if (cacheClearStatus === 'success') return <><CheckIcon className="w-4 h-4" /> Cleared!</>;
       if (cacheClearStatus === 'error') return <>Error</>;
-      return <><RefreshIcon className="w-4 h-4" /> Clear Cache</>;
+      return <><CachedIcon className="w-4 h-4" /> Clear Cache</>;
   };
   
   return (

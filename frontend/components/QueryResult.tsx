@@ -23,7 +23,7 @@ import {
   EditIcon,
   UndoIcon,
   RedoIcon,
-  RefreshIcon
+  RestoreIcon
 } from './icons/material-icons-imports';
 
 interface QueryResultProps {
@@ -363,7 +363,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
                      <div className="flex items-center gap-2">
                         <button onClick={handleUndo} disabled={historyIndex <= 0} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Undo last column change"><UndoIcon className="w-4 h-4"/>Undo</button>
                         <button onClick={handleRedo} disabled={historyIndex >= columnHistory.length - 1} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Redo last column change"><RedoIcon className="w-4 h-4"/>Redo</button>
-                        <button onClick={handleResetColumns} className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600" title="Restore all original columns"><RefreshIcon className="w-4 h-4"/>Reset Columns</button>
+                        <button onClick={handleResetColumns} className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600" title="Restore all original columns"><RestoreIcon className="w-4 h-4"/>Reset Columns</button>
                     </div>
                 ) : (
                    <div ref={downloadButtonRef} className="relative inline-flex rounded-md shadow-sm">

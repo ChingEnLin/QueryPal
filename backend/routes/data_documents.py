@@ -5,9 +5,10 @@ from models.data_documents import (
     DataDocumentsResponse,
     FindByIdRequest,
     FindByIdResponse,
-    UpdateDocumentRequest
+    UpdateDocumentRequest,
+    SingleDocumentRequest
 )
-from services.data_documents_service import find_document_by_id, fetch_documents, update_document
+from services.data_documents_service import find_document_by_id, fetch_documents, update_document, get_single_document
 from services.azure_auth import exchange_token_obo
 from services.azure_cosmos_resources import get_connection_string
 
@@ -80,3 +81,26 @@ def find_by_id(
             doc['_id'] = {'$oid': str(doc['_id'])}
         return FindByIdResponse(document=doc, collectionName=collection_name)
     raise HTTPException(status_code=404, detail=f"Document with ID '{body.document_id}' not found in any of the provided collections.")
+
+
+@router.post("/document", response_model=dict)
+def single_document(
+    body: SingleDocumentRequest = Body(...),
+    authorization: str = Header(...)
+):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    user_token = authorization.replace("Bearer ", "")
+    access_token = exchange_token_obo(user_token)
+    connection_string = get_connection_string(body.account_id, access_token)
+    doc = get_single_document(
+        connection_string=connection_string,
+        database_name=body.database_name,
+        collection_name=body.collection_name,
+        document_id=body.document_id
+    )
+    if doc:
+        if '_id' in doc and isinstance(doc['_id'], ObjectId):
+            doc['_id'] = {'$oid': str(doc['_id'])}
+        return doc
+    raise HTTPException(status_code=404, detail=f"Document with ID '{body.document_id}' not found.")

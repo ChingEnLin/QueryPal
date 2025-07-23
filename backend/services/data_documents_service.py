@@ -115,3 +115,13 @@ def update_document(connection_string: str, database_name: str, collection_name:
         return updated_doc
     except Exception as e:
         return None
+
+def get_single_document(connection_string: str, database_name: str, collection_name: str, document_id: str) -> dict:
+    client = MongoClient(connection_string)
+    db = client[database_name]
+    collection = db[collection_name]
+    try:
+        doc = collection.find_one({'_id': ObjectId(document_id)})
+        return doc
+    except Exception:
+        return None

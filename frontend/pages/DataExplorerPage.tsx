@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { SelectedResource, DbInfo, BreadcrumbItem, CosmosDBAccount } from '../types';
-import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache } from '../services/dbService';
+import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache, getSingleDocument } from '../services/dbService';
 import { extractSchemaTree, SchemaKeyNode } from '../utils/schemaUtils';
 import MongoIcon from '../components/icons/MongoIcon';
 import {
@@ -9,6 +8,8 @@ import {
     ChevronDownIcon,
     ChevronRightIcon,
     RefreshIcon,
+    CachedIcon,
+    ClearAllIcon,
     ArrowUpwardIcon,
     ArrowDownwardIcon,
     SunIcon,
@@ -129,7 +130,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
 
   // --- Editor State ---
   const [selectedDocument, setSelectedDocument] = useState<Record<string, any> | null>(null);
-  
+  const [editMode, setEditMode] = useState(false);
+
   // --- Sorting State ---
   const [collectionSortKey, setCollectionSortKey] = useState<'name' | 'count'>('name');
   const [collectionSortOrder, setCollectionSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -524,7 +526,37 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     );
   };
 
-  const [editMode, setEditMode] = useState(false);
+  const handleEditSave = async () => {
+    if (selectedCollection && selectedDocument) {
+      setIsLoading(true);
+      try {
+        const refreshed = await getSingleDocument(
+          currentResource.accountId,
+          currentResource.databaseName,
+          selectedCollection,
+          getDocId(selectedDocument)
+        );
+        setSelectedDocument(refreshed);
+        // Sync pinned document if present
+        setPinnedDocuments(prev => prev.map(p =>
+          getDocId(p.doc) === getDocId(selectedDocument)
+            ? { ...p, doc: refreshed }
+            : p
+        ));
+      } catch (e) {
+        // Optionally set error
+      } finally {
+        setIsLoading(false);
+        setEditMode(false);
+      }
+    } else {
+      setEditMode(false);
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditMode(false);
+  };
 
   const renderEditorPanel = () => {
     if (isLoading && !selectedDocument) {
@@ -567,6 +599,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
             collection={selectedCollection}
             docId={getDocId(selectedDocument)}
             loading={isLoading}
+            onCancel={handleEditCancel}
+            onSave={handleEditSave}
           />
         )}
       </div>
@@ -717,6 +751,18 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                     {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
                 </button>
                 <button
+                    onClick={handleClearDocCache}
+                    disabled={cacheClearStatus !== 'idle'}
+                    className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    title="Clear the server cache for linked document lookups"
+                    aria-label="Clear cache"
+                >
+                    {cacheClearStatus === 'loading' && <SpinnerIcon className="w-5 h-5 animate-spin" />}
+                    {cacheClearStatus === 'success' && <CheckIcon className="w-5 h-5 text-green-500" />}
+                    {cacheClearStatus === 'error' && <XIcon className="w-5 h-5 text-red-500" />}
+                    {cacheClearStatus === 'idle' && <CachedIcon className="w-5 h-5" />}
+                </button>
+                <button
                     onClick={onNavigateBack}
                     className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                     title="Return to the query generator"
@@ -789,7 +835,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                         className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Refresh documents and schema"
                     >
-                        <RefreshIcon className={`w-4 h-4 ${(isLoading || isFetchingSchema) ? 'animate-spin' : ''}`} />
+                        <ClearAllIcon className={`w-4 h-4 ${(isLoading || isFetchingSchema) ? 'animate-pulse' : ''}`} />
                     </button>
                 </div>
                 <div className="space-y-2">
@@ -830,18 +876,6 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
               <header className="flex justify-between items-center">
                  <div className="flex items-center gap-4">
                     <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Editor</h2>
-                    <button
-                        onClick={handleClearDocCache}
-                        disabled={cacheClearStatus !== 'idle'}
-                        className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                        title="Clear the server cache for linked document lookups"
-                        aria-label="Clear cache"
-                    >
-                        {cacheClearStatus === 'loading' && <SpinnerIcon className="w-5 h-5 animate-spin" />}
-                        {cacheClearStatus === 'success' && <CheckIcon className="w-5 h-5 text-green-500" />}
-                        {cacheClearStatus === 'error' && <XIcon className="w-5 h-5 text-red-500" />}
-                        {cacheClearStatus === 'idle' && <RefreshIcon className="w-5 h-5" />}
-                    </button>
                     {selectedDocument && (
                         <div className="flex items-center gap-2">
                             <span className="font-mono text-xs text-slate-400 dark:text-slate-500">ID:</span>
@@ -854,15 +888,46 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                             >
                                 <PinIcon className={`w-5 h-5 ${isDocumentPinned(selectedDocument) ? 'fill-current' : 'stroke-current'} transition-colors`} />
                             </button>
+                            <button
+                                onClick={async () => {
+                                  if (selectedCollection && selectedDocument) {
+                                    setIsLoading(true);
+                                    try {
+                                      const refreshed = await getSingleDocument(
+                                        currentResource.accountId,
+                                        currentResource.databaseName,
+                                        selectedCollection,
+                                        getDocId(selectedDocument)
+                                      );
+                                      setSelectedDocument(refreshed);
+                                      setPinnedDocuments(prev => prev.map(p =>
+                                        getDocId(p.doc) === getDocId(selectedDocument)
+                                          ? { ...p, doc: refreshed }
+                                          : p
+                                      ));
+                                    } catch (e) {
+                                      // Optionally set error
+                                    } finally {
+                                      setIsLoading(false);
+                                    }
+                                  }
+                                }}
+                                className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                title="Refresh document"
+                                aria-label="Refresh document"
+                                disabled={isLoading}
+                            >
+                                <RefreshIcon className="w-5 h-5" />
+                            </button>
                             {!editMode && (
                               <button
-                                className="p-2 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                 onClick={() => setEditMode(true)}
                                 disabled={isLoading}
                                 title="Edit document"
                                 aria-label="Edit document"
                               >
-                                <EditIcon className="w-5 h-5" />
+                                <EditIcon className={`w-5 h-5 ${editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
                               </button>
                             )}
                             {editMode && (
@@ -912,6 +977,13 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
           }
           .animate-fade-in-fast { 
             animation: fade-in-fast 0.3s ease-out forwards; 
+          }
+          @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+          }
+          .animate-pulse { 
+            animation: pulse 1s infinite; 
           }
       `}</style>
     </div>
