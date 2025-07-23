@@ -1,11 +1,12 @@
 from typing import Tuple, Optional
 from pymongo import MongoClient
-from models.data_documents import DataDocumentsRequest, DataDocumentsResponse
-from models.schemas import CollectionContext
-from services.gemini_service import generate_query_from_prompt
 from bson import ObjectId
 import re
 from cachetools import TTLCache, cached
+from datetime import datetime
+from models.data_documents import DataDocumentsRequest, DataDocumentsResponse
+from models.schemas import CollectionContext
+from services.gemini_service import generate_query_from_prompt
 
 # Caches: 10 min TTL, 100 max entries
 _find_by_id_cache = TTLCache(maxsize=100, ttl=600)
@@ -106,6 +107,14 @@ def update_document(connection_string: str, database_name: str, collection_name:
     # Try to update the document by _id
     try:
         content.pop('_id', None)  # Remove _id if present in content
+        # Convert ISO string datetimes to Python datetime objects
+        for key in ['datetime_creation', 'datetime_last_modified']:
+            if key in content and isinstance(content[key], str):
+                try:
+                    # Accept both with and without microseconds
+                    content[key] = datetime.datetime.fromisoformat(content[key].replace('Z', '+00:00'))
+                except Exception:
+                    pass
         result = collection.update_one({'_id': ObjectId(document_id)}, {'$set': content})
         if result.matched_count == 0:
             return None
