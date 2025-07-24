@@ -21,7 +21,8 @@ import {
   SearchIcon,
   XIcon,
   EditIcon,
-  NoteAddIcon
+  NoteAddIcon,
+  FileCopyIcon
 } from '../components/icons/material-icons-imports';
 import JsonDisplay from '../components/JsonDisplay';
 import DocumentEditView from '../components/DocumentDetailView';
@@ -97,6 +98,46 @@ const RenderOptions: React.FC<{ nodes: SchemaKeyNode[], level: number }> = ({ no
     );
 };
 
+// Delete Document Confirmation Dialog
+const DeleteDocumentDialog: React.FC<{
+  open: boolean;
+  document: Record<string, any> | null;
+  onClose: () => void;
+  onDelete: () => void;
+  loading?: boolean;
+}> = ({ open, document, onClose, onDelete, loading }) => {
+  if (!open || !document) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 dark:bg-black/60 animate-fade-in-fast">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-700">
+        <h2 className="text-lg font-bold text-red-600 dark:text-red-400 mb-2 flex items-center gap-2">
+          <TrashIcon className="w-5 h-5" /> Confirm Delete Document
+        </h2>
+        <p className="mb-3 text-slate-700 dark:text-slate-200 text-sm">Are you sure you want to delete this document? This action cannot be undone.</p>
+        <div className="bg-slate-100 dark:bg-slate-900 rounded p-3 text-xs overflow-x-auto text-slate-800 dark:text-slate-100 max-h-60 mb-4 border border-slate-200 dark:border-slate-700">
+          <JsonDisplay data={document} />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="px-4 py-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onDelete}
+            disabled={loading}
+            className="px-4 py-2 rounded-md border border-red-400 bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors disabled:opacity-60"
+          >
+            {loading ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, initialDbInfo, accountName, availableDbs, availableAccounts, onNavigateBack }) => {
   // --- Account & DB State ---
   const [currentAccount, setCurrentAccount] = useState<CosmosDBAccount>(() => availableAccounts.find(a => a.id === initialResource.accountId)!);
@@ -138,6 +179,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
   // --- Create Document Dialog State ---
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [createDocInitial, setCreateDocInitial] = useState<Record<string, any> | null>(null);
+
+  // --- Delete Document Dialog State ---
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
+  const [deleteTargetDoc, setDeleteTargetDoc] = React.useState<Record<string, any> | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   // Helper to infer schema for new document (mimic CollectionActionPanel logic)
   const getInitialDocFromSchema = useCallback(() => {
@@ -220,6 +266,28 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
       setIsLoading(false);
     }
   };
+
+  // Delete document handler
+  const handleDeleteDocument = React.useCallback(async () => {
+    if (!selectedCollection || !deleteTargetDoc || !currentResource) return;
+    setIsDeleting(true);
+    setError(null);
+    try {
+      const { deleteDocument } = await import('../services/dbService');
+      const docId = getDocId(deleteTargetDoc);
+      await deleteDocument(selectedCollection, currentResource, docId);
+      setDocuments(prev => prev.filter(doc => getDocId(doc) !== docId));
+      if (selectedDocument && getDocId(selectedDocument) === docId) {
+        setSelectedDocument(null);
+      }
+      setIsDeleteDialogOpen(false);
+      setDeleteTargetDoc(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete document.');
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [selectedCollection, deleteTargetDoc, currentResource, setDocuments, selectedDocument]);
 
   // --- Sorting State ---
   const [collectionSortKey, setCollectionSortKey] = useState<'name' | 'count'>('name');
@@ -581,14 +649,42 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                         >
                             <p className="font-mono text-slate-800 dark:text-slate-200 truncate" title={String(doc._id?.$oid || doc._id)}>{String(doc._id?.$oid || doc._id)}</p>
                         </button>
-                        <button
+                        <div className="flex items-center gap-1 mr-2">
+                          {/* Delete button */}
+                          <button
+                            onClick={() => {
+                              setDeleteTargetDoc(doc);
+                              setIsDeleteDialogOpen(true);
+                            }}
+                            className="p-2 rounded-full transition-colors text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 focus:outline-none focus:ring-2 focus:ring-red-400 opacity-0 group-hover:opacity-100"
+                            title="Delete document"
+                            aria-label="Delete document"
+                          >
+                            <TrashIcon className="w-5 h-5" />
+                          </button>
+                          {/* Copy as new document button */}
+                          <button
+                            onClick={() => {
+                              const { _id, ...rest } = doc;
+                              setCreateDocInitial(rest);
+                              setIsCreateDialogOpen(true);
+                            }}
+                            className="p-2 rounded-full transition-colors text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-400 opacity-0 group-hover:opacity-100"
+                            title="Copy as new document"
+                            aria-label="Copy as new document"
+                          >
+                            <FileCopyIcon className="w-5 h-5" />
+                          </button>
+                          {/* Pin button */}
+                          <button
                             onClick={() => handleTogglePin(doc, selectedCollection!)}
-                            className={`p-2 mr-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isPinned ? 'text-blue-500 hover:bg-blue-200/50 dark:hover:bg-blue-900/40' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'} ${!isPinned ? 'opacity-0 group-hover:opacity-100' : ''}`}
+                            className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isPinned ? 'text-blue-500 hover:bg-blue-200/50 dark:hover:bg-blue-900/40' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'} ${!isPinned ? 'opacity-0 group-hover:opacity-100' : ''}`}
                             title={isPinned ? 'Unpin document' : 'Pin document'}
                             aria-label={isPinned ? 'Unpin document' : 'Pin document'}
-                        >
+                          >
                             <PinIcon className={`w-5 h-5 ${isPinned ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                        </button>
+                          </button>
+                        </div>
                     </li>
                 );
             })}
@@ -1091,15 +1187,47 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                                 <RefreshIcon className="w-5 h-5" />
                             </button>
                             {!editMode && (
-                              <button
-                                className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-                                onClick={() => setEditMode(true)}
-                                disabled={isLoading}
-                                title="Edit document"
-                                aria-label="Edit document"
-                              >
-                                <EditIcon className={`w-5 h-5 ${editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                              </button>
+                              <>
+                                <button
+                                  className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                  onClick={() => setEditMode(true)}
+                                  disabled={isLoading}
+                                  title="Edit document"
+                                  aria-label="Edit document"
+                                >
+                                  <EditIcon className={`w-5 h-5 ${editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                                </button>
+                                <button
+                                  className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                  onClick={() => {
+                                    if (selectedDocument) {
+                                      // Remove _id from copy if present
+                                      const { _id, ...rest } = selectedDocument;
+                                      setCreateDocInitial(rest);
+                                      setIsCreateDialogOpen(true);
+                                    }
+                                  }}
+                                  disabled={isLoading || !selectedDocument}
+                                  title="Insert copy as new document"
+                                  aria-label="Insert copy as new document"
+                                >
+                                  <FileCopyIcon className="w-5 h-5 stroke-current transition-colors" />
+                                </button>
+                                <button
+                                  className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40"
+                                  onClick={() => {
+                                    if (selectedDocument) {
+                                      setDeleteTargetDoc(selectedDocument);
+                                      setIsDeleteDialogOpen(true);
+                                    }
+                                  }}
+                                  disabled={isLoading || !selectedDocument}
+                                  title="Delete document"
+                                  aria-label="Delete document"
+                                >
+                                  <TrashIcon className="w-5 h-5" />
+                                </button>
+                              </>
                             )}
                             {editMode && (
                               <button
@@ -1149,6 +1277,14 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
         onSave={handleCreateDocument}
         loading={isLoading}
         collectionName={selectedCollection || ''}
+      />
+      {/* Delete Document Dialog */}
+      <DeleteDocumentDialog
+        open={isDeleteDialogOpen}
+        document={deleteTargetDoc}
+        onClose={() => { setIsDeleteDialogOpen(false); setDeleteTargetDoc(null); }}
+        onDelete={handleDeleteDocument}
+        loading={isDeleting}
       />
       <style>{`
           @keyframes fade-in-fast { 

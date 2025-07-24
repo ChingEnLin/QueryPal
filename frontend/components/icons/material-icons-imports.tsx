@@ -1,5 +1,4 @@
 export { default as ClipboardIcon } from '@mui/icons-material/ContentCopy';
-export { default as DeleteIcon } from '@mui/icons-material/Delete';
 export { default as AddCircleIcon } from '@mui/icons-material/AddCircle';
 export { default as InfoIcon } from '@mui/icons-material/Info';
 export { default as CheckIcon } from '@mui/icons-material/Check';

@@ -7,14 +7,16 @@ from models.data_documents import (
     FindByIdResponse,
     UpdateDocumentRequest,
     SingleDocumentRequest,
-    InsertDocumentRequest
+    InsertDocumentRequest,
+    DeleteDocumentRequest
 )
 from services.data_documents_service import (
     find_document_by_id,
     fetch_documents,
     update_document,
     get_single_document,
-    insert_document
+    insert_document,
+    delete_document
 )
 from services.azure_auth import exchange_token_obo
 from services.azure_cosmos_resources import get_connection_string
@@ -133,3 +135,25 @@ def insert_document_route(
             inserted_doc['_id'] = {'$oid': str(inserted_doc['_id'])}
         return inserted_doc
     raise HTTPException(status_code=500, detail="Failed to insert document.")
+
+
+# Delete document endpoint
+@router.post("/delete_document", response_model=dict)
+def delete_document_route(
+    body: DeleteDocumentRequest = Body(...),
+    authorization: str = Header(...)
+):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    user_token = authorization.replace("Bearer ", "")
+    access_token = exchange_token_obo(user_token)
+    connection_string = get_connection_string(body.account_id, access_token)
+    success = delete_document(
+        connection_string=connection_string,
+        database_name=body.database_name,
+        collection_name=body.collection_name,
+        document_id=body.document_id
+    )
+    if success:
+        return {"success": True}
+    raise HTTPException(status_code=404, detail=f"Document with ID '{body.document_id}' not found or could not be deleted.")

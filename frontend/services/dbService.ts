@@ -1,3 +1,46 @@
+/**
+ * Deletes a document from a collection.
+ * @param collectionName The name of the collection.
+ * @param resource The database account and name context.
+ * @param documentId The document ID to delete.
+ * @returns {Promise<boolean>} True if deleted, false otherwise.
+ */
+export async function deleteDocument(collectionName: string, resource: SelectedResource, documentId: string): Promise<boolean> {
+  // --- DEVELOPMENT MOCK ---
+  if (!USE_MSAL_AUTH) {
+    // Simulate delete always succeeds
+    return Promise.resolve(true);
+  }
+  // --- END DEVELOPMENT MOCK ---
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) {
+    throw new Error("No signed-in user found.");
+  }
+  const tokenResponse = await msalInstance.acquireTokenSilent({
+    ...loginRequest,
+    account: accounts[0],
+  });
+  const accessToken = tokenResponse.accessToken;
+  const response = await fetch(`${API_BASE_URL}/data/delete_document`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      account_id: resource.accountId,
+      database_name: resource.databaseName,
+      collection_name: collectionName,
+      document_id: documentId,
+    }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to delete document.');
+  }
+  const result = await response.json();
+  return !!result.success;
+}
 import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, PaginatedDocumentsResponse, FoundDocumentResponse } from '../types';
 import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';

@@ -150,3 +150,13 @@ def insert_document(connection_string: str, database_name: str, collection_name:
         return inserted_doc
     except Exception:
         return None
+
+def delete_document(connection_string: str, database_name: str, collection_name: str, document_id: str) -> bool:
+    client = MongoClient(connection_string)
+    db = client[database_name]
+    collection = db[collection_name]
+    try:
+        result = collection.delete_one({'_id': ObjectId(document_id)})
+        return result.deleted_count > 0
+    except Exception:
+        return False
