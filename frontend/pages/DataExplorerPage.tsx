@@ -142,6 +142,10 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
   // --- Pinned Documents State ---
   const [pinnedDocuments, setPinnedDocuments] = useState<PinnedDocument[]>([]);
   const [isPinnedDrawerOpen, setIsPinnedDrawerOpen] = useState(false);
+  const [pinnedCardHeight, setPinnedCardHeight] = useState(260); // px, default height
+  const [pinnedCardWidth, setPinnedCardWidth] = useState(320); // px, default width
+  const minCardWidth = 180;
+  const maxCardWidth = 600;
   const prevPinnedCount = useRef(pinnedDocuments.length);
 
   // --- Theme State ---
@@ -607,70 +611,135 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     );
   }
 
-  const PinnedDrawer = () => (
-    <div 
-        className="fixed bottom-0 left-0 right-0 z-30 transition-transform duration-300 ease-in-out" 
-        style={{ transform: isPinnedDrawerOpen ? 'translateY(0)' : 'translateY(calc(100% - 49px))' }}
-        aria-hidden={!isPinnedDrawerOpen}
-    >
-        <div className="bg-white dark:bg-slate-800 border-t-2 border-blue-500 shadow-[0_-4px_15px_rgba(0,0,0,0.1)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
-            <button
-                onClick={() => setIsPinnedDrawerOpen(!isPinnedDrawerOpen)}
-                className="w-full flex items-center justify-between p-3 text-left"
-                aria-expanded={isPinnedDrawerOpen}
-            >
-                <div className="flex items-center gap-3">
-                    <PinIcon className="w-5 h-5 text-blue-500" />
-                    <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                        Pinned Documents ({pinnedDocuments.length})
-                    </h3>
-                </div>
-                <div className="flex items-center gap-4">
-                    {pinnedDocuments.length > 0 && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); handleClearAllPins(); }}
-                            className="flex items-center gap-2 px-3 py-1.5 border border-red-300 dark:border-red-500/50 text-xs font-medium rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40"
-                            title="Clear all pinned documents"
-                        >
-                            <TrashIcon className="w-4 h-4" /> Clear All
-                        </button>
-                    )}
-                    <ChevronDownIcon className={`w-6 h-6 text-slate-500 dark:text-slate-400 transition-transform duration-300 ${isPinnedDrawerOpen ? 'rotate-180' : ''}`} />
-                </div>
-            </button>
-            <div className="h-[40vh] bg-slate-100 dark:bg-slate-900 overflow-y-auto">
-                {pinnedDocuments.length > 0 ? (
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {pinnedDocuments.map(({ doc, collectionName }) => (
-                            <div key={getDocId(doc)} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-fade-in-fast">
-                                <header className="p-3 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center flex-shrink-0">
-                                    <div>
-                                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{collectionName}</p>
-                                        <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate" title={getDocId(doc)}>{getDocId(doc)}</p>
-                                    </div>
-                                    <button
-                                        onClick={() => handleTogglePin(doc, collectionName)}
-                                        className="p-1.5 rounded-full text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/50"
-                                        title="Unpin document"
-                                    >
-                                        <XIcon className="w-4 h-4" />
-                                    </button>
-                                </header>
-                                <div className="p-3 flex-grow overflow-y-auto">
-                                    <JsonDisplay data={doc} onObjectIdClick={handleObjectIdClick} />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
-                        Pin documents to compare them here.
-                    </div>
-                )}
+  // Only cover the editor area (right 60% for 2/4 xl:3/5), open/collapse vertically
+  const PinnedDrawer = () => {
+    const drawerHeight = isPinnedDrawerOpen ? '100%' : '48px';
+    // Clamp min/max height for card
+    const minCardHeight = 120;
+    const maxCardHeight = 600;
+    return (
+      <div
+        className="fixed bottom-0 right-0 z-30 transition-all duration-300 ease-in-out"
+        style={{ width: '60vw', maxWidth: '100vw', minWidth: '320px', height: drawerHeight, pointerEvents: 'auto' }}
+        aria-hidden={!isPinnedDrawerOpen && pinnedDocuments.length === 0}
+      >
+        <div className="h-full flex flex-col bg-white dark:bg-slate-800 border-l-2 border-blue-500 shadow-[0_0_20px_rgba(0,0,0,0.08)] dark:shadow-[0_0_30px_rgba(0,0,0,0.25)]">
+          <button
+            onClick={() => setIsPinnedDrawerOpen(!isPinnedDrawerOpen)}
+            className="flex items-center justify-between p-3 text-left border-b border-slate-200 dark:border-slate-700 w-full"
+            aria-expanded={isPinnedDrawerOpen}
+            style={{ minHeight: '48px' }}
+          >
+            <div className="flex items-center gap-3">
+              <PinIcon className="w-5 h-5 text-blue-500" />
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                Pinned Documents ({pinnedDocuments.length})
+              </h3>
             </div>
+            <div className="flex items-center gap-4">
+              {pinnedDocuments.length > 0 && (
+                <button
+                  onClick={e => { e.stopPropagation(); handleClearAllPins(); }}
+                  className="flex items-center gap-2 px-3 py-1.5 border border-red-300 dark:border-red-500/50 text-xs font-medium rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40"
+                  title="Clear all pinned documents"
+                >
+                  <TrashIcon className="w-4 h-4" /> Clear All
+                </button>
+              )}
+              <ChevronDownIcon className={`w-6 h-6 text-slate-500 dark:text-slate-400 transition-transform duration-300 ${isPinnedDrawerOpen ? 'rotate-180' : ''}`} />
+            </div>
+          </button>
+          {/* Card size drag handles (universal for all cards) */}
+          {isPinnedDrawerOpen && pinnedDocuments.length > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 select-none" style={{minHeight:'32px',height:'32px'}}>
+              <div
+                tabIndex={0}
+                aria-label="Drag to resize pinned document cards"
+                onMouseDown={e => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  if (e.clientX > rect.right - 20 && e.clientY > rect.bottom - 20) {
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const startW = pinnedCardWidth;
+                    const startH = pinnedCardHeight;
+                    const onMove = (moveEvt: MouseEvent) => {
+                      let newW = Math.max(minCardWidth, Math.min(maxCardWidth, startW + (moveEvt.clientX - startX)));
+                      let newH = Math.max(minCardHeight, Math.min(maxCardHeight, startH + (moveEvt.clientY - startY)));
+                      setPinnedCardWidth(newW);
+                      setPinnedCardHeight(newH);
+                    };
+                    const onUp = () => {
+                      window.removeEventListener('mousemove', onMove);
+                      window.removeEventListener('mouseup', onUp);
+                    };
+                    window.addEventListener('mousemove', onMove);
+                    window.addEventListener('mouseup', onUp);
+                  }
+                }}
+                style={{
+                  width: 44,
+                  height: 24,
+                  minWidth: 44,
+                  minHeight: 24,
+                  maxWidth: 44,
+                  maxHeight: 24,
+                  position: 'relative',
+                  background: 'transparent',
+                  border: '1px dashed #60a5fa',
+                  borderRadius: 6,
+                  display: 'inline-block',
+                  marginLeft: 0,
+                  marginRight: 0,
+                  cursor: 'nwse-resize',
+                  userSelect: 'none',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <div style={{position:'absolute',right:0,bottom:0,width:20,height:20,display:'flex',alignItems:'flex-end',justifyContent:'flex-end',pointerEvents:'none'}}>
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="6" y="16" width="8" height="2" rx="1" fill="#60a5fa"/><rect x="12" y="10" width="2" height="8" rx="1" fill="#60a5fa"/></svg>
+                </div>
+              </div>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium" style={{marginLeft:4}}>{pinnedCardWidth}×{pinnedCardHeight}px</span>
+            </div>
+          )}
+          <div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-900" style={{ display: isPinnedDrawerOpen ? 'block' : 'none' }}>
+            {pinnedDocuments.length > 0 ? (
+              <div className="p-4 flex flex-wrap gap-4">
+                {pinnedDocuments.map(({ doc, collectionName }) => (
+                  <div
+                    key={getDocId(doc)}
+                    className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-fade-in-fast"
+                    style={{ height: pinnedCardHeight, width: pinnedCardWidth, minHeight: minCardHeight, maxHeight: maxCardHeight, minWidth: minCardWidth, maxWidth: maxCardWidth, flex: '0 0 auto' }}
+                  >
+                    <header className="p-3 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center flex-shrink-0">
+                      <div>
+                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{collectionName}</p>
+                        <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate" title={getDocId(doc)}>{getDocId(doc)}</p>
+                      </div>
+                      <button
+                        onClick={() => handleTogglePin(doc, collectionName)}
+                        className="p-1.5 rounded-full text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                        title="Unpin document"
+                      >
+                        <XIcon className="w-4 h-4" />
+                      </button>
+                    </header>
+                    <div className="p-3 flex-grow overflow-y-auto">
+                      <JsonDisplay data={doc} onObjectIdClick={handleObjectIdClick} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
+                Pin documents to compare them here.
+              </div>
+            )}
+          </div>
         </div>
-    </div>
-  );
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
