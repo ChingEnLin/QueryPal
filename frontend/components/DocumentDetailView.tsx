@@ -62,7 +62,7 @@ const DocumentEditView: React.FC<DocumentEditViewProps> = ({ accountId, database
       </div>
       <div>
         <div className="mb-1 text-xs text-slate-500 dark:text-slate-400 font-semibold">Edit JSON</div>
-        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden" style={{ minHeight: 800, height: 800, width: '100%', display: 'flex' }}>
+        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden" style={{ minHeight: 400, height: 600, width: '100%', display: 'flex' }}>
           <MonacoEditor
             height="100%"
             width="100%"
