@@ -3,7 +3,7 @@ from pymongo import MongoClient
 from bson import ObjectId
 import re
 from cachetools import TTLCache, cached
-from datetime import datetime
+from datetime import datetime, timezone
 from models.data_documents import DataDocumentsRequest, DataDocumentsResponse
 from models.schemas import CollectionContext
 from services.gemini_service import generate_query_from_prompt
@@ -132,5 +132,21 @@ def get_single_document(connection_string: str, database_name: str, collection_n
     try:
         doc = collection.find_one({'_id': ObjectId(document_id)})
         return doc
+    except Exception:
+        return None
+
+def insert_document(connection_string: str, database_name: str, collection_name: str, document: dict) -> dict:
+    client = MongoClient(connection_string)
+    db = client[database_name]
+    collection = db[collection_name]
+    # Remove _id if present (let Mongo assign)
+    document.pop('_id', None)
+    # Assign or update datetime creation and last modified
+    document['datetime_creation'] = datetime.now(timezone.utc)
+    document['datetime_last_modified'] = datetime.now(timezone.utc)
+    try:
+        result = collection.insert_one(document)
+        inserted_doc = collection.find_one({'_id': result.inserted_id})
+        return inserted_doc
     except Exception:
         return None

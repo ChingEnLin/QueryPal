@@ -44,3 +44,9 @@ class SingleDocumentRequest(BaseModel):
     database_name: str
     collection_name: str
     document_id: str
+
+class InsertDocumentRequest(BaseModel):
+    account_id: str
+    database_name: str
+    collection_name: str
+    document: Dict[str, Any]

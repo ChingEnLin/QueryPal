@@ -571,3 +571,47 @@ export async function getSingleDocument(accountId: string, databaseName: string,
   }
   return response.json();
 }
+
+/**
+ * Inserts a new document into a collection.
+ * @param collectionName The name of the collection.
+ * @param resource The database account and name context.
+ * @param doc The document to insert.
+ * @returns The inserted document (with _id).
+ */
+export async function addDocument(collectionName: string, resource: SelectedResource, doc: Record<string, any>) {
+  // --- DEVELOPMENT MOCK ---
+  if (!USE_MSAL_AUTH) {
+    // Simulate _id assignment
+    const newDoc = { ...doc, _id: { $oid: Math.random().toString(16).slice(2) } };
+    return Promise.resolve(newDoc);
+  }
+  // --- END DEVELOPMENT MOCK ---
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) {
+    throw new Error("No signed-in user found.");
+  }
+  const tokenResponse = await msalInstance.acquireTokenSilent({
+    ...loginRequest,
+    account: accounts[0],
+  });
+  const accessToken = tokenResponse.accessToken;
+  const response = await fetch(`${API_BASE_URL}/data/insert_document`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      account_id: resource.accountId,
+      database_name: resource.databaseName,
+      collection_name: collectionName,
+      document: doc,
+    }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to create document.');
+  }
+  return response.json();
+}

@@ -1,29 +1,31 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { SelectedResource, DbInfo, BreadcrumbItem, CosmosDBAccount } from '../types';
+import { SelectedResource, DbInfo, BreadcrumbItem, CosmosDBAccount, CollectionInfo } from '../types';
 import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache, getSingleDocument } from '../services/dbService';
 import { extractSchemaTree, SchemaKeyNode } from '../utils/schemaUtils';
 import MongoIcon from '../components/icons/MongoIcon';
 import {
-    SpinnerIcon,
-    ChevronDownIcon,
-    ChevronRightIcon,
-    RefreshIcon,
-    CachedIcon,
-    ClearAllIcon,
-    ArrowUpwardIcon,
-    ArrowDownwardIcon,
-    SunIcon,
-    MoonIcon,
-    CheckIcon,
-    PinIcon,
-    TrashIcon,
-    ArrowLeftIcon,
-    SearchIcon,
-    XIcon,
-    EditIcon
+  SpinnerIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  RefreshIcon,
+  CachedIcon,
+  ClearAllIcon,
+  ArrowUpwardIcon,
+  ArrowDownwardIcon,
+  SunIcon,
+  MoonIcon,
+  CheckIcon,
+  PinIcon,
+  TrashIcon,
+  ArrowLeftIcon,
+  SearchIcon,
+  XIcon,
+  EditIcon,
+  NoteAddIcon
 } from '../components/icons/material-icons-imports';
 import JsonDisplay from '../components/JsonDisplay';
 import DocumentEditView from '../components/DocumentDetailView';
+import CreateDocumentDialog from '../components/CreateDocumentDialog';
 import { useTheme } from '../contexts/ThemeContext';
 
 
@@ -127,10 +129,97 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
   const [debouncedFilterValue, setDebouncedFilterValue] = useState(filterValue);
   const [schemaTree, setSchemaTree] = useState<SchemaKeyNode[]>([]);
   const [isFetchingSchema, setIsFetchingSchema] = useState(false);
+  const [currentCollectionInfo, setCurrentCollectionInfo] = useState<CollectionInfo | null>(null);
 
   // --- Editor State ---
   const [selectedDocument, setSelectedDocument] = useState<Record<string, any> | null>(null);
   const [editMode, setEditMode] = useState(false);
+
+  // --- Create Document Dialog State ---
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [createDocInitial, setCreateDocInitial] = useState<Record<string, any> | null>(null);
+
+  // Helper to infer schema for new document (mimic CollectionActionPanel logic)
+  const getInitialDocFromSchema = useCallback(() => {
+    if (!schemaTree || schemaTree.length === 0) return {};
+    // Use sampleDocument from currentCollectionInfo
+    const sampleDoc: any = currentCollectionInfo?.sampleDocument || {};
+    // Helper to get value from sampleDoc by path
+    const getSampleValue = (path: string[]): any => {
+      let val = sampleDoc;
+      for (const key of path) {
+        if (val && typeof val === 'object') val = val[key];
+        else return undefined;
+      }
+      return val;
+    };
+
+    const buildObj = (nodes: SchemaKeyNode[], path: string[] = []): any => {
+      const obj: any = {};
+      nodes.forEach(node => {
+        if (node.key === '_id') return; // skip _id
+        const fullPath = [...path, node.key];
+        let sampleVal = getSampleValue(fullPath);
+        if (node.children && node.children.length > 0) {
+          if (Array.isArray(sampleVal)) {
+            if (sampleVal.length > 0 && typeof sampleVal[0] === 'object' && sampleVal[0] !== null && !Array.isArray(sampleVal[0])) {
+              // Array of objects: fill with one object using the structure of the first element
+              obj[node.key] = [buildObj(node.children, fullPath.concat(['0']))];
+            } else {
+              // Array of primitives or empty
+              obj[node.key] = [];
+            }
+          } else if (sampleVal && typeof sampleVal === 'object') {
+            obj[node.key] = buildObj(node.children, fullPath);
+          } else {
+            obj[node.key] = {};
+          }
+        } else {
+          // Primitives
+          if (typeof sampleVal === 'number') {
+            obj[node.key] = 0;
+          } else if (typeof sampleVal === 'boolean') {
+            obj[node.key] = false;
+          } else if (typeof sampleVal === 'string') {
+            obj[node.key] = '';
+          } else if (Array.isArray(sampleVal)) {
+            obj[node.key] = [];
+          } else if (sampleVal && typeof sampleVal === 'object') {
+            obj[node.key] = {};
+          } else {
+            obj[node.key] = '';
+          }
+        }
+      });
+      return obj;
+    };
+    return buildObj(schemaTree);
+  }, [schemaTree, currentCollectionInfo]);
+
+  // Open create dialog with inferred schema
+  const handleOpenCreateDialog = useCallback(() => {
+    setCreateDocInitial(getInitialDocFromSchema());
+    setIsCreateDialogOpen(true);
+  }, [getInitialDocFromSchema]);
+
+  // Backend call to insert new document
+  const handleCreateDocument = async (doc: Record<string, any>) => {
+    if (!selectedCollection || !currentResource) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Use dbService addDocument (assume exists, or replace with correct import)
+      const { addDocument } = await import('../services/dbService');
+      const newDoc = await addDocument(selectedCollection, currentResource, doc);
+      setDocuments(prev => [newDoc, ...prev]);
+      setSelectedDocument(newDoc);
+      setIsCreateDialogOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create document.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // --- Sorting State ---
   const [collectionSortKey, setCollectionSortKey] = useState<'name' | 'count'>('name');
@@ -272,8 +361,10 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     if (!collectionName || !currentResource) return;
     setIsFetchingSchema(true);
     setSchemaTree([]);
+    setCurrentCollectionInfo(null);
     try {
       const info = await getCollectionInfo(collectionName, currentResource);
+      setCurrentCollectionInfo(info);
       if (info.sampleDocument) {
         setSchemaTree(extractSchemaTree(info.sampleDocument));
       }
@@ -898,14 +989,25 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                     <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">
                         Documents {totalDocuments > 0 && `(${totalDocuments.toLocaleString()})`}
                     </h2>
-                    <button
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleOpenCreateDialog}
+                        disabled={!selectedCollection || isLoading || isFetchingSchema}
+                        className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 ${isCreateDialogOpen ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : ''}`}
+                        title="Create new document"
+                        aria-label="Create new document"
+                      >
+                        <NoteAddIcon className={`w-5 h-5 ${isCreateDialogOpen ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                      </button>
+                      <button
                         onClick={handleRefresh}
                         disabled={!selectedCollection || isLoading || isFetchingSchema}
                         className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Refresh documents and schema"
-                    >
+                      >
                         <ClearAllIcon className={`w-4 h-4 ${(isLoading || isFetchingSchema) ? 'animate-pulse' : ''}`} />
-                    </button>
+                      </button>
+                    </div>
                 </div>
                 <div className="space-y-2">
                   <div className="relative">
@@ -1039,6 +1141,15 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
         </main>
         {pinnedDocuments.length > 0 && <PinnedDrawer />}
       </div>
+      {/* Create Document Dialog */}
+      <CreateDocumentDialog
+        open={isCreateDialogOpen}
+        initialDoc={createDocInitial}
+        onClose={() => setIsCreateDialogOpen(false)}
+        onSave={handleCreateDocument}
+        loading={isLoading}
+        collectionName={selectedCollection || ''}
+      />
       <style>{`
           @keyframes fade-in-fast { 
             from { opacity: 0; } 
