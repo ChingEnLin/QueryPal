@@ -112,7 +112,7 @@ def update_document(connection_string: str, database_name: str, collection_name:
             if key in content and isinstance(content[key], str):
                 try:
                     # Accept both with and without microseconds
-                    content[key] = datetime.datetime.fromisoformat(content[key].replace('Z', '+00:00'))
+                    content[key] = datetime.fromisoformat(content[key].replace('Z', '+00:00'))
                 except Exception:
                     pass
         result = collection.update_one({'_id': ObjectId(document_id)}, {'$set': content})
