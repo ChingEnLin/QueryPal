@@ -1,3 +1,6 @@
+
+import psycopg2
+from os import environ as env
 from typing import Tuple, Optional
 from pymongo import MongoClient
 from bson import ObjectId
@@ -14,6 +17,69 @@ _find_by_id_cache = TTLCache(maxsize=100, ttl=600)
 ALL_DOCUMENTS_CACHES = [
     _find_by_id_cache
 ]
+
+
+# --- Write Operation Audit Logging (PostgreSQL) ---
+def get_pg_connection():
+    return psycopg2.connect(
+        dbname=env.get("DB_NAME", "querypal"),
+        user=env.get("DB_USER", "postgres"),
+        password=env.get("DB_PASS", "postgres"),
+        host=env.get("DB_HOST", "127.0.0.1"),
+        port=env.get("DB_PORT", "5432")
+    )
+
+def dict_diff(before, after):
+    """
+    Return a dict with only the changed keys and their new values (for update), or the full doc for insert/delete.
+    """
+    if before is None:
+        return after
+    if after is None:
+        return before
+    diff = {}
+    for k in set(before.keys()).union(after.keys()):
+        if before.get(k) != after.get(k):
+            diff[k] = {'before': before.get(k), 'after': after.get(k)}
+    return diff
+
+def log_write_operation(user_email: str, operation: str, database_name: str, collection_name: str, document_id: str = None, before_data: dict = None, after_data: dict = None):
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        if operation == 'update':
+            diff_data = dict_diff(before_data, after_data)
+        elif operation == 'insert':
+            diff_data = after_data
+        elif operation == 'delete':
+            diff_data = before_data
+        else:
+            diff_data = None
+        cur.execute('''
+            INSERT INTO write_audit_log (
+                user_email, operation, database_name, collection_name, document_id, diff_data, timestamp_utc
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ''', (
+            user_email,
+            operation,
+            database_name,
+            collection_name,
+            document_id,
+            json_dumps_safe(diff_data),
+            datetime.now(timezone.utc)
+        ))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        pass
+
+def json_dumps_safe(obj):
+    import json
+    try:
+        return json.dumps(obj, default=str)
+    except Exception:
+        return None
 
 def fetch_documents(connection_string: str, database_name: str, collection_name: str, page: int, limit: int, filter: dict = None) -> DataDocumentsResponse:
     client = MongoClient(connection_string)
@@ -100,7 +166,7 @@ def find_document_by_id(connection_string: str, database_name: str, collection_n
             return doc, collection_name
     return None, None
 
-def update_document(connection_string: str, database_name: str, collection_name: str, document_id: str, content: dict) -> dict:
+def update_document(connection_string: str, database_name: str, collection_name: str, document_id: str, content: dict, user_email: str = 'unknown') -> dict:
     client = MongoClient(connection_string)
     db = client[database_name]
     collection = db[collection_name]
@@ -115,12 +181,27 @@ def update_document(connection_string: str, database_name: str, collection_name:
                     content[key] = datetime.fromisoformat(content[key].replace('Z', '+00:00'))
                 except Exception:
                     pass
+        before_doc = collection.find_one({'_id': ObjectId(document_id)})
         result = collection.update_one({'_id': ObjectId(document_id)}, {'$set': content})
         if result.matched_count == 0:
             return None
         updated_doc = collection.find_one({'_id': ObjectId(document_id)})
         if updated_doc:
             updated_doc['_id'] = ObjectId(updated_doc['_id'])
+        # Construct account name + database name for logging
+        # Extract account name from connection string (e.g., "mongodb+srv://<account_name>@...")
+        match = re.search(r'//([^:@]+)', connection_string)
+        account_name = match.group(1) if match else "unknown"
+        account_database = f"{account_name}.{database_name}"
+        log_write_operation(
+            user_email=user_email,
+            operation='update',
+            database_name=account_database,
+            collection_name=collection_name,
+            document_id=str(document_id),
+            before_data=before_doc,
+            after_data=updated_doc
+        )
         return updated_doc
     except Exception as e:
         return None
@@ -135,7 +216,7 @@ def get_single_document(connection_string: str, database_name: str, collection_n
     except Exception:
         return None
 
-def insert_document(connection_string: str, database_name: str, collection_name: str, document: dict) -> dict:
+def insert_document(connection_string: str, database_name: str, collection_name: str, document: dict, user_email: str = 'unknown') -> dict:
     client = MongoClient(connection_string)
     db = client[database_name]
     collection = db[collection_name]
@@ -147,16 +228,45 @@ def insert_document(connection_string: str, database_name: str, collection_name:
     try:
         result = collection.insert_one(document)
         inserted_doc = collection.find_one({'_id': result.inserted_id})
+        match = re.search(r'//([^:@]+)', connection_string)
+        account_name = match.group(1) if match else "unknown"
+        account_database = f"{account_name}.{database_name}"
+        # Log the insert
+        log_write_operation(
+            user_email=user_email,
+            operation='insert',
+            database_name=account_database,
+            collection_name=collection_name,
+            document_id=str(inserted_doc['_id']) if inserted_doc and '_id' in inserted_doc else None,
+            before_data=None,
+            after_data=inserted_doc
+        )
         return inserted_doc
     except Exception:
         return None
 
-def delete_document(connection_string: str, database_name: str, collection_name: str, document_id: str) -> bool:
+def delete_document(connection_string: str, database_name: str, collection_name: str, document_id: str, user_email: str = 'unknown') -> bool:
     client = MongoClient(connection_string)
     db = client[database_name]
     collection = db[collection_name]
     try:
+        before_doc = collection.find_one({'_id': ObjectId(document_id)})
         result = collection.delete_one({'_id': ObjectId(document_id)})
-        return result.deleted_count > 0
+        deleted = result.deleted_count > 0
+        match = re.search(r'//([^:@]+)', connection_string)
+        account_name = match.group(1) if match else "unknown"
+        account_database = f"{account_name}.{database_name}"
+        # Log the delete
+        if deleted:
+            log_write_operation(
+                user_email=user_email,
+                operation='delete',
+                database_name=account_database,
+                collection_name=collection_name,
+                document_id=str(document_id),
+                before_data=before_doc,
+                after_data=None
+            )
+        return deleted
     except Exception:
         return False

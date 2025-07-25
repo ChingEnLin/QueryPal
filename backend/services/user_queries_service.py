@@ -24,25 +24,6 @@ def get_connection():
     conn.autocommit = True
     return conn
 
-# Ensure table exists with new schema
-def ensure_table():
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS saved_queries (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        prompt TEXT NOT NULL,
-        code TEXT NOT NULL,
-        owner_email TEXT NOT NULL,
-        shared_with TEXT NOT NULL,
-        last_modified_by TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-    )
-    """)
-    conn.close()
-ensure_table()
-
 def get_user_id_from_token(token: str) -> str:
     # Extract user email from Azure Entra ID JWT access token
     try:

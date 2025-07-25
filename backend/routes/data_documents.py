@@ -18,6 +18,7 @@ from services.data_documents_service import (
     insert_document,
     delete_document
 )
+from services.user_queries_service import get_user_id_from_token
 from services.azure_auth import exchange_token_obo
 from services.azure_cosmos_resources import get_connection_string
 
@@ -52,12 +53,14 @@ def put_update_document(
     user_token = authorization.replace("Bearer ", "")
     access_token = exchange_token_obo(user_token)
     connection_string = get_connection_string(body.account_id, access_token)
+    user_id = get_user_id_from_token(authorization.replace("Bearer ", ""))
     updated_doc = update_document(
         connection_string=connection_string,
         database_name=body.database_name,
         collection_name=body.collection,
         document_id=body.id,
-        content=body.content
+        content=body.content,
+        user_email=user_id,
     )
     if updated_doc:
         # Convert ObjectId to $oid format for JSON compatibility
@@ -124,11 +127,13 @@ def insert_document_route(
     user_token = authorization.replace("Bearer ", "")
     access_token = exchange_token_obo(user_token)
     connection_string = get_connection_string(body.account_id, access_token)
+    user_id = get_user_id_from_token(authorization.replace("Bearer ", ""))
     inserted_doc = insert_document(
         connection_string=connection_string,
         database_name=body.database_name,
         collection_name=body.collection_name,
-        document=body.document
+        document=body.document,
+        user_email=user_id
     )
     if inserted_doc:
         if '_id' in inserted_doc and isinstance(inserted_doc['_id'], ObjectId):
@@ -148,11 +153,13 @@ def delete_document_route(
     user_token = authorization.replace("Bearer ", "")
     access_token = exchange_token_obo(user_token)
     connection_string = get_connection_string(body.account_id, access_token)
+    user_id = get_user_id_from_token(authorization.replace("Bearer ", ""))
     success = delete_document(
         connection_string=connection_string,
         database_name=body.database_name,
         collection_name=body.collection_name,
-        document_id=body.document_id
+        document_id=body.document_id,
+        user_email=user_id
     )
     if success:
         return {"success": True}
