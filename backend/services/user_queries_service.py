@@ -1,28 +1,9 @@
 import base64
 import json
 import uuid
-from os import environ as env
 from typing import List
-import psycopg2
 from models.user_queries import SavedQuery, SavedQueryCreate, SavedQueryUpdate
-
-
-DB_NAME = env.get("DB_NAME", "querypal")
-DB_USER = env.get("DB_USER", "postgres")
-DB_PASS = env.get("DB_PASS", "postgres")
-DB_HOST = env.get("DB_HOST", "127.0.0.1")
-DB_PORT = env.get("DB_PORT", "5432")
-
-def get_connection():
-    conn = psycopg2.connect(
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASS,
-        host=DB_HOST,
-        port=DB_PORT
-    )
-    conn.autocommit = True
-    return conn
+from services.pg_connection import get_connection
 
 def get_user_id_from_token(token: str) -> str:
     # Extract user email from Azure Entra ID JWT access token

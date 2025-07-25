@@ -1,6 +1,4 @@
 
-import psycopg2
-from os import environ as env
 from typing import Tuple, Optional
 from pymongo import MongoClient
 from bson import ObjectId
@@ -10,6 +8,7 @@ from datetime import datetime, timezone
 from models.data_documents import DataDocumentsRequest, DataDocumentsResponse
 from models.schemas import CollectionContext
 from services.gemini_service import generate_query_from_prompt
+from services.pg_connection import get_connection
 
 # Caches: 10 min TTL, 100 max entries
 _find_by_id_cache = TTLCache(maxsize=100, ttl=600)
@@ -17,17 +16,6 @@ _find_by_id_cache = TTLCache(maxsize=100, ttl=600)
 ALL_DOCUMENTS_CACHES = [
     _find_by_id_cache
 ]
-
-
-# --- Write Operation Audit Logging (PostgreSQL) ---
-def get_pg_connection():
-    return psycopg2.connect(
-        dbname=env.get("DB_NAME", "querypal"),
-        user=env.get("DB_USER", "postgres"),
-        password=env.get("DB_PASS", "postgres"),
-        host=env.get("DB_HOST", "127.0.0.1"),
-        port=env.get("DB_PORT", "5432")
-    )
 
 def dict_diff(before, after):
     """
@@ -45,7 +33,7 @@ def dict_diff(before, after):
 
 def log_write_operation(user_email: str, operation: str, database_name: str, collection_name: str, document_id: str = None, before_data: dict = None, after_data: dict = None):
     try:
-        conn = get_pg_connection()
+        conn = get_connection()
         cur = conn.cursor()
         if operation == 'update':
             diff_data = dict_diff(before_data, after_data)
