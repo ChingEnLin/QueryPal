@@ -41,7 +41,7 @@ export async function deleteDocument(collectionName: string, resource: SelectedR
   const result = await response.json();
   return !!result.success;
 }
-import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, PaginatedDocumentsResponse, FoundDocumentResponse } from '../types';
+import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, PaginatedDocumentsResponse, FoundDocumentResponse, DocumentHistoryResponse } from '../types';
 import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { 
@@ -656,5 +656,118 @@ export async function addDocument(collectionName: string, resource: SelectedReso
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || 'Failed to create document.');
   }
+  return response.json();
+}
+
+/**
+ * Gets the document history from the audit log.
+ * @param resource The database account and name context.
+ * @param collectionName The name of the collection.
+ * @param documentId The document ID to get history for.
+ * @returns The document history response with audit entries.
+ */
+export async function getDocumentHistory(resource: SelectedResource, collectionName: string, documentId: string): Promise<DocumentHistoryResponse> {
+  // --- DEVELOPMENT MOCK ---
+  if (!USE_MSAL_AUTH) {
+    // Mock data for development
+    const mockHistoryData: DocumentHistoryResponse = {
+      document_id: documentId,
+      total_entries: 4,
+      history_entries: [
+        {
+          id: '1',
+          user_email: 'john.doe@example.com',
+          operation: 'update',
+          timestamp_utc: '2024-01-15T14:30:00Z',
+          database_name: `${resource.accountId.split('/').pop()}.${resource.databaseName}`,
+          collection_name: collectionName,
+          diff_data: {
+            status: { before: 'pending', after: 'active' },
+            last_login: { before: null, after: '2024-01-15T14:29:45Z' },
+            'profile.preferences.theme': { before: 'light', after: 'dark' }
+          }
+        },
+        {
+          id: '2',
+          user_email: 'admin@system.com',
+          operation: 'update',
+          timestamp_utc: '2024-01-10T09:15:22Z',
+          database_name: `${resource.accountId.split('/').pop()}.${resource.databaseName}`,
+          collection_name: collectionName,
+          diff_data: {
+            email: { before: 'old.email@example.com', after: 'john.doe@example.com' },
+            'profile.name': { before: 'John Smith', after: 'John Doe' }
+          }
+        },
+        {
+          id: '3',
+          user_email: 'system@automated.com',
+          operation: 'update',
+          timestamp_utc: '2024-01-05T16:45:10Z',
+          database_name: `${resource.accountId.split('/').pop()}.${resource.databaseName}`,
+          collection_name: collectionName,
+          diff_data: {
+            'metadata.last_processed': { before: '2024-01-04T10:00:00Z', after: '2024-01-05T16:45:10Z' },
+            'stats.login_count': { before: 42, after: 43 }
+          }
+        },
+        {
+          id: '4',
+          user_email: 'jane.admin@example.com',
+          operation: 'insert',
+          timestamp_utc: '2024-01-01T12:00:00Z',
+          database_name: `${resource.accountId.split('/').pop()}.${resource.databaseName}`,
+          collection_name: collectionName,
+          diff_data: {
+            _id: documentId,
+            email: 'old.email@example.com',
+            status: 'pending',
+            profile: {
+              name: 'John Smith',
+              preferences: { theme: 'light' }
+            },
+            created_at: '2024-01-01T12:00:00Z'
+          }
+        }
+      ]
+    };
+    
+    // Simulate API delay
+    return new Promise(resolve => {
+      setTimeout(() => resolve(mockHistoryData), 800);
+    });
+  }
+  // --- END DEVELOPMENT MOCK ---
+  
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) {
+    throw new Error("No signed-in user found.");
+  }
+  
+  const tokenResponse = await msalInstance.acquireTokenSilent({
+    ...loginRequest,
+    account: accounts[0],
+  });
+  const accessToken = tokenResponse.accessToken;
+  
+  const response = await fetch(`${API_BASE_URL}/data/document_history`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      account_id: resource.accountId,
+      database_name: resource.databaseName,
+      collection_name: collectionName,
+      document_id: documentId,
+    }),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to load document history.');
+  }
+  
   return response.json();
 }

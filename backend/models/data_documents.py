@@ -56,3 +56,24 @@ class DeleteDocumentRequest(BaseModel):
     database_name: str
     collection_name: str
     document_id: str
+
+# Document History Models
+class DocumentHistoryEntry(BaseModel):
+    id: str
+    user_email: str
+    operation: str  # 'insert', 'update', 'delete'
+    timestamp_utc: str
+    diff_data: Any
+    database_name: str
+    collection_name: str
+
+class DocumentHistoryRequest(BaseModel):
+    account_id: str
+    database_name: str
+    collection_name: str
+    document_id: str
+
+class DocumentHistoryResponse(BaseModel):
+    document_id: str
+    history_entries: List[DocumentHistoryEntry]
+    total_entries: int

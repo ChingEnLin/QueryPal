@@ -149,3 +149,25 @@ export interface BreadcrumbItem {
     collectionName: string;
     document: Record<string, any>;
 }
+
+/**
+ * Represents a single entry in the document history audit log.
+ */
+export interface DocumentHistoryEntry {
+    id: string;
+    user_email: string;
+    operation: 'insert' | 'update' | 'delete';
+    timestamp_utc: string;
+    diff_data: any;
+    database_name: string;
+    collection_name: string;
+}
+
+/**
+ * Represents the response structure for document history requests.
+ */
+export interface DocumentHistoryResponse {
+    document_id: string;
+    history_entries: DocumentHistoryEntry[];
+    total_entries: number;
+}

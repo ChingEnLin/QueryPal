@@ -22,11 +22,13 @@ import {
   XIcon,
   EditIcon,
   NoteAddIcon,
-  FileCopyIcon
+  FileCopyIcon,
+  HistoryIcon
 } from '../components/icons/material-icons-imports';
 import JsonDisplay from '../components/JsonDisplay';
 import DocumentEditView from '../components/DocumentDetailView';
 import CreateDocumentDialog from '../components/CreateDocumentDialog';
+import DocumentHistoryDialog from '../components/DocumentHistoryDialog';
 import { useTheme } from '../contexts/ThemeContext';
 
 
@@ -184,6 +186,9 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [deleteTargetDoc, setDeleteTargetDoc] = React.useState<Record<string, any> | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
+
+  // --- Document History Dialog State ---
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = React.useState(false);
 
   // Helper to infer schema for new document (mimic CollectionActionPanel logic)
   const getInitialDocFromSchema = useCallback(() => {
@@ -1227,6 +1232,15 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
                                 >
                                   <TrashIcon className="w-5 h-5" />
                                 </button>
+                                <button
+                                  className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                  onClick={() => setIsHistoryDialogOpen(true)}
+                                  disabled={isLoading || !selectedDocument}
+                                  title="View document history"
+                                  aria-label="View document history"
+                                >
+                                  <HistoryIcon className="w-5 h-5" />
+                                </button>
                               </>
                             )}
                             {editMode && (
@@ -1285,6 +1299,14 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
         onClose={() => { setIsDeleteDialogOpen(false); setDeleteTargetDoc(null); }}
         onDelete={handleDeleteDocument}
         loading={isDeleting}
+      />
+      {/* Document History Dialog */}
+      <DocumentHistoryDialog
+        open={isHistoryDialogOpen}
+        documentId={selectedDocument ? getDocId(selectedDocument) : ''}
+        collectionName={selectedCollection || ''}
+        resource={currentResource}
+        onClose={() => setIsHistoryDialogOpen(false)}
       />
       <style>{`
           @keyframes fade-in-fast { 

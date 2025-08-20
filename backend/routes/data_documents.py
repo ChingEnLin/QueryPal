@@ -1,5 +1,6 @@
 from bson import ObjectId
 from fastapi import APIRouter, Header, Body, HTTPException
+import re
 from models.data_documents import (
     DataDocumentsRequest,
     DataDocumentsResponse,
@@ -8,7 +9,10 @@ from models.data_documents import (
     UpdateDocumentRequest,
     SingleDocumentRequest,
     InsertDocumentRequest,
-    DeleteDocumentRequest
+    DeleteDocumentRequest,
+    DocumentHistoryRequest,
+    DocumentHistoryResponse,
+    DocumentHistoryEntry
 )
 from services.data_documents_service import (
     find_document_by_id,
@@ -16,7 +20,8 @@ from services.data_documents_service import (
     update_document,
     get_single_document,
     insert_document,
-    delete_document
+    delete_document,
+    get_document_history
 )
 from services.user_queries_service import get_user_id_from_token
 from services.azure_auth import exchange_token_obo
@@ -164,3 +169,50 @@ def delete_document_route(
     if success:
         return {"success": True}
     raise HTTPException(status_code=404, detail=f"Document with ID '{body.document_id}' not found or could not be deleted.")
+
+@router.post("/document_history", response_model=DocumentHistoryResponse)
+def get_document_history_route(
+    body: DocumentHistoryRequest = Body(...),
+    authorization: str = Header(...)
+):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    
+    user_token = authorization.replace("Bearer ", "")
+    access_token = exchange_token_obo(user_token)
+    connection_string = get_connection_string(body.account_id, access_token)
+    
+    # Extract account name from connection string for database_name format
+    match = re.search(r'//([^:@]+)', connection_string)
+    account_name = match.group(1) if match else "unknown"
+    account_database = f"{account_name}.{body.database_name}"
+    
+    try:
+        history_entries, total_count = get_document_history(
+            database_name=account_database,
+            collection_name=body.collection_name,
+            document_id=body.document_id
+        )
+        
+        # Convert to DocumentHistoryEntry objects
+        entries = [
+            DocumentHistoryEntry(
+                id=entry['id'],
+                user_email=entry['user_email'],
+                operation=entry['operation'],
+                timestamp_utc=entry['timestamp_utc'],
+                diff_data=entry['diff_data'],
+                database_name=entry['database_name'],
+                collection_name=entry['collection_name']
+            )
+            for entry in history_entries
+        ]
+        
+        return DocumentHistoryResponse(
+            document_id=body.document_id,
+            history_entries=entries,
+            total_entries=total_count
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve document history: {str(e)}")

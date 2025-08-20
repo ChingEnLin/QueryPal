@@ -3,6 +3,7 @@ from typing import Tuple, Optional
 from pymongo import MongoClient
 from bson import ObjectId
 import re
+import json
 from cachetools import TTLCache, cached
 from datetime import datetime, timezone
 from models.data_documents import DataDocumentsRequest, DataDocumentsResponse
@@ -258,3 +259,64 @@ def delete_document(connection_string: str, database_name: str, collection_name:
         return deleted
     except Exception:
         return False
+
+def get_document_history(database_name: str, collection_name: str, document_id: str, limit: int = 50) -> tuple:
+    """
+    Retrieves the audit history for a specific document from the write_audit_log table.
+    
+    Args:
+        database_name: The database name as stored in the audit log (format: account.database)
+        collection_name: The collection name
+        document_id: The document ID to get history for
+        limit: Maximum number of history entries to return (default 50)
+    
+    Returns:
+        tuple: (history_entries, total_count)
+    """
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        
+        # Query to get document history ordered by timestamp (newest first)
+        cur.execute('''
+            SELECT user_email, operation, timestamp_utc, diff_data, database_name, collection_name
+            FROM write_audit_log 
+            WHERE database_name = %s AND collection_name = %s AND document_id = %s
+            ORDER BY timestamp_utc DESC
+            LIMIT %s
+        ''', (database_name, collection_name, document_id, limit))
+        
+        history_entries = []
+        for row in cur.fetchall():
+            user_email, operation, timestamp_utc, diff_data_json, db_name, coll_name = row
+            
+            # Generate a unique ID for this entry (using timestamp and operation)
+            diff_data_str = json.dumps(diff_data_json, sort_keys=True) if isinstance(diff_data_json, dict) else str(diff_data_json or '')
+            entry_id = f"{timestamp_utc.isoformat()}_{operation}_{hash(diff_data_str)}"
+            
+            history_entries.append({
+                'id': entry_id,
+                'user_email': user_email,
+                'operation': operation,
+                'timestamp_utc': timestamp_utc.isoformat(),
+                'diff_data': diff_data_json,
+                'database_name': db_name,
+                'collection_name': coll_name
+            })
+        
+        # Get total count for this document
+        cur.execute('''
+            SELECT COUNT(*) FROM write_audit_log 
+            WHERE database_name = %s AND collection_name = %s AND document_id = %s
+        ''', (database_name, collection_name, document_id))
+        
+        total_count = cur.fetchone()[0]
+        
+        cur.close()
+        conn.close()
+        
+        return history_entries, total_count
+        
+    except Exception as e:
+        print(f"Error retrieving document history: {e}")
+        return [], 0

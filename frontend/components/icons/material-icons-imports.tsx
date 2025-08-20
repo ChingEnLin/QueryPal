@@ -58,3 +58,7 @@ export { default as IndexIcon } from '@mui/icons-material/Storage';
 export { default as FileJsonIcon } from '@mui/icons-material/Description';
 export { default as MicrosoftIcon } from '@mui/icons-material/Microsoft';
 export { default as NoteAddIcon } from '@mui/icons-material/NoteAdd';
+export { default as HistoryIcon } from '@mui/icons-material/History';
+export { default as AccessTimeIcon } from '@mui/icons-material/AccessTime';
+export { default as AddIcon } from '@mui/icons-material/Add';
+export { default as DeleteIcon } from '@mui/icons-material/Delete';
