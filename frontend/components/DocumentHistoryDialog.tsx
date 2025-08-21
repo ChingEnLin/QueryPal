@@ -106,9 +106,26 @@ const DocumentHistoryDialog: React.FC<DocumentHistoryDialogProps> = ({
 
   const renderChangeValue = (value: any) => {
     if (value === null) return <span className="text-gray-400 italic">null</span>;
-    if (typeof value === 'object') return <span className="font-mono text-xs">{JSON.stringify(value)}</span>;
-    if (typeof value === 'string') return <span className="text-gray-800 dark:text-gray-200">"{value}"</span>;
-    return <span className="text-gray-800 dark:text-gray-200">{String(value)}</span>;
+    if (typeof value === 'object') {
+      const jsonString = JSON.stringify(value, null, 2);
+      return (
+        <div className="font-mono text-xs bg-gray-50 dark:bg-gray-700 p-2 rounded border max-w-full overflow-hidden">
+          <pre className="whitespace-pre-wrap break-words overflow-wrap-anywhere">{jsonString}</pre>
+        </div>
+      );
+    }
+    if (typeof value === 'string') {
+      return (
+        <span className="text-gray-800 dark:text-gray-200 break-words overflow-wrap-anywhere">
+          "{value}"
+        </span>
+      );
+    }
+    return (
+      <span className="text-gray-800 dark:text-gray-200 break-words overflow-wrap-anywhere">
+        {String(value)}
+      </span>
+    );
   };
 
   const renderDiffData = (entry: DocumentHistoryEntry) => {
@@ -116,8 +133,8 @@ const DocumentHistoryDialog: React.FC<DocumentHistoryDialogProps> = ({
       return (
         <div className="mt-2 p-3 bg-green-100 dark:bg-green-900/30 rounded border">
           <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Document created with initial data:</p>
-          <div className="text-xs font-mono bg-white dark:bg-gray-800 p-2 rounded border max-h-32 overflow-y-auto">
-            <pre className="whitespace-pre-wrap">{JSON.stringify(entry.diff_data, null, 2)}</pre>
+          <div className="text-xs font-mono bg-white dark:bg-gray-800 p-2 rounded border max-h-48 overflow-y-auto">
+            <pre className="whitespace-pre-wrap break-words overflow-wrap-anywhere">{JSON.stringify(entry.diff_data, null, 2)}</pre>
           </div>
         </div>
       );
@@ -139,17 +156,20 @@ const DocumentHistoryDialog: React.FC<DocumentHistoryDialogProps> = ({
         {changes.map(([field, change], index) => (
           <div key={index} className="border border-gray-200 dark:border-gray-700 rounded p-2 bg-white dark:bg-gray-800">
             <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{field}</code>
+              <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded break-words">{field}</code>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div className="flex-1">
-                <span className="text-red-600 dark:text-red-400 font-medium">Before:</span>{' '}
-                {renderChangeValue(change.before)}
+            <div className="space-y-2 text-xs">
+              <div className="border-l-2 border-red-300 pl-2">
+                <span className="text-red-600 dark:text-red-400 font-medium block mb-1">Before:</span>
+                <div className="max-w-full overflow-hidden">
+                  {renderChangeValue(change.before)}
+                </div>
               </div>
-              <span className="text-gray-400">→</span>
-              <div className="flex-1">
-                <span className="text-green-600 dark:text-green-400 font-medium">After:</span>{' '}
-                {renderChangeValue(change.after)}
+              <div className="border-l-2 border-green-300 pl-2">
+                <span className="text-green-600 dark:text-green-400 font-medium block mb-1">After:</span>
+                <div className="max-w-full overflow-hidden">
+                  {renderChangeValue(change.after)}
+                </div>
               </div>
             </div>
           </div>
