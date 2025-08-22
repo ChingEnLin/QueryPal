@@ -13,26 +13,25 @@ ALL_CACHES = [
     _connection_string_cache,
     _cosmos_list_cache,
     _database_info_cache,
-    _collection_info_cache
+    _collection_info_cache,
 ]
+
 
 @cached(_cosmos_list_cache)
 def list_cosmos_resources(access_token: str):
     url = "https://management.azure.com/subscriptions?api-version=2020-01-01"
     headers = {"Authorization": f"Bearer {access_token}"}
     subs = requests.get(url, headers=headers).json()
-    
+
     results = []
     for sub in subs.get("value", []):
         sub_id = sub["subscriptionId"]
         rg_url = f"https://management.azure.com/subscriptions/{sub_id}/resources?api-version=2021-04-01&$filter=resourceType eq 'Microsoft.DocumentDB/databaseAccounts'"
         accounts = requests.get(rg_url, headers=headers).json()
         for acct in accounts.get("value", []):
-            results.append({
-                "name": acct["name"],
-                "id": acct["id"]
-            })
+            results.append({"name": acct["name"], "id": acct["id"]})
     return results
+
 
 @cached(_connection_string_cache)
 def get_connection_string(account_id: str, access_token: str) -> str:
@@ -40,9 +39,12 @@ def get_connection_string(account_id: str, access_token: str) -> str:
     headers = {"Authorization": f"Bearer {access_token}"}
     response = requests.post(url, headers=headers, timeout=10)
     if response.status_code != 200:
-        raise requests.HTTPError(f"Failed to fetch connection string: {response.status_code} {response.text}")
+        raise requests.HTTPError(
+            f"Failed to fetch connection string: {response.status_code} {response.text}"
+        )
     conn_data = response.json()
     return conn_data["connectionStrings"][0]["connectionString"]
+
 
 @cached(_database_info_cache)
 def get_cosmosdb_info_from_conn_str(connection_string: str):
@@ -58,17 +60,22 @@ def get_cosmosdb_info_from_conn_str(connection_string: str):
             count = db[name].count_documents({})
             collections_info.append({"name": name, "count": count})
 
-        all_info.append({
-            "name": db_name,
-            "collections": collections_info,
-            "totalDocuments": sum(c["count"] for c in collections_info),
-            "size": None  # Size not available directly
-        })
+        all_info.append(
+            {
+                "name": db_name,
+                "collections": collections_info,
+                "totalDocuments": sum(c["count"] for c in collections_info),
+                "size": None,  # Size not available directly
+            }
+        )
 
     return all_info
 
+
 @cached(_collection_info_cache)
-def get_collection_info_with_conn_str(connection_string: str, db_name: str, collection_name: str):
+def get_collection_info_with_conn_str(
+    connection_string: str, db_name: str, collection_name: str
+):
     client = pymongo.MongoClient(connection_string)
     db = client[db_name]
     collection = db[collection_name]
@@ -126,7 +133,9 @@ def get_collection_info_with_conn_str(connection_string: str, db_name: str, coll
     return {
         "name": collection_name,
         "documentCount": document_count,
-        "averageDocumentSize": f"{round(avg_obj_size / 1024, 2)} KB" if avg_obj_size else "N/A",
+        "averageDocumentSize": (
+            f"{round(avg_obj_size / 1024, 2)} KB" if avg_obj_size else "N/A"
+        ),
         "indexes": indexes,
         "sampleDocument": sample,
     }

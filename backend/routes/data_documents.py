@@ -12,7 +12,7 @@ from models.data_documents import (
     DeleteDocumentRequest,
     DocumentHistoryRequest,
     DocumentHistoryResponse,
-    DocumentHistoryEntry
+    DocumentHistoryEntry,
 )
 from services.data_documents_service import (
     find_document_by_id,
@@ -21,7 +21,7 @@ from services.data_documents_service import (
     get_single_document,
     insert_document,
     delete_document,
-    get_document_history
+    get_document_history,
 )
 from services.user_queries_service import get_user_id_from_token
 from services.azure_auth import exchange_token_obo
@@ -29,10 +29,10 @@ from services.azure_cosmos_resources import get_connection_string
 
 router = APIRouter()
 
+
 @router.post("/documents", response_model=DataDocumentsResponse)
 def get_documents(
-    body: DataDocumentsRequest = Body(...),
-    authorization: str = Header(...)
+    body: DataDocumentsRequest = Body(...), authorization: str = Header(...)
 ):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
@@ -48,10 +48,10 @@ def get_documents(
         filter=body.filter.model_dump() if body.filter else None,
     )
 
+
 @router.put("/documents", response_model=dict)
 def put_update_document(
-    body: UpdateDocumentRequest = Body(...),
-    authorization: str = Header(...)
+    body: UpdateDocumentRequest = Body(...), authorization: str = Header(...)
 ):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
@@ -69,17 +69,17 @@ def put_update_document(
     )
     if updated_doc:
         # Convert ObjectId to $oid format for JSON compatibility
-        if '_id' in updated_doc and isinstance(updated_doc['_id'], ObjectId):
-            updated_doc['_id'] = {'$oid': str(updated_doc['_id'])}
+        if "_id" in updated_doc and isinstance(updated_doc["_id"], ObjectId):
+            updated_doc["_id"] = {"$oid": str(updated_doc["_id"])}
         return updated_doc
-    raise HTTPException(status_code=404, detail=f"Document with ID '{body.id}' not found or not updated.")
+    raise HTTPException(
+        status_code=404,
+        detail=f"Document with ID '{body.id}' not found or not updated.",
+    )
 
 
 @router.post("/find_by_id", response_model=FindByIdResponse)
-def find_by_id(
-    body: FindByIdRequest = Body(...),
-    authorization: str = Header(...)
-):
+def find_by_id(body: FindByIdRequest = Body(...), authorization: str = Header(...)):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
     user_token = authorization.replace("Bearer ", "")
@@ -88,22 +88,24 @@ def find_by_id(
     doc, collection_name = find_document_by_id(
         connection_string=connection_string,
         database_name=body.database_name,
-        collection_names=', '.join(body.collection_names),
+        collection_names=", ".join(body.collection_names),
         document_id=body.document_id,
-        key_context=body.key_context
+        key_context=body.key_context,
     )
     if doc:
         # Convert ObjectId to $oid format for JSON compatibility
-        if '_id' in doc and isinstance(doc['_id'], ObjectId):
-            doc['_id'] = {'$oid': str(doc['_id'])}
+        if "_id" in doc and isinstance(doc["_id"], ObjectId):
+            doc["_id"] = {"$oid": str(doc["_id"])}
         return FindByIdResponse(document=doc, collectionName=collection_name)
-    raise HTTPException(status_code=404, detail=f"Document with ID '{body.document_id}' not found in any of the provided collections.")
+    raise HTTPException(
+        status_code=404,
+        detail=f"Document with ID '{body.document_id}' not found in any of the provided collections.",
+    )
 
 
 @router.post("/document", response_model=dict)
 def single_document(
-    body: SingleDocumentRequest = Body(...),
-    authorization: str = Header(...)
+    body: SingleDocumentRequest = Body(...), authorization: str = Header(...)
 ):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
@@ -114,18 +116,20 @@ def single_document(
         connection_string=connection_string,
         database_name=body.database_name,
         collection_name=body.collection_name,
-        document_id=body.document_id
+        document_id=body.document_id,
     )
     if doc:
-        if '_id' in doc and isinstance(doc['_id'], ObjectId):
-            doc['_id'] = {'$oid': str(doc['_id'])}
+        if "_id" in doc and isinstance(doc["_id"], ObjectId):
+            doc["_id"] = {"$oid": str(doc["_id"])}
         return doc
-    raise HTTPException(status_code=404, detail=f"Document with ID '{body.document_id}' not found.")
+    raise HTTPException(
+        status_code=404, detail=f"Document with ID '{body.document_id}' not found."
+    )
+
 
 @router.post("/insert_document", response_model=dict)
 def insert_document_route(
-    body: InsertDocumentRequest = Body(...),
-    authorization: str = Header(...)
+    body: InsertDocumentRequest = Body(...), authorization: str = Header(...)
 ):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
@@ -138,11 +142,11 @@ def insert_document_route(
         database_name=body.database_name,
         collection_name=body.collection_name,
         document=body.document,
-        user_email=user_id
+        user_email=user_id,
     )
     if inserted_doc:
-        if '_id' in inserted_doc and isinstance(inserted_doc['_id'], ObjectId):
-            inserted_doc['_id'] = {'$oid': str(inserted_doc['_id'])}
+        if "_id" in inserted_doc and isinstance(inserted_doc["_id"], ObjectId):
+            inserted_doc["_id"] = {"$oid": str(inserted_doc["_id"])}
         return inserted_doc
     raise HTTPException(status_code=500, detail="Failed to insert document.")
 
@@ -150,8 +154,7 @@ def insert_document_route(
 # Delete document endpoint
 @router.post("/delete_document", response_model=dict)
 def delete_document_route(
-    body: DeleteDocumentRequest = Body(...),
-    authorization: str = Header(...)
+    body: DeleteDocumentRequest = Body(...), authorization: str = Header(...)
 ):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
@@ -164,55 +167,60 @@ def delete_document_route(
         database_name=body.database_name,
         collection_name=body.collection_name,
         document_id=body.document_id,
-        user_email=user_id
+        user_email=user_id,
     )
     if success:
         return {"success": True}
-    raise HTTPException(status_code=404, detail=f"Document with ID '{body.document_id}' not found or could not be deleted.")
+    raise HTTPException(
+        status_code=404,
+        detail=f"Document with ID '{body.document_id}' not found or could not be deleted.",
+    )
+
 
 @router.post("/document_history", response_model=DocumentHistoryResponse)
 def get_document_history_route(
-    body: DocumentHistoryRequest = Body(...),
-    authorization: str = Header(...)
+    body: DocumentHistoryRequest = Body(...), authorization: str = Header(...)
 ):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
-    
+
     user_token = authorization.replace("Bearer ", "")
     access_token = exchange_token_obo(user_token)
     connection_string = get_connection_string(body.account_id, access_token)
-    
+
     # Extract account name from connection string for database_name format
-    match = re.search(r'//([^:@]+)', connection_string)
+    match = re.search(r"//([^:@]+)", connection_string)
     account_name = match.group(1) if match else "unknown"
     account_database = f"{account_name}.{body.database_name}"
-    
+
     try:
         history_entries, total_count = get_document_history(
             database_name=account_database,
             collection_name=body.collection_name,
-            document_id=body.document_id
+            document_id=body.document_id,
         )
-        
+
         # Convert to DocumentHistoryEntry objects
         entries = [
             DocumentHistoryEntry(
-                id=entry['id'],
-                user_email=entry['user_email'],
-                operation=entry['operation'],
-                timestamp_utc=entry['timestamp_utc'],
-                diff_data=entry['diff_data'],
-                database_name=entry['database_name'],
-                collection_name=entry['collection_name']
+                id=entry["id"],
+                user_email=entry["user_email"],
+                operation=entry["operation"],
+                timestamp_utc=entry["timestamp_utc"],
+                diff_data=entry["diff_data"],
+                database_name=entry["database_name"],
+                collection_name=entry["collection_name"],
             )
             for entry in history_entries
         ]
-        
+
         return DocumentHistoryResponse(
             document_id=body.document_id,
             history_entries=entries,
-            total_entries=total_count
+            total_entries=total_count,
         )
-        
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve document history: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to retrieve document history: {str(e)}"
+        )
