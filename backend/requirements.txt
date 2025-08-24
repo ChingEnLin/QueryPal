@@ -8,3 +8,14 @@ psycopg2-binary
 requests
 pymongo
 msal
+
+# Testing dependencies
+pytest
+pytest-asyncio
+pytest-cov
+httpx
+
+# Static code analysis
+flake8
+black
+mypy

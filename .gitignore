@@ -27,6 +27,12 @@ dist-ssr
 __pycache__/
 *.py[cod]
 
+# Testing and coverage
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
 # Environment variables and configuration
 .env
 .env.local

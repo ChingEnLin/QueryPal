@@ -6,6 +6,7 @@ class DataDocumentsFilter(BaseModel):
     key: str
     value: Any  # Can be str, int, etc. depending on the field type
 
+
 class DataDocumentsRequest(BaseModel):
     account_id: str
     database_name: str
@@ -14,11 +15,13 @@ class DataDocumentsRequest(BaseModel):
     limit: int = 20
     filter: Optional[DataDocumentsFilter] = None
 
+
 class DataDocumentsResponse(BaseModel):
     documents: List[Dict[str, Any]]
     currentPage: int
     totalPages: int
     totalDocuments: int
+
 
 class FindByIdRequest(BaseModel):
     account_id: str
@@ -26,6 +29,7 @@ class FindByIdRequest(BaseModel):
     collection_names: List[str]
     document_id: str
     key_context: Optional[str] = None
+
 
 class FindByIdResponse(BaseModel):
     document: Dict[str, Any]
@@ -39,11 +43,13 @@ class UpdateDocumentRequest(BaseModel):
     id: str
     content: Dict[str, Any]
 
+
 class SingleDocumentRequest(BaseModel):
     account_id: str
     database_name: str
     collection_name: str
     document_id: str
+
 
 class InsertDocumentRequest(BaseModel):
     account_id: str
@@ -51,11 +57,13 @@ class InsertDocumentRequest(BaseModel):
     collection_name: str
     document: Dict[str, Any]
 
+
 class DeleteDocumentRequest(BaseModel):
     account_id: str
     database_name: str
     collection_name: str
     document_id: str
+
 
 # Document History Models
 class DocumentHistoryEntry(BaseModel):
@@ -67,11 +75,13 @@ class DocumentHistoryEntry(BaseModel):
     database_name: str
     collection_name: str
 
+
 class DocumentHistoryRequest(BaseModel):
     account_id: str
     database_name: str
     collection_name: str
     document_id: str
+
 
 class DocumentHistoryResponse(BaseModel):
     document_id: str

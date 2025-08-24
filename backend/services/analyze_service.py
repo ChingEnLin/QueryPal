@@ -1,7 +1,8 @@
 import json
 from google import genai
 from google.genai import types
-from models.analyze import AnalyzeRequest, AnalyzeResponse
+from models.analyze import AnalyzeResponse
+
 
 def analyze_query_result(query_result: list[dict]) -> AnalyzeResponse:
     prompt = f"""
@@ -21,12 +22,14 @@ Respond in JSON with keys: insight, chartType, chartData, chartOptions.
         contents=prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=0)
-        ))
+        ),
+    )
     # Try to extract JSON from the response
     try:
         # Find the first JSON object in the response
         import re
-        match = re.search(r'\{[\s\S]+\}', response.text)
+
+        match = re.search(r"\{[\s\S]+\}", response.text)
         if match:
             data = json.loads(match.group(0))
         else:

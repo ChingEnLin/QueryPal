@@ -72,6 +72,104 @@ API docs will be available at:
 
 ⸻
 
+## 🧪 Testing and Code Quality
+
+This project includes comprehensive testing and static code analysis tools to ensure code quality and reliability.
+
+### Running Tests
+
+#### Quick Start
+```bash
+# Run all tests and code analysis
+./run_tests.sh
+
+# Or using Make
+make all
+```
+
+#### Individual Commands
+
+##### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+# or
+make install
+```
+
+##### 2. Run Tests
+```bash
+# Run tests with coverage report
+pytest --cov=. --cov-report=term-missing --cov-report=html
+# or
+make test
+```
+
+##### 3. Code Linting
+```bash
+# Check code style with flake8
+flake8 . --statistics
+# or
+make lint
+```
+
+##### 4. Code Formatting
+```bash
+# Check formatting with black
+black --check .
+
+# Apply formatting
+black .
+# or
+make format-fix
+```
+
+##### 5. Type Checking
+```bash
+# Run type checking with mypy
+mypy .
+# or
+make typecheck
+```
+
+### Test Coverage
+
+The test suite currently covers:
+- ✅ Main FastAPI application structure and CORS
+- ✅ All Pydantic models and schema validation
+- ✅ System routes (cache management)
+- ✅ Query routes (mocked external dependencies)
+- ✅ Authentication and authorization flow
+
+Coverage report is generated in `htmlcov/` directory. Open `htmlcov/index.html` in your browser to view detailed coverage.
+
+### Static Code Analysis
+
+The project uses multiple tools for code quality:
+- **flake8**: PEP 8 style guide enforcement
+- **black**: Automatic code formatting
+- **mypy**: Static type checking
+- **pytest**: Testing framework with coverage reporting
+
+### Test Structure
+
+```
+tests/
+├── conftest.py           # Test configuration and fixtures
+├── test_main.py          # FastAPI app tests
+├── test_schemas.py       # Pydantic model tests
+├── test_system_routes.py # System endpoint tests
+└── test_query_routes.py  # Query endpoint tests (mocked)
+```
+
+### Configuration Files
+
+- `pytest.ini` - Pytest configuration
+- `.flake8` - Flake8 linting rules
+- `mypy.ini` - MyPy type checking settings
+- `pyproject.toml` - Black formatting configuration
+
+⸻
+
 
 ## 📡 API Endpoints
 

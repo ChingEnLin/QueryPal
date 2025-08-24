@@ -1,6 +1,12 @@
 from bson import ObjectId
 import pymongo
-from pymongo.results import UpdateResult, InsertOneResult, InsertManyResult, DeleteResult
+from pymongo.results import (
+    UpdateResult,
+    InsertOneResult,
+    InsertManyResult,
+    DeleteResult,
+)
+
 
 def execute_mongo_query(connection_string: str, database: str, query: str):
     client = pymongo.MongoClient(connection_string)
@@ -12,12 +18,13 @@ def execute_mongo_query(connection_string: str, database: str, query: str):
         # Return the exception to be handled by the endpoint
         return {"error": str(e), "exception_type": type(e).__name__}
     # Convert cursor to list if it's a cursor object
-    if hasattr(query_result, 'to_list'):
+    if hasattr(query_result, "to_list"):
         return query_result.to_list()
-    elif hasattr(query_result, 'batch_size'):
+    elif hasattr(query_result, "batch_size"):
         return list(query_result)
     else:
         return query_result
+
 
 def transform_mongo_result(result):
     # If result is a list of dicts, convert ObjectIds
@@ -44,10 +51,8 @@ def transform_mongo_result(result):
         return {
             "matched_count": result.matched_count,
             "modified_count": result.modified_count,
-            "upserted_id": str(result.upserted_id) if result.upserted_id else None
+            "upserted_id": str(result.upserted_id) if result.upserted_id else None,
         }
     elif isinstance(result, DeleteResult):
-        return {
-            "deleted_count": result.deleted_count
-        }
+        return {"deleted_count": result.deleted_count}
     return result
