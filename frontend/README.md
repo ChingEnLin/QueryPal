@@ -38,6 +38,73 @@ This pattern is critical for security and compliance, preventing exposure of sen
     -   In your App Registration, go to **API permissions**. You must grant consent to an API scope exposed by your backend service.
 3.  **Run the application** using a local server like `http-server`.
 
+## Testing
+
+This frontend includes comprehensive test suites to ensure code quality and reliability.
+
+### Running Tests
+
+#### Quick Start
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test
+
+# Run tests once and exit
+npm run test:run
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run tests with UI (if you have @vitest/ui installed)
+npm run test:ui
+```
+
+### Test Structure
+
+The test suites are organized as follows:
+
+```
+__tests__/
+├── components/          # Component tests
+│   └── Loader.test.tsx  # UI component tests
+├── services/            # Service layer tests
+│   ├── dbService.test.ts
+│   ├── geminiService.test.ts
+│   └── mockData.test.ts
+├── utils/               # Utility function tests
+│   └── schemaUtils.test.ts
+└── App.test.tsx         # Main app component tests
+```
+
+### Test Coverage
+
+The test suites currently cover:
+- ✅ Core services (database, AI, mock data)
+- ✅ Utility functions (schema processing)
+- ✅ UI components (loader, basic components)
+- ✅ App structure and routing logic
+- ✅ Mock data validation
+- ✅ Error handling scenarios
+
+### Testing Tools
+
+- **Vitest**: Fast unit test runner built for Vite
+- **React Testing Library**: Simple and complete React DOM testing utilities
+- **Jest DOM**: Custom Jest matchers for DOM elements
+- **User Event**: Fire events the same way the user does
+
+### Writing New Tests
+
+When adding new components or services, ensure you:
+1. Create corresponding test files in the `__tests__` directory
+2. Follow the existing naming convention (`*.test.ts` or `*.test.tsx`)
+3. Test both happy paths and error scenarios
+4. Mock external dependencies appropriately
+5. Maintain good test coverage for critical functionality
+
 ## API Contract
 
 Your backend service must implement the following endpoints. All endpoints should be protected and require a valid Bearer token from the authenticated user.
