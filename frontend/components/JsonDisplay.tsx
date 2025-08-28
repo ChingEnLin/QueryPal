@@ -516,10 +516,11 @@ const JsonDisplay: React.FC<JsonDisplayProps> = ({ data, onObjectIdClick }) => {
           <input
             ref={searchInputRef}
             type="text"
-            placeholder="Search in JSON..."
+            placeholder="Search in JSON... (Enter: next, Shift+Enter: previous)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 px-2 py-1 text-sm bg-transparent border-none focus:outline-none text-slate-900 dark:text-slate-100"
+            title="Use Enter to go to next match, Shift+Enter for previous match, Esc to close"
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 handleSearchClose();
