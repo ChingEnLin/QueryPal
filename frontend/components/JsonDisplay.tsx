@@ -1,6 +1,40 @@
 
-import React, { useState } from 'react';
-import { CheckIcon, ChevronDownIcon, ClipboardIcon } from './icons/material-icons-imports';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { CheckIcon, ChevronDownIcon, ClipboardIcon, SearchIcon, XIcon, ArrowUpwardIcon, ArrowDownwardIcon } from './icons/material-icons-imports';
+
+// Search context for highlighting and navigation
+interface SearchState {
+  query: string;
+  currentMatchIndex: number;
+  totalMatches: number;
+  isActive: boolean;
+}
+
+// Helper function to highlight search matches in text
+const highlightText = (text: string, searchQuery: string, isCurrentMatch: boolean = false): React.ReactNode => {
+  if (!searchQuery || !text.includes(searchQuery)) {
+    return text;
+  }
+
+  const parts = text.split(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+  let matchIndex = 0;
+  
+  return parts.map((part, index) => {
+    if (part.toLowerCase() === searchQuery.toLowerCase()) {
+      const currentMatch = matchIndex++;
+      return (
+        <mark
+          key={index}
+          className={`px-1 py-0.5 rounded text-black ${isCurrentMatch ? 'bg-yellow-300 ring-2 ring-yellow-400' : 'bg-yellow-200'}`}
+          data-search-match={currentMatch}
+        >
+          {part}
+        </mark>
+      );
+    }
+    return part;
+  });
+};
 
 // Component to render ObjectId with both click navigation and copy functionality
 const ObjectIdDisplay: React.FC<{
@@ -148,7 +182,9 @@ const JsonNode: React.FC<{
   isRoot?: boolean; // The top-level object is not collapsible
   onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean) => void;
   parentKeyContext?: string; // The key of the parent, used for context in clicks
-}> = ({ nodeValue, nodeKey, isRoot = false, onObjectIdClick, parentKeyContext }) => {
+  searchQuery?: string; // Search query for highlighting
+  currentMatchIndex?: number; // Current match index for highlighting
+}> = ({ nodeValue, nodeKey, isRoot = false, onObjectIdClick, parentKeyContext, searchQuery = '', currentMatchIndex = -1 }) => {
   // All nodes are expanded by default.
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -157,7 +193,9 @@ const JsonNode: React.FC<{
     const canCollapse = !isRoot;
     return (
       <span onClick={() => canCollapse && setIsExpanded(!isExpanded)} className={canCollapse ? 'cursor-pointer' : ''}>
-        {nodeKey && <span className="text-purple-600 dark:text-purple-400">"{nodeKey}"</span>}
+        {nodeKey && <span className="text-purple-600 dark:text-purple-400">"
+          {searchQuery ? highlightText(nodeKey, searchQuery) : nodeKey}"
+        </span>}
         {nodeKey && <span className="mr-1">:</span>}
         {canCollapse && (
           <ChevronDownIcon
@@ -180,7 +218,9 @@ const JsonNode: React.FC<{
   if (nodeValue === null) {
     return (
       <div className="inline-block">
-        {nodeKey && <span className="text-purple-600 dark:text-purple-400">"{nodeKey}": </span>}
+        {nodeKey && <span className="text-purple-600 dark:text-purple-400">"
+          {searchQuery ? highlightText(nodeKey, searchQuery) : nodeKey}": 
+        </span>}
         <span className="text-rose-500 dark:text-rose-400">null</span>
       </div>
     );
@@ -192,7 +232,9 @@ const JsonNode: React.FC<{
       const objectId = nodeValue.$oid;
       return (
         <div className="inline-block">
-            {nodeKey && <span className="text-purple-600 dark:text-purple-400">"{nodeKey}": </span>}
+            {nodeKey && <span className="text-purple-600 dark:text-purple-400">"
+              {searchQuery ? highlightText(nodeKey, searchQuery) : nodeKey}": 
+            </span>}
             <span className="text-slate-700 dark:text-slate-300">
               <span className="text-purple-600 dark:text-purple-400">ObjectId</span>(
               <ObjectIdDisplay 
@@ -209,9 +251,12 @@ const JsonNode: React.FC<{
     if (nodeValue.$date && Object.keys(nodeValue).length === 1) {
         return (
             <div className="inline-block">
-                {nodeKey && <span className="text-purple-600 dark:text-purple-400">"{nodeKey}": </span>}
+                {nodeKey && <span className="text-purple-600 dark:text-purple-400">"
+                  {searchQuery ? highlightText(nodeKey, searchQuery) : nodeKey}": 
+                </span>}
                 <span className="text-slate-700 dark:text-slate-300">
-                    <span className="text-purple-600 dark:text-purple-400">ISODate</span>("{new Date(nodeValue.$date).toISOString()}")
+                    <span className="text-purple-600 dark:text-purple-400">ISODate</span>("
+                    {searchQuery ? highlightText(new Date(nodeValue.$date).toISOString(), searchQuery) : new Date(nodeValue.$date).toISOString()}")
                 </span>
             </div>
         );
@@ -223,7 +268,9 @@ const JsonNode: React.FC<{
     if (nodeValue.length === 0) {
       return (
         <span>
-          {nodeKey && <span className="text-purple-600 dark:text-purple-400">"{nodeKey}": </span>}
+          {nodeKey && <span className="text-purple-600 dark:text-purple-400">"
+            {searchQuery ? highlightText(nodeKey, searchQuery) : nodeKey}": 
+          </span>}
           []
         </span>
       );
@@ -236,7 +283,13 @@ const JsonNode: React.FC<{
             <div className="pl-6 border-l border-slate-200 dark:border-slate-700 ml-2">
               {nodeValue.map((item, index) => (
                 <div key={index}>
-                  <JsonNode nodeValue={item} onObjectIdClick={onObjectIdClick} parentKeyContext={parentKeyContext} />
+                  <JsonNode 
+                    nodeValue={item} 
+                    onObjectIdClick={onObjectIdClick} 
+                    parentKeyContext={parentKeyContext}
+                    searchQuery={searchQuery}
+                    currentMatchIndex={currentMatchIndex}
+                  />
                   {index < nodeValue.length - 1 && ','}
                 </div>
               ))}
@@ -254,7 +307,9 @@ const JsonNode: React.FC<{
     if (keys.length === 0) {
         return (
             <span>
-              {nodeKey && <span className="text-purple-600 dark:text-purple-400">"{nodeKey}": </span>}
+              {nodeKey && <span className="text-purple-600 dark:text-purple-400">"
+                {searchQuery ? highlightText(nodeKey, searchQuery) : nodeKey}": 
+              </span>}
               {`{}`}
             </span>
           );
@@ -267,7 +322,14 @@ const JsonNode: React.FC<{
             <div className="pl-6 border-l border-slate-200 dark:border-slate-700 ml-2">
               {keys.map((key, index) => (
                 <div key={key}>
-                  <JsonNode nodeValue={nodeValue[key]} nodeKey={key} onObjectIdClick={onObjectIdClick} parentKeyContext={key} />
+                  <JsonNode 
+                    nodeValue={nodeValue[key]} 
+                    nodeKey={key} 
+                    onObjectIdClick={onObjectIdClick} 
+                    parentKeyContext={key}
+                    searchQuery={searchQuery}
+                    currentMatchIndex={currentMatchIndex}
+                  />
                   {index < keys.length - 1 && ','}
                 </div>
               ))}
@@ -296,20 +358,33 @@ const JsonNode: React.FC<{
               </span>
             );
           }
-          return <span className="text-emerald-700 dark:text-emerald-300">"{nodeValue}"</span>;
+          return <span className="text-emerald-700 dark:text-emerald-300">"
+            {searchQuery ? highlightText(nodeValue, searchQuery) : nodeValue}"
+          </span>;
         }
         case 'number':
-          return <span className="text-amber-600 dark:text-amber-400">{nodeValue}</span>;
+          const numberStr = String(nodeValue);
+          return <span className="text-amber-600 dark:text-amber-400">
+            {searchQuery ? highlightText(numberStr, searchQuery) : numberStr}
+          </span>;
         case 'boolean':
-          return <span className="text-sky-600 dark:text-sky-400">{String(nodeValue)}</span>;
+          const boolStr = String(nodeValue);
+          return <span className="text-sky-600 dark:text-sky-400">
+            {searchQuery ? highlightText(boolStr, searchQuery) : boolStr}
+          </span>;
         default:
-          return <span>{String(nodeValue)}</span>;
+          const defaultStr = String(nodeValue);
+          return <span>
+            {searchQuery ? highlightText(defaultStr, searchQuery) : defaultStr}
+          </span>;
       }
   };
 
   return (
     <div className="inline-block">
-        {nodeKey && <span className="text-purple-600 dark:text-purple-400">"{nodeKey}": </span>}
+        {nodeKey && <span className="text-purple-600 dark:text-purple-400">"
+          {searchQuery ? highlightText(nodeKey, searchQuery) : nodeKey}": 
+        </span>}
         {renderPrimitive()}
     </div>
   );
@@ -322,6 +397,87 @@ interface JsonDisplayProps {
 
 const JsonDisplay: React.FC<JsonDisplayProps> = ({ data, onObjectIdClick }) => {
   const [copied, setCopied] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const [totalMatches, setTotalMatches] = useState(0);
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const containerRef = useRef<HTMLPreElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Count total matches in the JSON string
+  const countMatches = useCallback((query: string) => {
+    if (!query) return 0;
+    const jsonString = JSON.stringify(data, null, 2);
+    const matches = jsonString.match(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'));
+    return matches ? matches.length : 0;
+  }, [data]);
+
+  // Update match count when search query changes
+  useEffect(() => {
+    const matches = countMatches(searchQuery);
+    setTotalMatches(matches);
+    if (matches === 0) {
+      setCurrentMatchIndex(0);
+    } else if (currentMatchIndex >= matches) {
+      setCurrentMatchIndex(0);
+    }
+  }, [searchQuery, countMatches, currentMatchIndex]);
+
+  // Navigate to current match
+  const scrollToMatch = useCallback(() => {
+    if (!containerRef.current || totalMatches === 0) return;
+    
+    const matches = containerRef.current.querySelectorAll('[data-search-match]');
+    if (matches.length === 0) return;
+
+    // Remove previous highlight
+    matches.forEach(match => {
+      match.classList.remove('bg-yellow-300', 'ring-2', 'ring-yellow-400');
+      match.classList.add('bg-yellow-200');
+    });
+
+    // Highlight current match
+    const currentMatch = matches[currentMatchIndex];
+    if (currentMatch) {
+      currentMatch.classList.remove('bg-yellow-200');
+      currentMatch.classList.add('bg-yellow-300', 'ring-2', 'ring-yellow-400');
+      currentMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [currentMatchIndex, totalMatches]);
+
+  // Scroll to match when current index changes
+  useEffect(() => {
+    scrollToMatch();
+  }, [scrollToMatch]);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setIsSearchVisible(true);
+        setTimeout(() => searchInputRef.current?.focus(), 100);
+      } else if (e.key === 'Escape' && isSearchVisible) {
+        setIsSearchVisible(false);
+        setSearchQuery('');
+        setCurrentMatchIndex(0);
+      } else if (isSearchVisible && searchQuery && totalMatches > 0) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (e.shiftKey) {
+            // Previous match
+            setCurrentMatchIndex(prev => prev === 0 ? totalMatches - 1 : prev - 1);
+          } else {
+            // Next match
+            setCurrentMatchIndex(prev => (prev + 1) % totalMatches);
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isSearchVisible, searchQuery, totalMatches]);
 
   const handleCopy = () => {
     const jsonString = JSON.stringify(data, null, 2);
@@ -333,21 +489,118 @@ const JsonDisplay: React.FC<JsonDisplayProps> = ({ data, onObjectIdClick }) => {
     });
   };
 
+  const handleNextMatch = () => {
+    if (totalMatches > 0) {
+      setCurrentMatchIndex(prev => (prev + 1) % totalMatches);
+    }
+  };
+
+  const handlePrevMatch = () => {
+    if (totalMatches > 0) {
+      setCurrentMatchIndex(prev => prev === 0 ? totalMatches - 1 : prev - 1);
+    }
+  };
+
+  const handleSearchClose = () => {
+    setIsSearchVisible(false);
+    setSearchQuery('');
+    setCurrentMatchIndex(0);
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-md relative group ring-1 ring-slate-200 dark:ring-slate-700">
-      <pre className="text-sm p-4 overflow-x-auto font-mono text-slate-900 dark:text-slate-100">
+      {/* Search Bar */}
+      {isSearchVisible && (
+        <div className="absolute top-2 left-2 right-12 z-10 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-lg p-2 flex items-center gap-2">
+          <SearchIcon className="w-4 h-4 text-slate-400" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder="Search in JSON..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 px-2 py-1 text-sm bg-transparent border-none focus:outline-none text-slate-900 dark:text-slate-100"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                handleSearchClose();
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                  handlePrevMatch();
+                } else {
+                  handleNextMatch();
+                }
+              }
+            }}
+          />
+          {searchQuery && (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {totalMatches > 0 ? `${currentMatchIndex + 1}/${totalMatches}` : 'No matches'}
+              </span>
+              <button
+                onClick={handlePrevMatch}
+                disabled={totalMatches === 0}
+                className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Previous match (Shift+Enter)"
+              >
+                <ArrowUpwardIcon className="w-3 h-3" />
+              </button>
+              <button
+                onClick={handleNextMatch}
+                disabled={totalMatches === 0}
+                className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Next match (Enter)"
+              >
+                <ArrowDownwardIcon className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+          <button
+            onClick={handleSearchClose}
+            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600"
+            title="Close search (Esc)"
+          >
+            <XIcon className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      
+      <pre className="text-sm p-4 overflow-x-auto font-mono text-slate-900 dark:text-slate-100" ref={containerRef}>
         <code>
-          <JsonNode nodeValue={data} isRoot onObjectIdClick={onObjectIdClick} />
+          <JsonNode 
+            nodeValue={data} 
+            isRoot 
+            onObjectIdClick={onObjectIdClick}
+            searchQuery={searchQuery}
+            currentMatchIndex={currentMatchIndex}
+          />
         </code>
       </pre>
-      <button
-        onClick={handleCopy}
-        className="absolute top-2 right-2 p-2 bg-slate-100/80 dark:bg-slate-700/80 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 hover:text-slate-800 dark:hover:text-white transition-all duration-200 opacity-0 group-hover:opacity-100 focus:opacity-100"
-        aria-label="Copy JSON result"
-        title={copied ? 'Copied!' : 'Copy raw JSON'}
-      >
-        {copied ? <CheckIcon className="w-4 h-4 text-blue-500" /> : <ClipboardIcon className="w-4 h-4" />}
-      </button>
+      
+      <div className="absolute top-2 right-2 flex items-center gap-1">
+        {!isSearchVisible && (
+          <button
+            onClick={() => {
+              setIsSearchVisible(true);
+              setTimeout(() => searchInputRef.current?.focus(), 100);
+            }}
+            className="p-2 bg-slate-100/80 dark:bg-slate-700/80 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 hover:text-slate-800 dark:hover:text-white transition-all duration-200 opacity-0 group-hover:opacity-100 focus:opacity-100"
+            aria-label="Search in JSON (Ctrl+F / Cmd+F)"
+            title="Search in JSON (Ctrl+F / Cmd+F)"
+          >
+            <SearchIcon className="w-4 h-4" />
+          </button>
+        )}
+        <button
+          onClick={handleCopy}
+          className="p-2 bg-slate-100/80 dark:bg-slate-700/80 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 hover:text-slate-800 dark:hover:text-white transition-all duration-200 opacity-0 group-hover:opacity-100 focus:opacity-100"
+          aria-label="Copy JSON result"
+          title={copied ? 'Copied!' : 'Copy raw JSON'}
+        >
+          {copied ? <CheckIcon className="w-4 h-4 text-blue-500" /> : <ClipboardIcon className="w-4 h-4" />}
+        </button>
+      </div>
     </div>
   );
 };
