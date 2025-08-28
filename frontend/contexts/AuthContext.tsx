@@ -20,7 +20,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = () => {
     // In bypass mode, simulate a successful login with an email
-    setUser({ name: 'Developer User', email: 'dev.user@example.com' });
+    const newUser = { name: 'Developer User', email: 'dev.user@example.com' };
+    setUser(newUser);
     setIsAuthenticated(true);
   };
 

@@ -1,6 +1,7 @@
 
-import React from 'react';
-import { useMsal } from "@azure/msal-react";
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { loginRequest } from "../authConfig";
 import MongoIcon from '../components/icons/MongoIcon';
 import { USE_MSAL_AUTH } from '../app.config';
@@ -11,7 +12,7 @@ import { UserIcon, MicrosoftIcon } from '../components/icons/material-icons-impo
 interface LoginUIProps {
     onLogin: () => void;
     buttonText: string;
-    ButtonIcon: React.FC<React.SVGProps<SVGSVGElement>>;
+    ButtonIcon: React.ComponentType<any>;
 }
 
 const LoginUI: React.FC<LoginUIProps> = ({ onLogin, buttonText, ButtonIcon }) => (
@@ -55,18 +56,50 @@ const LoginUI: React.FC<LoginUIProps> = ({ onLogin, buttonText, ButtonIcon }) =>
 // --- Container Components ---
 
 const MsalLoginPage: React.FC = () => {
-    const { instance } = useMsal();
+    const { instance, accounts } = useMsal();
+    const isAuthenticated = useIsAuthenticated();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        console.log('MSAL Login Page - isAuthenticated:', isAuthenticated, 'accounts:', accounts);
+        if (isAuthenticated && accounts.length > 0) {
+            console.log('User is authenticated, navigating to /query-generator');
+            navigate('/query-generator', { replace: true });
+        }
+    }, [isAuthenticated, accounts, navigate]);
+
     const handleLogin = () => {
+        console.log('Starting MSAL login redirect');
         instance.loginRedirect(loginRequest).catch(e => {
-            console.error(e);
+            console.error('MSAL login error:', e);
         });
     }
+
+    // Show loading state if we're in the middle of processing authentication
+    if (isAuthenticated && accounts.length > 0) {
+        return (
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col justify-center items-center p-4 text-slate-800 dark:text-slate-200">
+                <div>Redirecting to Query Generator...</div>
+            </div>
+        );
+    }
+
     return <LoginUI onLogin={handleLogin} buttonText="Sign In with Microsoft Entra ID" ButtonIcon={MicrosoftIcon} />;
 };
 
 const BypassLoginPage: React.FC = () => {
     const { login } = useAuth();
-    return <LoginUI onLogin={login} buttonText="Sign In as Developer" ButtonIcon={UserIcon} />;
+    const navigate = useNavigate();
+
+    const handleLogin = () => {
+        login();
+        // Navigate using React Router instead of window.location
+        setTimeout(() => {
+            navigate('/query-generator', { replace: true });
+        }, 100);
+    };
+
+    return <LoginUI onLogin={handleLogin} buttonText="Sign In as Developer" ButtonIcon={UserIcon} />;
 }
 
 // --- Main Exported Component (Router) ---

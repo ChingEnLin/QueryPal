@@ -13,18 +13,51 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <ThemeProvider>
-      {USE_MSAL_AUTH ? (
-        <MsalProvider instance={msalInstance}>
-          <App />
-        </MsalProvider>
-      ) : (
+
+// Initialize MSAL and handle redirect response
+if (USE_MSAL_AUTH) {
+  msalInstance.initialize().then(() => {
+    // Handle redirect promise to capture the result of the authentication flow
+    return msalInstance.handleRedirectPromise();
+  }).then((response) => {
+    // If the response is non-null, the user was redirected back from Azure AD
+    if (response) {
+      console.log('Authentication successful:', response);
+    }
+    
+    // Render the app after MSAL initialization is complete
+    root.render(
+      <React.StrictMode>
+        <ThemeProvider>
+          <MsalProvider instance={msalInstance}>
+            <App />
+          </MsalProvider>
+        </ThemeProvider>
+      </React.StrictMode>
+    );
+  }).catch((error) => {
+    console.error('MSAL initialization error:', error);
+    
+    // Still render the app even if there's an error
+    root.render(
+      <React.StrictMode>
+        <ThemeProvider>
+          <MsalProvider instance={msalInstance}>
+            <App />
+          </MsalProvider>
+        </ThemeProvider>
+      </React.StrictMode>
+    );
+  });
+} else {
+  // For bypass authentication, render normally
+  root.render(
+    <React.StrictMode>
+      <ThemeProvider>
         <AuthProvider>
           <App />
         </AuthProvider>
-      )}
-    </ThemeProvider>
-  </React.StrictMode>
-);
+      </ThemeProvider>
+    </React.StrictMode>
+  );
+}
