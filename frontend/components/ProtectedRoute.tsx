@@ -14,7 +14,11 @@ const MsalProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   
   if (!isAuthenticated) {
     // Save the current location to state so we can redirect back after login
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: { 
+      pathname: location.pathname, 
+      search: location.search, 
+      hash: location.hash 
+    }}} replace />;
   }
   
   return <>{children}</>;
@@ -26,7 +30,11 @@ const BypassProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   
   if (!isAuthenticated) {
     // Save the current location to state so we can redirect back after login
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: { 
+      pathname: location.pathname, 
+      search: location.search, 
+      hash: location.hash 
+    }}} replace />;
   }
   
   return <>{children}</>;

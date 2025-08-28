@@ -67,7 +67,8 @@ const MsalLoginPage: React.FC = () => {
             // Check if there's a saved location to redirect to
             const from = location.state?.from?.pathname || '/query-generator';
             const search = location.state?.from?.search || '';
-            const redirectPath = from + search;
+            const hash = location.state?.from?.hash || '';
+            const redirectPath = from + search + hash;
             
             console.log('User is authenticated, navigating to:', redirectPath);
             navigate(redirectPath, { replace: true });
@@ -105,7 +106,8 @@ const BypassLoginPage: React.FC = () => {
             // Check if there's a saved location to redirect to
             const from = location.state?.from?.pathname || '/query-generator';
             const search = location.state?.from?.search || '';
-            const redirectPath = from + search;
+            const hash = location.state?.from?.hash || '';
+            const redirectPath = from + search + hash;
             
             navigate(redirectPath, { replace: true });
         }, 100);
