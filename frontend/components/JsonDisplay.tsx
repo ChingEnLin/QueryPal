@@ -2,6 +2,54 @@
 import React, { useState } from 'react';
 import { CheckIcon, ChevronDownIcon, ClipboardIcon } from './icons/material-icons-imports';
 
+// Component to render ObjectId with both click navigation and copy functionality
+const ObjectIdDisplay: React.FC<{
+  objectId: string;
+  onObjectIdClick?: (id: string, keyContext?: string) => void;
+  keyContext?: string;
+  showAsLink?: boolean;
+}> = ({ objectId, onObjectIdClick, keyContext, showAsLink = true }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(objectId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(err => {
+      console.error("Failed to copy ObjectId:", err);
+    });
+  };
+
+  return (
+    <span className="inline-flex items-center relative group/objectid">
+      {showAsLink ? (
+        <button
+          onClick={() => onObjectIdClick?.(objectId, keyContext)}
+          className="text-blue-600 dark:text-blue-400 hover:underline focus:outline-none"
+          title={`Find document with ID: ${objectId}`}
+        >
+          "{objectId}"
+        </button>
+      ) : (
+        <span className="text-emerald-700 dark:text-emerald-300">"{objectId}"</span>
+      )}
+      <button
+        onClick={handleCopy}
+        className="absolute -right-5 top-1/2 -translate-y-1/2 p-0.5 rounded opacity-0 group-hover/objectid:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 focus:opacity-100 z-10"
+        title={copied ? 'Copied!' : 'Copy ObjectId'}
+        aria-label="Copy ObjectId"
+      >
+        {copied ? (
+          <CheckIcon className="w-3 h-3 text-green-500" />
+        ) : (
+          <ClipboardIcon className="w-3 h-3 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" />
+        )}
+      </button>
+    </span>
+  );
+};
+
 // A single, recursive component to render all parts of the JSON object.
 const JsonNode: React.FC<{
   nodeValue: any;
@@ -56,13 +104,12 @@ const JsonNode: React.FC<{
             {nodeKey && <span className="text-purple-600 dark:text-purple-400">"{nodeKey}": </span>}
             <span className="text-slate-700 dark:text-slate-300">
               <span className="text-purple-600 dark:text-purple-400">ObjectId</span>(
-              <button
-                onClick={() => onObjectIdClick?.(objectId, parentKeyContext)}
-                className="text-blue-600 dark:text-blue-400 hover:underline focus:outline-none"
-                title={`Find document with ID: ${objectId}`}
-              >
-                "{objectId}"
-              </button>
+              <ObjectIdDisplay 
+                objectId={objectId} 
+                onObjectIdClick={onObjectIdClick} 
+                keyContext={parentKeyContext}
+                showAsLink={!!onObjectIdClick}
+              />
               )
             </span>
         </div>
@@ -149,15 +196,12 @@ const JsonNode: React.FC<{
           if (isObjectIdLike && onObjectIdClick) {
             return (
               <span className="text-emerald-700 dark:text-emerald-300">
-                "
-                <button
-                  onClick={() => onObjectIdClick(nodeValue, parentKeyContext)}
-                  className="text-blue-600 dark:text-blue-400 hover:underline focus:outline-none"
-                  title={`Find document with ID: ${nodeValue}`}
-                >
-                  {nodeValue}
-                </button>
-                "
+                <ObjectIdDisplay 
+                  objectId={nodeValue} 
+                  onObjectIdClick={onObjectIdClick} 
+                  keyContext={parentKeyContext}
+                  showAsLink={true}
+                />
               </span>
             );
           }
