@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useIsAuthenticated } from "@azure/msal-react";
 import { useAuth } from '../contexts/AuthContext';
 import { USE_MSAL_AUTH } from '../app.config';
@@ -10,9 +10,11 @@ interface ProtectedRouteProps {
 
 const MsalProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const isAuthenticated = useIsAuthenticated();
+  const location = useLocation();
   
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // Save the current location to state so we can redirect back after login
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
   
   return <>{children}</>;
@@ -20,9 +22,11 @@ const MsalProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
 const BypassProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated } = useAuth();
+  const location = useLocation();
   
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // Save the current location to state so we can redirect back after login
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
   
   return <>{children}</>;

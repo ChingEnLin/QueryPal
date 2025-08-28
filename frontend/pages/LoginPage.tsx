@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { loginRequest } from "../authConfig";
 import MongoIcon from '../components/icons/MongoIcon';
@@ -59,14 +59,20 @@ const MsalLoginPage: React.FC = () => {
     const { instance, accounts } = useMsal();
     const isAuthenticated = useIsAuthenticated();
     const navigate = useNavigate();
+    const location = useLocation();
 
     useEffect(() => {
         console.log('MSAL Login Page - isAuthenticated:', isAuthenticated, 'accounts:', accounts);
         if (isAuthenticated && accounts.length > 0) {
-            console.log('User is authenticated, navigating to /query-generator');
-            navigate('/query-generator', { replace: true });
+            // Check if there's a saved location to redirect to
+            const from = location.state?.from?.pathname || '/query-generator';
+            const search = location.state?.from?.search || '';
+            const redirectPath = from + search;
+            
+            console.log('User is authenticated, navigating to:', redirectPath);
+            navigate(redirectPath, { replace: true });
         }
-    }, [isAuthenticated, accounts, navigate]);
+    }, [isAuthenticated, accounts, navigate, location.state]);
 
     const handleLogin = () => {
         console.log('Starting MSAL login redirect');
@@ -90,12 +96,18 @@ const MsalLoginPage: React.FC = () => {
 const BypassLoginPage: React.FC = () => {
     const { login } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const handleLogin = () => {
         login();
         // Navigate using React Router instead of window.location
         setTimeout(() => {
-            navigate('/query-generator', { replace: true });
+            // Check if there's a saved location to redirect to
+            const from = location.state?.from?.pathname || '/query-generator';
+            const search = location.state?.from?.search || '';
+            const redirectPath = from + search;
+            
+            navigate(redirectPath, { replace: true });
         }, 100);
     };
 

@@ -113,7 +113,7 @@ const DataExplorerPageWrapper: React.FC = () => {
         backgroundColor: '#121212',
         color: 'white'
       }}>
-        <Loader />
+        <Loader message="Loading database information..." />
       </div>
     );
   }

@@ -1,7 +1,11 @@
 
 import React from 'react';
 
-const Loader: React.FC = () => (
+interface LoaderProps {
+  message?: string;
+}
+
+const Loader: React.FC<LoaderProps> = ({ message = "Loading..." }) => (
   <div className="flex justify-center items-center p-8">
     <svg
       className="animate-spin -ml-1 mr-3 h-8 w-8 text-blue-500"
@@ -23,7 +27,7 @@ const Loader: React.FC = () => (
         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
       ></path>
     </svg>
-    <span className="text-slate-600 dark:text-slate-400 text-lg">Generating query...</span>
+    <span className="text-slate-600 dark:text-slate-400 text-lg">{message}</span>
   </div>
 );
 
