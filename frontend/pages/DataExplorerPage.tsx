@@ -458,15 +458,15 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     setIsLoadingDbsForAccount(true);
     setError(null);
     
-    resetExplorerState();
-    
-    setCurrentAccount(newAccount);
-    setCurrentAccountDbs([]);
-    setCurrentDb(null);
+    // Don't reset explorer state immediately - let it blur out instead
     
     try {
       const dbs = await getDatabasesForAccount(newAccount.id);
+      
+      // Only update state and reset explorer after successful data fetch
+      setCurrentAccount(newAccount);
       setCurrentAccountDbs(dbs);
+      resetExplorerState();
   
       if (dbs.length > 0) {
         const firstDb = dbs[0];
@@ -478,6 +478,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
         const encodedDatabaseName = encodeURIComponent(firstDb.name);
         navigate(`/data-explorer/${encodedAccountId}/${encodedDatabaseName}`, { replace: true });
       } else {
+        setCurrentDb(null);
         setCurrentResource({ accountId: newAccount.id, databaseName: '' });
         // Navigate to account-only URL if no databases
         const encodedAccountId = encodeURIComponent(newAccount.id);
@@ -951,7 +952,17 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
-      <div className="flex flex-col h-screen">
+      <div className="flex flex-col h-screen relative">
+        
+        {/* Loading Overlay */}
+        {isLoadingDbsForAccount && (
+          <div className="absolute inset-0 z-50 bg-black/20 dark:bg-black/40 backdrop-blur-sm flex items-center justify-center">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl px-6 py-4 flex items-center gap-3 border border-slate-200 dark:border-slate-700">
+              <SpinnerIcon className="w-5 h-5 animate-spin text-blue-500" />
+              <span className="text-slate-700 dark:text-slate-200 font-medium">Switching account...</span>
+            </div>
+          </div>
+        )}
         
         {/* Header */}
         <header className="flex-shrink-0 bg-white dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
