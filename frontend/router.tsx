@@ -31,6 +31,14 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: "/data-explorer/:accountId/:databaseName/document/:documentId",
+    element: (
+      <ProtectedRoute>
+        <DataExplorerPageWrapper />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: "*",
     element: <NotFoundPage />,
   },

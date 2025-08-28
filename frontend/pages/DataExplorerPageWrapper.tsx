@@ -13,7 +13,11 @@ interface LocationState {
 }
 
 const DataExplorerPageWrapper: React.FC = () => {
-  const { accountId, databaseName } = useParams<{ accountId: string; databaseName: string }>();
+  const { accountId, databaseName, documentId } = useParams<{
+    accountId: string;
+    databaseName: string;
+    documentId?: string;
+  }>();
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as LocationState;
@@ -26,6 +30,7 @@ const DataExplorerPageWrapper: React.FC = () => {
     accountName: string;
     availableDbs: DbInfo[];
     availableAccounts: CosmosDBAccount[];
+    initialDocumentId?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -42,6 +47,13 @@ const DataExplorerPageWrapper: React.FC = () => {
         // Decode URL parameters
         const decodedAccountId = decodeURIComponent(accountId);
         const decodedDatabaseName = decodeURIComponent(databaseName);
+        const decodedDocumentId = documentId ? decodeURIComponent(documentId) : undefined;
+
+        console.log('DataExplorerPageWrapper - URL params:', {
+          accountId: decodedAccountId,
+          databaseName: decodedDatabaseName,
+          documentId: decodedDocumentId
+        });
 
         // Validate decoded parameters
         if (!decodedAccountId.trim() || !decodedDatabaseName.trim()) {
@@ -60,7 +72,8 @@ const DataExplorerPageWrapper: React.FC = () => {
             dbInfo: state.dbInfo,
             accountName: state.accountName,
             availableDbs: state.availableDbs,
-            availableAccounts: state.availableAccounts
+            availableAccounts: state.availableAccounts,
+            initialDocumentId: decodedDocumentId
           });
         } else {
           // Otherwise, fetch the data we need
@@ -85,7 +98,8 @@ const DataExplorerPageWrapper: React.FC = () => {
             dbInfo: database,
             accountName: account.name,
             availableDbs: databases,
-            availableAccounts: accounts
+            availableAccounts: accounts,
+            initialDocumentId: decodedDocumentId
           });
         }
       } catch (err) {
@@ -97,7 +111,7 @@ const DataExplorerPageWrapper: React.FC = () => {
     };
 
     initializePageData();
-  }, [accountId, databaseName, state, navigate]);
+  }, [accountId, databaseName, documentId, state, navigate]);
 
   const onNavigateBack = () => {
     navigate('/query-generator');
@@ -216,14 +230,15 @@ const DataExplorerPageWrapper: React.FC = () => {
   }
 
   return (
-    <DataExplorerPage
-      initialResource={pageData.resource}
-      initialDbInfo={pageData.dbInfo}
-      accountName={pageData.accountName}
-      availableDbs={pageData.availableDbs}
-      availableAccounts={pageData.availableAccounts}
-      onNavigateBack={onNavigateBack}
-    />
+          <DataExplorerPage
+        resource={pageData.resource}
+        dbInfo={pageData.dbInfo}
+        accountName={pageData.accountName}
+        availableDbs={pageData.availableDbs}
+        availableAccounts={pageData.availableAccounts}
+        initialDocumentId={pageData.initialDocumentId}
+        onNavigateBack={onNavigateBack}
+      />
   );
 };
 

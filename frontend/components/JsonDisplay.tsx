@@ -5,11 +5,13 @@ import { CheckIcon, ChevronDownIcon, ClipboardIcon } from './icons/material-icon
 // Component to render ObjectId with both click navigation and copy functionality
 const ObjectIdDisplay: React.FC<{
   objectId: string;
-  onObjectIdClick?: (id: string, keyContext?: string) => void;
+  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean) => void;
   keyContext?: string;
   showAsLink?: boolean;
 }> = ({ objectId, onObjectIdClick, keyContext, showAsLink = true }) => {
   const [copied, setCopied] = useState(false);
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -21,19 +23,108 @@ const ObjectIdDisplay: React.FC<{
     });
   };
 
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowContextMenu(false); // Hide context menu if clicking normally
+    onObjectIdClick?.(objectId, keyContext, false);
+  };
+
+  const handleRightClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenuPosition({ x: e.clientX, y: e.clientY });
+    setShowContextMenu(true);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+Enter or Cmd+Enter opens in new tab
+        onObjectIdClick?.(objectId, keyContext, true);
+      } else {
+        // Regular Enter navigates in same tab
+        onObjectIdClick?.(objectId, keyContext, false);
+      }
+    }
+  };
+
+  const handleOpenInNewTab = () => {
+    setShowContextMenu(false);
+    onObjectIdClick?.(objectId, keyContext, true);
+  };
+
+  const handleOpenInCurrentTab = () => {
+    setShowContextMenu(false);
+    onObjectIdClick?.(objectId, keyContext, false);
+  };
+
+  const handleCopyFromMenu = () => {
+    setShowContextMenu(false);
+    navigator.clipboard.writeText(objectId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(err => {
+      console.error("Failed to copy ObjectId:", err);
+    });
+  };
+
+  // Close context menu when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = () => setShowContextMenu(false);
+    if (showContextMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showContextMenu]);
+
   return (
     <span className="inline-flex items-center relative group/objectid">
       {showAsLink ? (
         <button
-          onClick={() => onObjectIdClick?.(objectId, keyContext)}
-          className="text-blue-600 dark:text-blue-400 hover:underline focus:outline-none"
-          title={`Find document with ID: ${objectId}`}
+          onClick={handleClick}
+          onContextMenu={handleRightClick}
+          onKeyDown={handleKeyDown}
+          className="text-blue-600 dark:text-blue-400 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
+          title={`Find document with ID: ${objectId}\n• Click to navigate in current tab\n• Right-click for options\n• Ctrl+Enter (⌘+Enter on Mac) to open in new tab`}
         >
           "{objectId}"
         </button>
       ) : (
         <span className="text-emerald-700 dark:text-emerald-300">"{objectId}"</span>
       )}
+
+      {/* Context Menu */}
+      {showContextMenu && (
+        <div 
+          className="fixed z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-md shadow-lg py-1 min-w-[180px]"
+          style={{ 
+            left: `${contextMenuPosition.x}px`, 
+            top: `${contextMenuPosition.y}px`,
+            transform: 'translate(-50%, 0)'
+          }}
+        >
+          <button
+            onClick={handleOpenInCurrentTab}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+          >
+            <span>Open in Current Tab</span>
+          </button>
+          <button
+            onClick={handleOpenInNewTab}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+          >
+            <span>Open in New Tab</span>
+          </button>
+          <div className="border-t border-slate-200 dark:border-slate-600 my-1"></div>
+          <button
+            onClick={handleCopyFromMenu}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+          >
+            <span>Copy ObjectId</span>
+          </button>
+        </div>
+      )}
+
       <button
         onClick={handleCopy}
         className="absolute -right-5 top-1/2 -translate-y-1/2 p-0.5 rounded opacity-0 group-hover/objectid:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 focus:opacity-100 z-10"
@@ -55,7 +146,7 @@ const JsonNode: React.FC<{
   nodeValue: any;
   nodeKey?: string; // The key of this node, if it's in an object
   isRoot?: boolean; // The top-level object is not collapsible
-  onObjectIdClick?: (id: string, keyContext?: string) => void;
+  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean) => void;
   parentKeyContext?: string; // The key of the parent, used for context in clicks
 }> = ({ nodeValue, nodeKey, isRoot = false, onObjectIdClick, parentKeyContext }) => {
   // All nodes are expanded by default.
@@ -226,7 +317,7 @@ const JsonNode: React.FC<{
 
 interface JsonDisplayProps {
   data: any;
-  onObjectIdClick?: (id: string, keyContext?: string) => void;
+  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean) => void;
 }
 
 const JsonDisplay: React.FC<JsonDisplayProps> = ({ data, onObjectIdClick }) => {

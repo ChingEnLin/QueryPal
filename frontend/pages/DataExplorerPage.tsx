@@ -65,11 +65,12 @@ const getCoercedFilterValue = (value: string): any => {
 
 
 interface DataExplorerPageProps {
-  initialResource: SelectedResource;
-  initialDbInfo: DbInfo;
+  resource: SelectedResource;
+  dbInfo: DbInfo;
   accountName: string; // Keep this for the initial display before full state is ready
   availableDbs: DbInfo[];
   availableAccounts: CosmosDBAccount[];
+  initialDocumentId?: string;
   onNavigateBack: () => void;
 }
 
@@ -141,13 +142,21 @@ const DeleteDocumentDialog: React.FC<{
   );
 };
 
-const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, initialDbInfo, accountName, availableDbs, availableAccounts, onNavigateBack }) => {
+const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
+  resource,
+  dbInfo,
+  accountName,
+  availableDbs,
+  availableAccounts,
+  initialDocumentId,
+  onNavigateBack
+}) => {
   const navigate = useNavigate();
   
   // --- Account & DB State ---
-  const [currentAccount, setCurrentAccount] = useState<CosmosDBAccount>(() => availableAccounts.find(a => a.id === initialResource.accountId)!);
-  const [currentDb, setCurrentDb] = useState<DbInfo | null>(initialDbInfo);
-  const [currentResource, setCurrentResource] = useState<SelectedResource>(initialResource);
+  const [currentAccount, setCurrentAccount] = useState<CosmosDBAccount>(() => availableAccounts.find(a => a.id === resource.accountId)!);
+  const [currentDb, setCurrentDb] = useState<DbInfo | null>(dbInfo);
+  const [currentResource, setCurrentResource] = useState<SelectedResource>(resource);
   const [currentAccountDbs, setCurrentAccountDbs] = useState<DbInfo[]>(availableDbs);
   const [isLoadingDbsForAccount, setIsLoadingDbsForAccount] = useState(false);
   
@@ -451,6 +460,44 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     }
   }, [currentResource]);
 
+  // Handle initial document selection from URL (no collection specified)
+  useEffect(() => {
+    const handleInitialDocumentSelection = async () => {
+      console.log('useEffect triggered - initialDocumentId:', initialDocumentId);
+      console.log('currentDb:', currentDb, 'currentResource:', currentResource);
+      
+      if (!currentDb || !currentResource || !initialDocumentId) {
+        console.log('Missing required data for initial document selection - initialDocumentId:', initialDocumentId, 'currentDb:', !!currentDb);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const collectionNames = currentDb.collections.map(c => c.name);
+        console.log('Searching for document:', initialDocumentId, 'across all collections');
+        
+        const result = await findDocumentById(initialDocumentId, currentResource, collectionNames);
+        console.log('Found document in collection:', result.collectionName);
+        
+        // Set the collection that contains the document
+        setSelectedCollection(result.collectionName);
+        await fetchSchemaForCollection(result.collectionName);
+        
+        // Set the found document
+        console.log('Setting selected document:', result.document);
+        setSelectedDocument(result.document);
+        
+      } catch (error) {
+        console.error('Failed to load initial document:', error);
+        setError(`Document with ID '${initialDocumentId}' not found in any collection`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    handleInitialDocumentSelection();
+  }, [initialDocumentId, currentDb, currentResource, fetchSchemaForCollection]);
+
   const handleAccountSwitch = useCallback(async (newAccount: CosmosDBAccount) => {
     if (newAccount.id === currentAccount.id) return;
   
@@ -563,8 +610,19 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     });
   }, [currentDb, collectionSortKey, collectionSortOrder]);
 
-  const handleObjectIdClick = useCallback(async (objectId: string, keyContext?: string) => {
+  const handleObjectIdClick = useCallback(async (objectId: string, keyContext?: string, openInNewTab?: boolean) => {
     if (!selectedDocument || !selectedCollection || !currentDb) return;
+    
+    if (openInNewTab) {
+      // Generate URL for new tab - let backend find which collection contains the document
+      const encodedAccountId = encodeURIComponent(currentAccount.id);
+      const encodedDatabaseName = encodeURIComponent(currentDb.name);
+      const encodedDocumentId = encodeURIComponent(objectId);
+      const newTabUrl = `/data-explorer/${encodedAccountId}/${encodedDatabaseName}/document/${encodedDocumentId}`;
+      window.open(newTabUrl, '_blank');
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
@@ -584,7 +642,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDocument, selectedCollection, currentResource, currentDb, fetchSchemaForCollection]);
+  }, [selectedDocument, selectedCollection, currentResource, currentDb, currentAccount.id, fetchSchemaForCollection]);
 
   const handleBreadcrumbClick = useCallback(async (index: number) => {
     const targetState = breadcrumbs[index];
