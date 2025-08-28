@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SelectedResource, DbInfo, BreadcrumbItem, CosmosDBAccount, CollectionInfo } from '../types';
 import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache, getSingleDocument } from '../services/dbService';
 import { extractSchemaTree, SchemaKeyNode } from '../utils/schemaUtils';
@@ -141,6 +142,8 @@ const DeleteDocumentDialog: React.FC<{
 };
 
 const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, initialDbInfo, accountName, availableDbs, availableAccounts, onNavigateBack }) => {
+  const navigate = useNavigate();
+  
   // --- Account & DB State ---
   const [currentAccount, setCurrentAccount] = useState<CosmosDBAccount>(() => availableAccounts.find(a => a.id === initialResource.accountId)!);
   const [currentDb, setCurrentDb] = useState<DbInfo | null>(initialDbInfo);
@@ -469,8 +472,16 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
         const firstDb = dbs[0];
         setCurrentDb(firstDb);
         setCurrentResource({ accountId: newAccount.id, databaseName: firstDb.name });
+        
+        // Navigate to the new URL with the updated account and database
+        const encodedAccountId = encodeURIComponent(newAccount.id);
+        const encodedDatabaseName = encodeURIComponent(firstDb.name);
+        navigate(`/data-explorer/${encodedAccountId}/${encodedDatabaseName}`, { replace: true });
       } else {
         setCurrentResource({ accountId: newAccount.id, databaseName: '' });
+        // Navigate to account-only URL if no databases
+        const encodedAccountId = encodeURIComponent(newAccount.id);
+        navigate(`/data-explorer/${encodedAccountId}/`, { replace: true });
       }
     } catch (e) {
       if (e instanceof Error) setError(e.message);
@@ -478,7 +489,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     } finally {
       setIsLoadingDbsForAccount(false);
     }
-  }, [currentAccount, resetExplorerState]);
+  }, [currentAccount, resetExplorerState, navigate]);
 
   const handleDbSwitch = useCallback((newDb: DbInfo) => {
     if (newDb.name === currentDb?.name) return;
@@ -488,7 +499,12 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     setCurrentResource(prev => ({ ...prev, databaseName: newDb.name }));
     
     resetExplorerState();
-  }, [currentDb, resetExplorerState]);
+    
+    // Navigate to the new URL with the updated database
+    const encodedAccountId = encodeURIComponent(currentAccount.id);
+    const encodedDatabaseName = encodeURIComponent(newDb.name);
+    navigate(`/data-explorer/${encodedAccountId}/${encodedDatabaseName}`, { replace: true });
+  }, [currentDb, currentAccount.id, resetExplorerState, navigate]);
   
   const handleCollectionClick = useCallback(async (collectionName: string) => {
     if (selectedCollection === collectionName) return;
