@@ -37,13 +37,14 @@ jobs:
           workload_identity_provider: '${{ env.WORKLOAD_IDENTITY_PROVIDER }}'
           service_account: 'github-actions@gen-lang-client-0698668474.iam.gserviceaccount.com'
 
-      # BEGIN - Docker auth and build
-      - name: 'Docker Auth'
-        uses: 'docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567' # docker/login-action@v3
-        with:
-          username: 'oauth2accesstoken'
-          password: '${{ steps.auth.outputs.auth_token }}'
-          registry: 'gcr.io'
+      # Set up Cloud SDK
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@98ddc00a17442e89a24bbf282954a3b65ce6d200' # google-github-actions/setup-gcloud@v2
+
+      # Configure Docker to use gcloud as a credential helper
+      - name: 'Configure Docker for GCR'
+        run: |-
+          gcloud auth configure-docker --quiet
 
       # Build and Push Backend Container
       - name: 'Build and Push Backend Container'
