@@ -233,6 +233,18 @@ export const loginRequest = {
 
 ---
 
+## 🏷️ Versioning
+
+This project uses [Semantic Versioning](https://semver.org/) with automated releases based on [Conventional Commits](https://www.conventionalcommits.org/).
+
+- **Version format**: `vMAJOR.MINOR.PATCH` (e.g., `v2.1.0`)
+- **Automated releases**: Triggered when pushing to the `production` branch
+- **Release notes**: Auto-generated and published to GitHub Releases and project wiki
+
+For detailed information about our versioning process and commit message conventions, see [docs/SEMANTIC_VERSIONING.md](docs/SEMANTIC_VERSIONING.md).
+
+---
+
 ## ✨ Features
 
 - 🔐 Authenticated access via Microsoft Entra ID
