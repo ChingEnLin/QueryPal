@@ -119,7 +119,7 @@ const ObjectIdDisplay: React.FC<{
           onContextMenu={handleRightClick}
           onKeyDown={handleKeyDown}
           className="text-blue-600 dark:text-blue-400 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
-          title={`Find document with ID: ${objectId}\n• Click to navigate in current tab\n• Right-click for options\n• Ctrl+Enter (⌘+Enter on Mac) to open in new tab`}
+          title={`Find document with ID: ${objectId} • Click to navigate in current tab • Right-click for options • Ctrl+Enter (⌘+Enter on Mac) to open in new tab`}
         >
           "{objectId}"
         </button>

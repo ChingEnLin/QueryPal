@@ -230,15 +230,15 @@ const DataExplorerPageWrapper: React.FC = () => {
   }
 
   return (
-          <DataExplorerPage
-        resource={pageData.resource}
-        dbInfo={pageData.dbInfo}
-        accountName={pageData.accountName}
-        availableDbs={pageData.availableDbs}
-        availableAccounts={pageData.availableAccounts}
-        initialDocumentId={pageData.initialDocumentId}
-        onNavigateBack={onNavigateBack}
-      />
+    <DataExplorerPage
+      resource={pageData.resource}
+      dbInfo={pageData.dbInfo}
+      accountName={pageData.accountName}
+      availableDbs={pageData.availableDbs}
+      availableAccounts={pageData.availableAccounts}
+      initialDocumentId={pageData.initialDocumentId}
+      onNavigateBack={onNavigateBack}
+    />
   );
 };
 

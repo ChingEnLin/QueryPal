@@ -12,7 +12,7 @@ import { UserIcon, MicrosoftIcon } from '../components/icons/material-icons-impo
 interface LoginUIProps {
     onLogin: () => void;
     buttonText: string;
-    ButtonIcon: React.ComponentType<any>;
+    ButtonIcon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
 }
 
 const LoginUI: React.FC<LoginUIProps> = ({ onLogin, buttonText, ButtonIcon }) => (

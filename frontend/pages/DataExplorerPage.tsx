@@ -619,7 +619,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       const encodedDatabaseName = encodeURIComponent(currentDb.name);
       const encodedDocumentId = encodeURIComponent(objectId);
       const newTabUrl = `/data-explorer/${encodedAccountId}/${encodedDatabaseName}/document/${encodedDocumentId}`;
-      window.open(newTabUrl, '_blank');
+      window.open(newTabUrl, '_blank', 'noopener,noreferrer');
       return;
     }
     
