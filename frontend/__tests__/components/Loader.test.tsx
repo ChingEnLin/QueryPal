@@ -6,7 +6,7 @@ describe('Loader', () => {
   it('should render the loader component', () => {
     render(<Loader />)
     
-    const loadingText = screen.getByText('Generating query...')
+    const loadingText = screen.getByText('Loading...')
     expect(loadingText).toBeInTheDocument()
   })
 

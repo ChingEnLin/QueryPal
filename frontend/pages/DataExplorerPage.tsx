@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SelectedResource, DbInfo, BreadcrumbItem, CosmosDBAccount, CollectionInfo } from '../types';
 import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache, getSingleDocument } from '../services/dbService';
 import { extractSchemaTree, SchemaKeyNode } from '../utils/schemaUtils';
@@ -64,11 +65,12 @@ const getCoercedFilterValue = (value: string): any => {
 
 
 interface DataExplorerPageProps {
-  initialResource: SelectedResource;
-  initialDbInfo: DbInfo;
+  resource: SelectedResource;
+  dbInfo: DbInfo;
   accountName: string; // Keep this for the initial display before full state is ready
   availableDbs: DbInfo[];
   availableAccounts: CosmosDBAccount[];
+  initialDocumentId?: string;
   onNavigateBack: () => void;
 }
 
@@ -140,11 +142,21 @@ const DeleteDocumentDialog: React.FC<{
   );
 };
 
-const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, initialDbInfo, accountName, availableDbs, availableAccounts, onNavigateBack }) => {
+const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
+  resource,
+  dbInfo,
+  accountName,
+  availableDbs,
+  availableAccounts,
+  initialDocumentId,
+  onNavigateBack
+}) => {
+  const navigate = useNavigate();
+  
   // --- Account & DB State ---
-  const [currentAccount, setCurrentAccount] = useState<CosmosDBAccount>(() => availableAccounts.find(a => a.id === initialResource.accountId)!);
-  const [currentDb, setCurrentDb] = useState<DbInfo | null>(initialDbInfo);
-  const [currentResource, setCurrentResource] = useState<SelectedResource>(initialResource);
+  const [currentAccount, setCurrentAccount] = useState<CosmosDBAccount>(() => availableAccounts.find(a => a.id === resource.accountId)!);
+  const [currentDb, setCurrentDb] = useState<DbInfo | null>(dbInfo);
+  const [currentResource, setCurrentResource] = useState<SelectedResource>(resource);
   const [currentAccountDbs, setCurrentAccountDbs] = useState<DbInfo[]>(availableDbs);
   const [isLoadingDbsForAccount, setIsLoadingDbsForAccount] = useState(false);
   
@@ -448,6 +460,44 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     }
   }, [currentResource]);
 
+  // Handle initial document selection from URL (no collection specified)
+  useEffect(() => {
+    const handleInitialDocumentSelection = async () => {
+      console.log('useEffect triggered - initialDocumentId:', initialDocumentId);
+      console.log('currentDb:', currentDb, 'currentResource:', currentResource);
+      
+      if (!currentDb || !currentResource || !initialDocumentId) {
+        console.log('Missing required data for initial document selection - initialDocumentId:', initialDocumentId, 'currentDb:', !!currentDb);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const collectionNames = currentDb.collections.map(c => c.name);
+        console.log('Searching for document:', initialDocumentId, 'across all collections');
+        
+        const result = await findDocumentById(initialDocumentId, currentResource, collectionNames);
+        console.log('Found document in collection:', result.collectionName);
+        
+        // Set the collection that contains the document
+        setSelectedCollection(result.collectionName);
+        await fetchSchemaForCollection(result.collectionName);
+        
+        // Set the found document
+        console.log('Setting selected document:', result.document);
+        setSelectedDocument(result.document);
+        
+      } catch (error) {
+        console.error('Failed to load initial document:', error);
+        setError(`Document with ID '${initialDocumentId}' not found in any collection`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    handleInitialDocumentSelection();
+  }, [initialDocumentId, currentDb, currentResource, fetchSchemaForCollection]);
+
   const handleAccountSwitch = useCallback(async (newAccount: CosmosDBAccount) => {
     if (newAccount.id === currentAccount.id) return;
   
@@ -455,22 +505,31 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     setIsLoadingDbsForAccount(true);
     setError(null);
     
-    resetExplorerState();
-    
-    setCurrentAccount(newAccount);
-    setCurrentAccountDbs([]);
-    setCurrentDb(null);
+    // Don't reset explorer state immediately - let it blur out instead
     
     try {
       const dbs = await getDatabasesForAccount(newAccount.id);
+      
+      // Only update state and reset explorer after successful data fetch
+      setCurrentAccount(newAccount);
       setCurrentAccountDbs(dbs);
+      resetExplorerState();
   
       if (dbs.length > 0) {
         const firstDb = dbs[0];
         setCurrentDb(firstDb);
         setCurrentResource({ accountId: newAccount.id, databaseName: firstDb.name });
+        
+        // Navigate to the new URL with the updated account and database
+        const encodedAccountId = encodeURIComponent(newAccount.id);
+        const encodedDatabaseName = encodeURIComponent(firstDb.name);
+        navigate(`/data-explorer/${encodedAccountId}/${encodedDatabaseName}`, { replace: true });
       } else {
+        setCurrentDb(null);
         setCurrentResource({ accountId: newAccount.id, databaseName: '' });
+        // Navigate to account-only URL if no databases
+        const encodedAccountId = encodeURIComponent(newAccount.id);
+        navigate(`/data-explorer/${encodedAccountId}/`, { replace: true });
       }
     } catch (e) {
       if (e instanceof Error) setError(e.message);
@@ -478,7 +537,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     } finally {
       setIsLoadingDbsForAccount(false);
     }
-  }, [currentAccount, resetExplorerState]);
+  }, [currentAccount, resetExplorerState, navigate]);
 
   const handleDbSwitch = useCallback((newDb: DbInfo) => {
     if (newDb.name === currentDb?.name) return;
@@ -488,7 +547,12 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     setCurrentResource(prev => ({ ...prev, databaseName: newDb.name }));
     
     resetExplorerState();
-  }, [currentDb, resetExplorerState]);
+    
+    // Navigate to the new URL with the updated database
+    const encodedAccountId = encodeURIComponent(currentAccount.id);
+    const encodedDatabaseName = encodeURIComponent(newDb.name);
+    navigate(`/data-explorer/${encodedAccountId}/${encodedDatabaseName}`, { replace: true });
+  }, [currentDb, currentAccount.id, resetExplorerState, navigate]);
   
   const handleCollectionClick = useCallback(async (collectionName: string) => {
     if (selectedCollection === collectionName) return;
@@ -546,8 +610,19 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     });
   }, [currentDb, collectionSortKey, collectionSortOrder]);
 
-  const handleObjectIdClick = useCallback(async (objectId: string, keyContext?: string) => {
+  const handleObjectIdClick = useCallback(async (objectId: string, keyContext?: string, openInNewTab?: boolean) => {
     if (!selectedDocument || !selectedCollection || !currentDb) return;
+    
+    if (openInNewTab) {
+      // Generate URL for new tab - let backend find which collection contains the document
+      const encodedAccountId = encodeURIComponent(currentAccount.id);
+      const encodedDatabaseName = encodeURIComponent(currentDb.name);
+      const encodedDocumentId = encodeURIComponent(objectId);
+      const newTabUrl = `/data-explorer/${encodedAccountId}/${encodedDatabaseName}/document/${encodedDocumentId}`;
+      window.open(newTabUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
@@ -567,7 +642,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDocument, selectedCollection, currentResource, currentDb, fetchSchemaForCollection]);
+  }, [selectedDocument, selectedCollection, currentResource, currentDb, currentAccount.id, fetchSchemaForCollection]);
 
   const handleBreadcrumbClick = useCallback(async (index: number) => {
     const targetState = breadcrumbs[index];
@@ -935,7 +1010,17 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({ initialResource, in
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
-      <div className="flex flex-col h-screen">
+      <div className="flex flex-col h-screen relative">
+        
+        {/* Loading Overlay */}
+        {isLoadingDbsForAccount && (
+          <div className="absolute inset-0 z-50 bg-black/20 dark:bg-black/40 backdrop-blur-sm flex items-center justify-center">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl px-6 py-4 flex items-center gap-3 border border-slate-200 dark:border-slate-700">
+              <SpinnerIcon className="w-5 h-5 animate-spin text-blue-500" />
+              <span className="text-slate-700 dark:text-slate-200 font-medium">Switching account...</span>
+            </div>
+          </div>
+        )}
         
         {/* Header */}
         <header className="flex-shrink-0 bg-white dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">

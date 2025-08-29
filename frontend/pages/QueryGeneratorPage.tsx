@@ -1263,7 +1263,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     </button>
                 </div>
 
-              {isLoading && !isDemoModeForDebugStep && !isDemoModeForResultsStep && !isDemoModeForRunStep && <Loader />}
+              {isLoading && !isDemoModeForDebugStep && !isDemoModeForResultsStep && !isDemoModeForRunStep && <Loader message="Generating query..." />}
               
               {error && !isDemoModeForDebugStep && !isDemoModeForResultsStep && !isDemoModeForRunStep && (
                   <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg animate-fade-in dark:bg-red-900/50 dark:border-red-500/50 dark:text-red-300" role="alert">
