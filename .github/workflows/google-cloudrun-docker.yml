@@ -74,6 +74,7 @@ jobs:
             DB_UNIX_SOCKET=/cloudsql/gen-lang-client-0698668474:europe-west1:querypal-db
           flags: |
             --port=8000
+            --add-cloudsql-instances=gen-lang-client-0698668474:europe-west1:querypal-db
             --allow-unauthenticated
 
       # Build and Push Frontend Container
