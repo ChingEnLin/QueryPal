@@ -10,7 +10,6 @@ export const USE_MSAL_AUTH = true;
 
 /**
  * Defines the base URL for the backend API.
- * Change this to point to your deployed backend service.
- * For local development, this typically points to a local server.
+ * Uses environment variable if available, otherwise defaults to localhost for development.
  */
-export const API_BASE_URL = 'http://localhost:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';

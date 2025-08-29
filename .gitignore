@@ -38,6 +38,7 @@ coverage/
 .env
 .env.local
 .env.docker
+.env.production
 
 # CD and deployment files
 publish-profile.yml
