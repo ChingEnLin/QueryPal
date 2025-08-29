@@ -96,8 +96,6 @@ jobs:
           service: '${{ env.FRONTEND_SERVICE }}'
           region: '${{ env.REGION }}'
           image: 'gcr.io/${{ env.PROJECT_ID }}/${{ env.FRONTEND_SERVICE }}:${{ github.sha }}'
-          env_vars: |
-            PORT=4000
           flags: |
             --port=4000
             --allow-unauthenticated
