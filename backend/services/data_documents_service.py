@@ -95,7 +95,7 @@ def fetch_documents(
     collection = db[collection_name]
 
     query = {}
-    if filter and filter.get("key") and filter.get("value"):
+    if filter and ("key" in filter) and ("value" in filter):
         key = filter["key"]
         value = filter["value"]
         if key == "all":
