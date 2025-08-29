@@ -78,7 +78,7 @@ describe('JsonDisplay ObjectId Copy Functionality', () => {
     fireEvent.click(objectIdLink);
 
     // Verify the click handler was called
-    expect(mockOnObjectIdClick).toHaveBeenCalledWith('507f1f77bcf86cd799439013', '_id');
+    expect(mockOnObjectIdClick).toHaveBeenCalledWith('507f1f77bcf86cd799439013', '_id', false);
   });
 
   it('should not call onObjectIdClick when clicking the copy button', () => {
