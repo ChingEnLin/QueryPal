@@ -24,7 +24,9 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf.template
 
 # Create script to substitute environment variables in nginx config
 RUN echo '#!/bin/sh' > /docker-entrypoint.sh && \
-    echo 'envsubst < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf' >> /docker-entrypoint.sh && \
+    echo '# Set PORT default if not provided' >> /docker-entrypoint.sh && \
+    echo 'export PORT=${PORT:-4000}' >> /docker-entrypoint.sh && \
+    echo 'envsubst "\$PORT" < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf' >> /docker-entrypoint.sh && \
     echo 'exec nginx -g "daemon off;"' >> /docker-entrypoint.sh && \
     chmod +x /docker-entrypoint.sh
 
