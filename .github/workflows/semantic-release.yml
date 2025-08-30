@@ -189,7 +189,34 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # Create or update the Releases page
+          # Preserve existing releases before creating new content
+          EXISTING_RELEASES=""
+          if [ -f "Releases.md" ]; then
+            # Extract everything after "### Previous Releases" from existing file
+            if grep -q "### Previous Releases" "Releases.md"; then
+              EXISTING_RELEASES=$(grep -A 1000 "### Previous Releases" "Releases.md" | tail -n +2)
+            fi
+            
+            # Also extract current "Latest Release" section to move to Previous Releases
+            if grep -q "## Latest Release:" "Releases.md"; then
+              CURRENT_LATEST=$(sed -n '/## Latest Release:/,/### Previous Releases/p' "Releases.md" | head -n -1)
+              # Convert "Latest Release" to a previous release entry
+              if [ -n "$CURRENT_LATEST" ]; then
+                # Extract version from the current latest release
+                PREV_VERSION=$(echo "$CURRENT_LATEST" | grep "## Latest Release:" | sed 's/.*Latest Release: //')
+                # Format the previous release entry
+                PREV_RELEASE_FORMATTED="## Release ${PREV_VERSION}"$'\n\n'"$(echo "$CURRENT_LATEST" | sed '/## Latest Release:/d')"
+                # Combine with existing releases
+                if [ -n "$EXISTING_RELEASES" ]; then
+                  EXISTING_RELEASES="${PREV_RELEASE_FORMATTED}"$'\n\n'"${EXISTING_RELEASES}"
+                else
+                  EXISTING_RELEASES="${PREV_RELEASE_FORMATTED}"
+                fi
+              fi
+            fi
+          fi
+          
+          # Create or update the Releases page with new content
           cat > "Releases.md" << EOF
           # QueryPal Releases
           
@@ -232,14 +259,10 @@ jobs:
           
           EOF
           
-          # If there's already a releases page, preserve previous releases section
-          if [ -f "Releases.md.bak" ]; then
-            # Extract previous releases section if it exists
-            grep -A 1000 "### Previous Releases" "Releases.md.bak" | tail -n +2 >> "Releases.md" 2>/dev/null || true
+          # Append preserved existing releases
+          if [ -n "$EXISTING_RELEASES" ]; then
+            echo "$EXISTING_RELEASES" >> "Releases.md"
           fi
-          
-          # Backup current version for next time
-          cp "Releases.md" "Releases.md.bak"
           
           # Add to git and push
           git add "Releases.md"
