@@ -84,7 +84,7 @@ jobs:
           DOCKER_TAG="gcr.io/${{ env.PROJECT_ID }}/${{ env.FRONTEND_SERVICE }}:${{ github.sha }}"
           docker build --tag "${DOCKER_TAG}" --platform linux/amd64 \
             --build-arg VITE_API_BASE_URL=${{ steps.deploy-backend.outputs.url }} \
-            --build-arg VITE_AZURE_REDIRECT_URI=https://querypal-frontend-zynyyoxona-ew.a.run.app \
+            --build-arg VITE_AZURE_REDIRECT_URI=https://querypal.virtonomy.io \
             .
           docker push "${DOCKER_TAG}"
 
