@@ -402,27 +402,6 @@ QueryPal provides comprehensive REST APIs. When running locally, access:
 
 ---
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### Development Workflow
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Make** your changes with tests
-4. **Run** the test suite (`npm test` and `./run_tests.sh`)
-5. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-6. **Push** to the branch (`git push origin feature/amazing-feature`)
-7. **Open** a Pull Request
-
-### Code Standards
-- **TypeScript**: Strict mode enabled
-- **Python**: Black formatting, MyPy type checking
-- **Testing**: Maintain 80%+ coverage
-- **Documentation**: Update README and inline docs
-
----
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -440,7 +419,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## � Links
+## 🔗 Links
 
 - **Live Demo**: [QueryPal Production](https://querypal.virtonomy.io)
 - **GitHub Repository**: [QueryPal Source](https://github.com/ChingEnLin/QueryPal)
