@@ -425,6 +425,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **GitHub Repository**: [QueryPal Source](https://github.com/ChingEnLin/QueryPal)
 - **Issues & Feedback**: [GitHub Issues](https://github.com/ChingEnLin/QueryPal/issues)
 
----
-
-**⚠️ Important**: This is a demonstration application. For production use with sensitive data, conduct a thorough security review of both frontend and backend implementations.
