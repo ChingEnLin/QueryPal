@@ -1,0 +1,277 @@
+name: Semantic Release
+
+on:
+  push:
+    branches:
+      - production
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Create Semantic Release
+    runs-on: ubuntu-latest
+    
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+      new_release_git_tag: ${{ steps.semantic.outputs.new_release_git_tag }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install semantic-release dependencies
+        run: |
+          npm install -g semantic-release
+          npm install -g @semantic-release/changelog
+          npm install -g @semantic-release/git
+          npm install -g @semantic-release/github
+          npm install -g conventional-changelog-conventionalcommits
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Handle existing v2.0 tag
+        run: |
+          # Check if v2.0 tag exists but v2.0.0 doesn't
+          if git tag -l | grep -q "^v2.0$" && ! git tag -l | grep -q "^v2.0.0$"; then
+            echo "Found v2.0 tag, creating v2.0.0 tag for semantic-release compatibility"
+            # Get the commit hash of v2.0 tag
+            COMMIT_HASH=$(git rev-list -n 1 v2.0)
+            # Create v2.0.0 tag pointing to the same commit
+            git tag v2.0.0 $COMMIT_HASH
+            echo "Created v2.0.0 tag pointing to same commit as v2.0"
+          fi
+
+      - name: Create .releaserc.json
+        run: |
+          cat > .releaserc.json << 'EOF'
+          {
+            "branches": ["production"],
+            "tagFormat": "v${version}",
+            "repositoryUrl": "https://github.com/ChingEnLin/QueryPal",
+            "plugins": [
+              [
+                "@semantic-release/commit-analyzer",
+                {
+                  "preset": "conventionalcommits",
+                  "releaseRules": [
+                    {"type": "feat", "release": "minor"},
+                    {"type": "fix", "release": "patch"},
+                    {"type": "docs", "release": "patch"},
+                    {"type": "style", "release": "patch"},
+                    {"type": "refactor", "release": "patch"},
+                    {"type": "perf", "release": "patch"},
+                    {"type": "test", "release": "patch"},
+                    {"type": "ci", "release": "patch"},
+                    {"type": "chore", "release": "patch"},
+                    {"type": "build", "release": "patch"},
+                    {"breaking": true, "release": "major"}
+                  ]
+                }
+              ],
+              [
+                "@semantic-release/release-notes-generator",
+                {
+                  "preset": "conventionalcommits",
+                  "presetConfig": {
+                    "types": [
+                      {"type": "feat", "section": "Features"},
+                      {"type": "fix", "section": "Bug Fixes"},
+                      {"type": "chore", "section": "Maintenance", "hidden": false},
+                      {"type": "docs", "section": "Documentation", "hidden": false},
+                      {"type": "style", "section": "Styling", "hidden": false},
+                      {"type": "refactor", "section": "Refactoring", "hidden": false},
+                      {"type": "perf", "section": "Performance", "hidden": false},
+                      {"type": "test", "section": "Testing", "hidden": false},
+                      {"type": "build", "section": "Build System", "hidden": false},
+                      {"type": "ci", "section": "CI/CD", "hidden": false}
+                    ]
+                  }
+                }
+              ],
+              [
+                "@semantic-release/changelog",
+                {
+                  "changelogFile": "CHANGELOG.md"
+                }
+              ],
+              [
+                "@semantic-release/git",
+                {
+                  "assets": ["CHANGELOG.md"],
+                  "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+                }
+              ],
+              [
+                "@semantic-release/github",
+                {
+                  "assets": []
+                }
+              ]
+            ]
+          }
+          EOF
+
+      - name: Run semantic-release
+        id: semantic
+        run: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output version information
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          echo "New version published: ${{ steps.semantic.outputs.new_release_version }}"
+          echo "Git tag: ${{ steps.semantic.outputs.new_release_git_tag }}"
+
+  update-wiki:
+    name: Update Wiki Page
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get release information
+        id: release_info
+        run: |
+          # Get the latest release information
+          VERSION="${{ needs.release.outputs.new_release_version }}"
+          TAG="${{ needs.release.outputs.new_release_git_tag }}"
+          
+          # Get commit messages since last tag (excluding the current one)
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          if [ -n "$PREVIOUS_TAG" ]; then
+            COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --oneline --no-merges)
+          else
+            COMMITS=$(git log --oneline --no-merges)
+          fi
+          
+          # Create release notes
+          echo "RELEASE_VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "RELEASE_TAG=${TAG}" >> $GITHUB_OUTPUT
+          echo "RELEASE_DATE=$(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+          
+          # Save commits to file for wiki
+          echo "$COMMITS" > commits.txt
+          
+      - name: Create/Update Wiki Release Page
+        run: |
+          VERSION="${{ steps.release_info.outputs.RELEASE_VERSION }}"
+          TAG="${{ steps.release_info.outputs.RELEASE_TAG }}"
+          RELEASE_DATE="${{ steps.release_info.outputs.RELEASE_DATE }}"
+          
+          # Clone wiki repository
+          git clone https://github.com/ChingEnLin/QueryPal.wiki.git wiki
+          cd wiki
+          
+          # Configure git for wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Preserve existing releases before creating new content
+          EXISTING_RELEASES=""
+          if [ -f "Releases.md" ]; then
+            # Extract everything after "### Previous Releases" from existing file
+            if grep -q "### Previous Releases" "Releases.md"; then
+              EXISTING_RELEASES=$(grep -A 1000 "### Previous Releases" "Releases.md" | tail -n +2)
+            fi
+            
+            # Also extract current "Latest Release" section to move to Previous Releases
+            if grep -q "## Latest Release:" "Releases.md"; then
+              CURRENT_LATEST=$(sed -n '/## Latest Release:/,/### Previous Releases/p' "Releases.md" | head -n -1)
+              # Convert "Latest Release" to a previous release entry
+              if [ -n "$CURRENT_LATEST" ]; then
+                # Extract version from the current latest release
+                PREV_VERSION=$(echo "$CURRENT_LATEST" | grep "## Latest Release:" | sed 's/.*Latest Release: //')
+                # Format the previous release entry
+                PREV_RELEASE_FORMATTED="## Release ${PREV_VERSION}"$'\n\n'"$(echo "$CURRENT_LATEST" | sed '/## Latest Release:/d')"
+                # Combine with existing releases
+                if [ -n "$EXISTING_RELEASES" ]; then
+                  EXISTING_RELEASES="${PREV_RELEASE_FORMATTED}"$'\n\n'"${EXISTING_RELEASES}"
+                else
+                  EXISTING_RELEASES="${PREV_RELEASE_FORMATTED}"
+                fi
+              fi
+            fi
+          fi
+          
+          # Create or update the Releases page with new content
+          cat > "Releases.md" << EOF
+          # QueryPal Releases
+          
+          This page contains information about QueryPal releases, automatically generated from conventional commits.
+          
+          ## Latest Release: ${TAG}
+          
+          **Release Date:** ${RELEASE_DATE}
+          
+          **Version:** ${VERSION}
+          
+          ### Changes in this Release
+          
+          EOF
+          
+          # Add commit information
+          if [ -f ../commits.txt ]; then
+            echo "### Commits:" >> "Releases.md"
+            echo "" >> "Releases.md"
+            while IFS= read -r commit; do
+              echo "- $commit" >> "Releases.md"
+            done < ../commits.txt
+          fi
+          
+          # Add deployment information
+          cat >> "Releases.md" << EOF
+          
+          ### Deployment Information
+          
+          - **Backend Service:** querypal-backend
+          - **Frontend Service:** querypal-frontend
+          - **Cloud Platform:** Google Cloud Run
+          - **Region:** europe-west1
+          
+          ### Getting Started
+          
+          For setup and usage instructions, see the [main README](https://github.com/ChingEnLin/QueryPal/blob/production/README.md).
+          
+          ### Previous Releases
+          
+          EOF
+          
+          # Append preserved existing releases
+          if [ -n "$EXISTING_RELEASES" ]; then
+            echo "$EXISTING_RELEASES" >> "Releases.md"
+          fi
+          
+          # Add to git and push
+          git add "Releases.md"
+          if ! git diff --staged --quiet; then
+            git commit -m "docs: Update releases page for ${TAG}"
+            git push https://${{ secrets.GITHUB_TOKEN }}@github.com/ChingEnLin/QueryPal.wiki.git
+            echo "Wiki updated successfully"
+          else
+            echo "No changes to commit"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
