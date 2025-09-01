@@ -209,9 +209,7 @@ def update_document(
         before_doc = collection.find_one({"_id": ObjectId(document_id)})
         # Use replace_one instead of update_one to completely replace the document
         # This ensures deleted fields are actually removed
-        result = collection.replace_one(
-            {"_id": ObjectId(document_id)}, content
-        )
+        result = collection.replace_one({"_id": ObjectId(document_id)}, content)
         if result.matched_count == 0:
             return None
         updated_doc = collection.find_one({"_id": ObjectId(document_id)})
