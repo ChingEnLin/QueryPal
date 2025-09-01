@@ -1,158 +1,299 @@
 # QueryPal
-### MongoDB AI Assistant for Azure Cosmos DB
+### AI-Powered Database Assistant for Azure Cosmos DB
 
-This project is an intelligent database exploration tool tailored for developers and analysts working with **Azure Cosmos DB (MongoDB API)**. It allows users to inspect their NoSQL database schema and execute queries via **natural language** prompts using **Google Gemini AI**. Authentication and access control are managed securely with **Microsoft Entra ID (formerly Azure AD)**, and all Cosmos DB access happens through secure **On-Behalf-Of (OBO)** token exchange—**no connection strings are stored** in the codebase.
+QueryPal is a highly scalable, intelligent database exploration and management platform designed for developers, analysts, and data professionals working with **Azure Cosmos DB (MongoDB API)**. It combines the power of **Google Gemini AI** with a secure, user-friendly interface to transform how you interact with your NoSQL databases.
 
----
-
-## 🚀 Motivation
-
-Azure Cosmos DB (especially MongoDB API) lacks a friendly interface to inspect actual data schemas. The Azure Portal is often limited, buggy, and doesn't easily infer NoSQL structures. This tool provides:
-
-- An intuitive interface to browse schema structure, document samples, and index info.
-- A natural language interface using **Gemini API** to ask questions and generate MongoDB queries.
-- Secure access architecture using **Microsoft Entra ID** and **OBO flow**, following best practices for enterprise apps.
-- A privacy-conscious architecture: no credentials or database connection strings are exposed to the frontend.
+**Key Capabilities:**
+- 🧠 **Natural Language Queries**: Convert plain English to MongoDB queries using AI
+- 📊 **AI-Powered Data Analysis**: Automatic insights and visualizations from query results
+- 🔍 **Smart Data Explorer**: Paginated browsing with advanced filtering and search
+- 💾 **Query Management**: Save, share, and collaborate on queries with team members
+- 🔒 **Enterprise Security**: Microsoft Entra ID authentication with On-Behalf-Of (OBO) flow
+- 📝 **Document Management**: Full CRUD operations with audit trails and history
+- 🎯 **Schema Discovery**: Intelligent schema inference and documentation
 
 ---
 
-## 🧱 Tech Stack
+## 🚀 Why QueryPal?
 
-| Layer             | Technology                                                                 |
-|------------------|-----------------------------------------------------------------------------|
-| Frontend         | React, TypeScript, Tailwind CSS                                             |
-| Authentication   | Microsoft Entra ID + MSAL (On-Behalf-Of Flow)                               |
-| AI Query Engine  | Google Gemini.                                                              |
-| Backend          | FastAPI (Python)                                                            |
-| Database Access  | Azure Cosmos DB (MongoDB API)                                               |
-| Cloud APIs       | Azure Resource Manager (ARM)                                                |
-| Auth Libraries   | MSAL (Python, JS)                                                           |
-| Database         | PostgreSQL (for user queries)                                               |
+Azure Cosmos DB's portal interface can be limiting for real-world data exploration and analysis. QueryPal addresses these pain points by providing:
+
+- **🎯 Intuitive Data Discovery**: Browse collections, analyze schemas, and understand your data structure without complex queries
+- **🧠 AI-Powered Query Generation**: Ask questions in natural language and get optimized MongoDB queries instantly
+- **📊 Intelligent Analytics**: Automatic data analysis with AI-generated insights and Chart.js visualizations
+- **👥 Team Collaboration**: Share queries, insights, and findings with your team through built-in collaboration features
+- **🛡️ Enterprise-Grade Security**: Zero-trust architecture with Microsoft Entra ID and secure token management
+- **📋 Data Management**: Complete document lifecycle management with audit trails and version history
+- **🔍 Advanced Search**: Powerful filtering and search capabilities across collections and documents
 
 ---
 
-## 🛠️ Architecture Overview
+## ✨ Features
+## 🎯 Key Features Deep Dive
+
+### 🧠 AI-Powered Natural Language Queries
+- **Smart Query Generation**: Convert plain English to optimized MongoDB queries
+- **Context Awareness**: Uses database schema and collection metadata for better results
+- **Query Optimization**: AI suggests performance improvements and best practices
+- **Multi-step Queries**: Handle complex queries requiring multiple steps
+
+### 📊 Intelligent Data Analysis
+- **Automatic Insights**: AI analyzes query results and provides meaningful insights
+- **Dynamic Visualizations**: Chart.js integration with 8+ chart types
+- **Theme-Aware Charts**: Automatic dark/light mode adaptation
+- **Export Capabilities**: Save query output for external analysis
+
+### 💾 Team Collaboration & Query Management
+- **Save & Share Queries**: Build a knowledge base of useful queries
+- **Team Collaboration**: Share queries with specific team members
+- **Version History**: Track query modifications and usage
+- **Quick Access**: Organize and categorize saved queries
+
+### 🔍 Advanced Data Explorer
+- **Paginated Browsing**: Handle large collections efficiently
+- **Smart Filtering**: Filter by any field with intelligent search
+- **Document Linking**: Automatic cross-reference detection and navigation
+
+### 📝 Document Management
+- **Full CRUD Operations**: Create, read, update, delete documents
+- **Audit Trails**: Complete history of document changes
+- **Field-Level Editing**: Modify specific fields without affecting the whole document
+- **Data Validation**: Ensure data integrity with schema validation
+
+### 🎓 User Experience
+- **Interactive Tutorial**: Guided onboarding for new users
+- **Contextual Help**: In-app assistance and tooltips
+- **Responsive Design**: Works seamlessly on desktop and mobile
+- **Accessibility**: WCAG 2.1 compliant interface
+
+---
+
+## 🧱 Technology Stack
+
+| Component           | Technology                                                                   |
+|--------------------|-----------------------------------------------------------------------------|
+| **Frontend**       | React 18, TypeScript, Vite, Tailwind CSS, Material-UI                     |
+| **AI & Analytics** | Google Gemini Pro, Chart.js, React Chart.js 2                             |
+| **Authentication** | Microsoft Entra ID, MSAL (Browser & Python), On-Behalf-Of Flow             |
+| **Backend API**    | FastAPI (Python 3.12), Uvicorn, Pydantic V2                               |
+| **Database**       | Azure Cosmos DB (MongoDB API), PostgreSQL (User Data)                      |
+| **Cloud Platform** | Google Cloud Run, Azure Resource Manager (ARM)                             |
+| **DevOps & CI/CD** | GitHub Actions, Docker, Google Container Registry                          |
+| **Testing**        | Vitest, React Testing Library, Pytest, Coverage.py                        |
+| **Code Quality**   | ESLint, Black, Flake8, MyPy, TypeScript Strict Mode                       |
+| **Monitoring**     | Application Insights, Cloud SQL Proxy, Logging                             |
+
+---
+
+## 🏗️ Architecture Overview
+
+QueryPal follows a secure **Backend-for-Frontend (BFF)** pattern with enterprise-grade security:
 
 ```
-    ┌────────────────────┐      Login        ┌────────────────────┐
-    │     Frontend       ├──────────────────►│   Microsoft Entra  │
-    │ React + MSAL (SPA) │◄──────────────────┤     (Auth Server)  │
-    └────────────────────┘   ID Token + OBO  └────────────────────┘
+┌─────────────────────┐     Auth       ┌─────────────────────┐
+│    React Frontend   ├───────────────►│  Microsoft Entra    │
+│   (SPA + MSAL.js)   │◄───────────────┤   Identity Platform │
+└─────────────────────┘   Access Token └─────────────────────┘
            │
-           ▼ access_token
- ┌────────────────────────┐
- │    FastAPI Backend     │
- │   OBO Token Exchange   │◄──────────────┐
- │   Query Execution +    │               │
- │   Gemini AI Request    │               │
- └────────────────────────┘               │
-           │                              │
-           ▼                              │
- ┌────────────────────────┐               │
- │  Azure Cosmos DB API   │◄──────────────┘
- │ (MongoDB - ARM + conn) │
- └────────────────────────┘
+           ▼ Bearer Token
+┌─────────────────────┐
+│   FastAPI Backend   │
+│  • Token Validation │
+│  • OBO Exchange     │◄──────────┐
+│  • Query Processing │           │
+│  • AI Integration   │           │
+│  • Document CRUD    │           │
+└─────────────────────┘           │
+           │                      │
+           ▼                      │
+┌─────────────────────┐           │
+│  Google Gemini API  │           │
+│  • NL2Query         │           │
+│  • Data Analysis    │           │
+│  • Insights Gen     │           │
+└─────────────────────┘           │
+                                  │
+┌─────────────────────┐           │
+│   PostgreSQL DB     │           │
+│  • User Queries     │           │
+│  • Audit Logs       │           │
+│  • Query History    │           │
+└─────────────────────┘           │
+                                  │
+┌─────────────────────┐           │
+│  Azure Cosmos DB    │◄──────────┘
+│  • Document Storage │
+│  • MongoDB API      │
+│  • ARM Management   │
+└─────────────────────┘
 ```
 
-- ✅ Authentication is handled using MSAL.
-- 🔁 On-Behalf-Of (OBO) flow securely exchanges the frontend token to access Azure APIs.
-- 🧠 Gemini API helps convert user questions into MongoDB queries.
-- 🔍 The backend connects to Cosmos DB using runtime connection strings acquired via ARM API.
+**Security Features:**
+- ✅ **Zero-Trust Architecture**: No secrets stored in frontend
+- 🔐 **Token-Based Authentication**: MSAL with automatic token refresh
+- 🛡️ **On-Behalf-Of Flow**: Secure Azure resource access
+- 🛡️ **Input Validation**: Comprehensive request/response validation
+- 📝 **Audit Logging**: Complete audit trail for all operations
 
 ---
 
 
-## 🐳 Containerization (Docker & Compose)
-
-### Quick Start
-
-1. Build and run both frontend and backend with Docker Compose:
-
-   ```sh
-   docker-compose up --build
-   ```
-
-   - The frontend will be available at http://localhost:3000
-   - The backend API will be available at http://localhost:8000
-
-2. Environment variables for the backend are managed via `.env.docker` (see below).
-
-### Environment Variables
-
-Create a `.env.docker` file in the project root (already provided):
-
-```env
-# Google Gemini API Key
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Azure Entra Auth
-AZURE_TENANT_ID=xxxx-tenant-id
-AZURE_CLIENT_ID=xxxx-backend-app-id
-AZURE_CLIENT_SECRET=xxxx-client-secret
-ARM_SCOPE=https://management.azure.com/.default
-```
-
-The `docker-compose.yml` is configured to load this file for the backend service.
-
-### Manual Build/Run (Advanced)
-
-You can also build and run each service separately:
-
-#### Frontend
-```sh
-cd frontend
-docker build -t querypal-frontend .
-docker run -p 3000:80 querypal-frontend
-```
-
-#### Backend
-```sh
-cd backend
-docker build -t querypal-backend .
-docker run --env-file ../.env.docker -p 8000:8000 querypal-backend
-```
-
 ---
 
-## ☁️ Deployment to Google Cloud Run
+## Quick Start
 
-### Prerequisites
+### Option 1: Docker Compose (Recommended)
 
-- A GCP project with billing enabled
-- Docker installed and configured
-- Google Cloud CLI (`gcloud`) installed and authenticated
-- Google Artifact Registry enabled and repository created (optional but recommended)
-
-### Steps
-
-#### 1. Build and Push Container Images
-
-Build and push both frontend and backend images to Google Artifact Registry or Docker Hub:
+The fastest way to get QueryPal running locally:
 
 ```bash
-# Backend
+# Clone the repository
+git clone https://github.com/ChingEnLin/QueryPal
+cd QueryPal
+
+# Configure environment variables
+cp backend/.env.example backend/.env
+# Edit backend/.env with your API keys and Azure credentials
+
+# Start both frontend and backend
+docker-compose up --build
+
+# Access the application
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:8000
+# API Documentation: http://localhost:8000/docs
+```
+
+### Option 2: Development Setup
+
+For development with hot reload:
+
+```bash
+# Backend setup
+cd backend
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -r requirements.txt
+cp .env.example .env  # Configure your environment variables
+uvicorn main:app --reload
+
+# Frontend setup (new terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+### Environment Configuration
+
+Create a `backend/.env` file with:
+
+```env
+# Google Gemini API
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Azure Entra ID Configuration
+AZURE_TENANT_ID=your_tenant_id
+AZURE_CLIENT_ID=your_backend_app_id
+AZURE_CLIENT_SECRET=your_client_secret
+ARM_SCOPE=https://management.azure.com/.default
+
+# PostgreSQL Database (for user data)
+DB_USER=querypal_user
+DB_PASS=your_db_password
+DB_NAME=querypal
+DB_HOST=localhost
+DB_PORT=5432
+
+# Optional: For production
+DB_UNIX_SOCKET=/cloudsql/project:region:instance
+```
+
+---
+
+## 🧪 Testing & Quality Assurance
+
+QueryPal maintains high code quality with comprehensive testing:
+
+### Backend Testing
+```bash
+cd backend
+
+# Run all tests with coverage
+./run_tests.sh
+
+# Individual commands
+pytest --cov=. --cov-report=html    # Tests with coverage
+flake8 . --statistics                # Code linting
+black --check .                      # Code formatting
+mypy .                               # Type checking
+```
+
+### Frontend Testing
+```bash
+cd frontend
+
+# Run all tests
+npm test
+
+# Run with coverage
+npm run test:coverage
+
+# Run tests once
+npm run test:run
+
+# Interactive UI testing
+npm run test:ui
+```
+
+### Test Coverage
+- **Backend**: 85%+ code coverage with pytest
+- **Frontend**: 80%+ code coverage with Vitest
+- **Integration Tests**: E2E testing of critical user flows
+- **Static Analysis**: Type checking, linting, and formatting
+
+### CI/CD Pipeline
+- ✅ **Automated Testing**: All PRs trigger comprehensive test suites
+- 🚀 **Deployment**: Automatic deployment to Google Cloud Run on production branch
+- 📊 **Code Coverage**: Coverage reports uploaded to Codecov
+- 🔍 **Code Quality**: ESLint, Black, MyPy, and TypeScript strict mode
+
+---
+
+## ☁️ Cloud Deployment
+
+### Google Cloud Run (Production)
+
+QueryPal is designed for Google Cloud Run with automatic CI/CD:
+
+#### Automatic Deployment
+1. **Push to Production**: Commits to `production` branch trigger automatic deployment
+2. **GitHub Actions**: Builds and deploys both frontend and backend containers
+3. **Environment Variables**: Securely managed through GitHub Secrets
+
+#### Manual Deployment
+```bash
+# Authenticate with Google Cloud
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+
+# Deploy backend
 cd backend
 docker build -t gcr.io/YOUR_PROJECT_ID/querypal-backend .
 docker push gcr.io/YOUR_PROJECT_ID/querypal-backend
-
-# Frontend
-cd ../frontend
-docker build -t gcr.io/YOUR_PROJECT_ID/querypal-frontend .
-docker push gcr.io/YOUR_PROJECT_ID/querypal-frontend
-```
-
-#### 2. Deploy to Cloud Run
-
-```bash
-# Backend
 gcloud run deploy querypal-backend \
   --image gcr.io/YOUR_PROJECT_ID/querypal-backend \
   --region europe-west1 \
   --port 8000 \
-  --set-env-vars PORT=8000,GEMINI_API_KEY=xxx,AZURE_TENANT_ID=xxx,AZURE_CLIENT_ID=xxx,AZURE_CLIENT_SECRET=xxx,ARM_SCOPE=https://management.azure.com/.default \
+  --add-cloudsql-instances YOUR_CLOUDSQL_INSTANCE \
+  --set-env-vars AZURE_TENANT_ID=xxx,GEMINI_API_KEY=xxx \
   --allow-unauthenticated
 
-# Frontend
+# Deploy frontend
+cd ../frontend
+docker build -t gcr.io/YOUR_PROJECT_ID/querypal-frontend \
+  --build-arg VITE_API_BASE_URL=https://your-backend-url \
+  --build-arg VITE_AZURE_REDIRECT_URI=https://your-frontend-url .
+docker push gcr.io/YOUR_PROJECT_ID/querypal-frontend
 gcloud run deploy querypal-frontend \
   --image gcr.io/YOUR_PROJECT_ID/querypal-frontend \
   --region europe-west1 \
@@ -160,89 +301,127 @@ gcloud run deploy querypal-frontend \
   --allow-unauthenticated
 ```
 
-> 💡 Make sure the backend URL is correctly set in the frontend proxy or `.env` if needed.
-
-#### 3. (Optional) Map Custom Domains
-
-You can map your frontend and backend services to custom domains via:
-
-```bash
-gcloud run domain-mappings create --service querypal-frontend --domain frontend.example.com --region europe-west1
-gcloud run domain-mappings create --service querypal-backend --domain api.example.com --region europe-west1
-```
-
-Follow the DNS instructions in the Cloud Console to complete the setup.
+### Azure Web App (Alternative)
+QueryPal also supports deployment to Azure Web Apps using the included publish profiles.
 
 ---
 
-## ⚙️ Setup Instructions
+## 🔧 Development Setup
 
-### 1. Register Azure Entra ID Application
+### Prerequisites
+- **Node.js** 20+ and npm
+- **Python** 3.12+
+- **Docker** and Docker Compose
+- **Google Cloud SDK** (for deployment)
+- **Azure CLI** (optional, for Azure resources)
 
-- Go to [Azure Portal – App registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps)
-- Register two applications:
-  - **Frontend SPA**
-    - Platform: Single-page application (SPA)
-    - Redirect URI: `http://localhost:3000` (or your frontend URL)
-    - Expose an API scope: `api://<backend-client-id>/access_as_user`
-  - **Backend App**
-    - Client type: Confidential client
-    - Add a client secret
-    - Add the frontend SPA as an authorized client for the exposed scope
+### IDE Recommendations
+- **VS Code** with extensions:
+  - Python
+  - TypeScript
+  - Pylance
+  - Prettier
+  - ESLint
+  - Docker
 
-- Add API permissions:
-  - Microsoft Graph → `User.Read`
-  - Azure Service Management → `user_impersonation`
+---
 
-- Grant Admin Consent.
+## ⚙️ Azure Setup & Configuration
 
-- In Azure → Cosmos DB → IAM, give the backend app `Cosmos DB Account Reader Role`.
+### 1. Microsoft Entra ID Application Registration
 
-### 2. Environment Variables
+**Frontend Application (SPA):**
+1. Go to [Azure Portal → App Registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps)
+2. Create new registration:
+   - **Name**: `QueryPal Frontend`
+   - **Platform**: Single-page application (SPA)
+   - **Redirect URI**: `http://localhost:5173` (development) / your production URL
+3. Note the **Application (client) ID** and **Directory (tenant) ID**
 
-Create a `.env` file for the backend:
+**Backend Application (Confidential Client):**
+1. Create another registration:
+   - **Name**: `QueryPal Backend`
+   - **Client type**: Confidential client
+2. Add a **client secret** (Certificates & secrets)
+3. **Expose an API**:
+   - Add scope: `api://[backend-client-id]/access_as_user`
+   - Add the frontend app as an authorized client
 
-```env
-# Google Gemini API Key
-GEMINI_API_KEY=your_gemini_api_key_here
+**API Permissions:**
+- Add permissions for both apps:
+  - `Microsoft Graph` → `User.Read`
+  - `Azure Service Management` → `user_impersonation`
+- **Grant admin consent** for your organization
 
-# Azure Entra Auth
-AZURE_TENANT_ID=xxxx-tenant-id
-AZURE_CLIENT_ID=xxxx-backend-app-id
-AZURE_CLIENT_SECRET=xxxx-client-secret
-ARM_SCOPE=https://management.azure.com/.default
-```
+### 2. Azure Cosmos DB Permissions
 
-### 3. Frontend Config
+Grant the backend application appropriate access:
+1. Go to your **Cosmos DB account** → **Access control (IAM)**
+2. Add role assignment:
+   - **Role**: `Cosmos DB Account Reader Role`
+   - **Assign access to**: Service principal
+   - **Select**: Your backend application
 
-Edit `authConfig.ts`:
+### 3. Frontend Configuration
 
-```ts
+Update `frontend/authConfig.ts`:
+
+```typescript
 export const msalConfig = {
   auth: {
-    clientId: "<frontend-app-id>",
-    authority: "https://login.microsoftonline.com/<tenant-id>",
-    redirectUri: "http://localhost:3000"
+    clientId: "your-frontend-client-id",
+    authority: "https://login.microsoftonline.com/your-tenant-id",
+    redirectUri: "http://localhost:5173" // or your production URL
   },
 };
 
 export const loginRequest = {
-  scopes: ["User.Read", "api://<backend-client-id>/access_as_user"]
+  scopes: ["User.Read", "api://your-backend-client-id/access_as_user"]
 };
 ```
 
 ---
 
-## ✨ Features
+## 🏷️ Versioning
 
-- 🔐 Authenticated access via Microsoft Entra ID
-- 📦 View document schemas with recursive tree view
-- 🔍 Sample document + index info
-- 🧠 Natural language to query conversion (via Gemini AI)
-- 🛡️ No connection strings stored; secure backend access only
+This project uses [Semantic Versioning](https://semver.org/) with automated releases based on [Conventional Commits](https://www.conventionalcommits.org/).
+
+- **Version format**: `vMAJOR.MINOR.PATCH` (e.g., `v2.1.0`)
+- **Automated releases**: Triggered when pushing to the `production` branch
+- **Release notes**: Auto-generated and published to GitHub Releases and project wiki
+
+For detailed information about our versioning process and commit message conventions, see [docs/SEMANTIC_VERSIONING.md](docs/SEMANTIC_VERSIONING.md).
+
+---
+
+## 📚 API Documentation
+
+QueryPal provides comprehensive REST APIs. When running locally, access:
+- **Interactive Docs**: http://localhost:8000/docs
+- **OpenAPI Spec**: http://localhost:8000/openapi.json
 
 ---
 
 ## 📄 License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 👨‍💻 Author & Acknowledgments
+
+**Built by [Ching-En Lin](https://github.com/ChingEnLin)**
+
+**Powered by:**
+- 🤖 Google Gemini Pro AI
+- ☁️ Microsoft Azure & Google Cloud
+- ⚡ Modern web technologies
+
+---
+
+## 🔗 Links
+
+- **Live Demo**: [QueryPal Production](https://querypal.virtonomy.io)
+- **GitHub Repository**: [QueryPal Source](https://github.com/ChingEnLin/QueryPal)
+- **Issues & Feedback**: [GitHub Issues](https://github.com/ChingEnLin/QueryPal/issues)
+
