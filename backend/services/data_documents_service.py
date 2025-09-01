@@ -207,9 +207,18 @@ def update_document(
                 except Exception:
                     pass
         before_doc = collection.find_one({"_id": ObjectId(document_id)})
-        result = collection.update_one(
-            {"_id": ObjectId(document_id)}, {"$set": content}
-        )
+        if not before_doc:
+            return None
+
+        # Preserve datetime_creation from the existing document
+        if "datetime_creation" in before_doc:
+            content["datetime_creation"] = before_doc["datetime_creation"]
+
+        # Always update datetime_last_modified to current time
+        content["datetime_last_modified"] = datetime.now(timezone.utc)
+
+        # Use replace_one to completely replace the document while preserving system fields
+        result = collection.replace_one({"_id": ObjectId(document_id)}, content)
         if result.matched_count == 0:
             return None
         updated_doc = collection.find_one({"_id": ObjectId(document_id)})

@@ -14,6 +14,9 @@ pytest
 pytest-asyncio
 pytest-cov
 httpx
+mongomock
+pytest-mock
+freezegun
 
 # Static code analysis
 flake8
