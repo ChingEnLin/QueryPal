@@ -44,6 +44,7 @@ export async function deleteDocument(collectionName: string, resource: SelectedR
 import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, PaginatedDocumentsResponse, FoundDocumentResponse, DocumentHistoryResponse } from '../types';
 import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
+import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
 import { 
     mockCosmosAccounts, 
     mockDatabasesByAccountId, 
@@ -61,6 +62,32 @@ import {
 } from './mockData';
 
 /**
+ * Helper function to get access token with proper error handling
+ */
+const getAuthenticatedToken = async (): Promise<string> => {
+  try {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+      throw new Error("No signed-in user found.");
+    }
+
+    const response = await msalInstance.acquireTokenSilent({
+      ...loginRequest,
+      account: accounts[0],
+    });
+
+    return response.accessToken;
+  } catch (error) {
+    // Handle authentication errors with user-friendly messages
+    if (isAuthenticationExpiredError(error)) {
+      throw new Error(getAuthErrorMessage(error));
+    }
+    // Re-throw other errors as-is
+    throw error;
+  }
+};
+
+/**
  * Fetches available Azure Cosmos DB resources from the backend.
  * @returns A promise that resolves with an array of Cosmos DB resources.
  */
@@ -73,34 +100,43 @@ export const getAzureCosmosAccounts = async (): Promise<CosmosDBAccount[]> => {
   }
   // --- END DEVELOPMENT MOCK ---
 
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) {
-    throw new Error("No signed-in user found.");
+  try {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+      throw new Error("No signed-in user found.");
+    }
+
+    // acquire token for backend API (must be set in loginRequest.scopes)
+    const response = await msalInstance.acquireTokenSilent({
+      ...loginRequest,
+      account: accounts[0],
+    });
+
+    const accessToken = response.accessToken;
+    
+    console.log("Fetching Azure cosmosdb accounts from backend...");
+    const responseApi = await fetch(`${API_BASE_URL}/azure/cosmos_accounts`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!responseApi.ok) {
+      const errorData = await responseApi.json().catch(() => ({}));
+      const errorMessage = errorData.detail || errorData.message || `Could not load Azure resource list from server. Status: ${responseApi.status}`;
+      throw new Error(errorMessage);
+    }
+    
+    return responseApi.json();
+  } catch (error) {
+    // Handle authentication errors with user-friendly messages
+    if (isAuthenticationExpiredError(error)) {
+      throw new Error(getAuthErrorMessage(error));
+    }
+    // Re-throw other errors as-is
+    throw error;
   }
-
-  // acquire token for backend API (must be set in loginRequest.scopes)
-  const response = await msalInstance.acquireTokenSilent({
-    ...loginRequest,
-    account: accounts[0],
-  });
-
-  const accessToken = response.accessToken;
-  
-  console.log("Fetching Azure cosmosdb accounts from backend...");
-  const responseApi = await fetch(`${API_BASE_URL}/azure/cosmos_accounts`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!responseApi.ok) {
-    const errorData = await responseApi.json().catch(() => ({}));
-    const errorMessage = errorData.detail || errorData.message || `Could not load Azure resource list from server. Status: ${responseApi.status}`;
-    throw new Error(errorMessage);
-  }
-  
-  return responseApi.json();
 };
 
 
@@ -129,18 +165,9 @@ export const getDatabasesForAccount = async (accountId: string): Promise<DbInfo[
   // --- END DEVELOPMENT MOCK ---
 
   console.log(`Fetching databases for account ID ${accountId} from backend...`);
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) {
-      throw new Error("No signed-in user found.");
-  }
-
-  // acquire token for backend API (must be set in loginRequest.scopes)
-  const tokenResponse = await msalInstance.acquireTokenSilent({
-      ...loginRequest,
-      account: accounts[0],
-  });
-
-  const accessToken = tokenResponse.accessToken;
+  
+  // Use helper function to get authenticated token with proper error handling
+  const accessToken = await getAuthenticatedToken();
 
   const response = await fetch(`${API_BASE_URL}/azure/account_details`, {
       method: 'POST',
@@ -179,18 +206,9 @@ export const getCollectionInfo = async (collectionName: string, resource: Select
         return Promise.reject(new Error(`Mock collection info not found for ${collectionName}`));
     }
     // --- END DEVELOPMENT MOCK ---
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-        throw new Error("No signed-in user found.");
-    }
-
-    // acquire token for backend API (must be set in loginRequest.scopes)
-    const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
-    });
-
-    const accessToken = tokenResponse.accessToken;
+    
+    // Use helper function to get authenticated token with proper error handling
+    const accessToken = await getAuthenticatedToken();
 
     console.log(`Fetching info for collection: ${collectionName} from backend...`);
     const response = await fetch(`${API_BASE_URL}/azure/collection_info`, {
@@ -242,13 +260,10 @@ export const runMongoQuery = async (accountId: string, query: string, resource: 
     }
     // --- END DEVELOPMENT MOCK ---
     console.log(`Fetching databases for account ID ${accountId} from backend...`);
-    const accounts = msalInstance.getAllAccounts();
-    const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
-    });
-
-    const accessToken = tokenResponse.accessToken;
+    
+    // Use helper function to get authenticated token with proper error handling
+    const accessToken = await getAuthenticatedToken();
+    
     console.log(`Sending query for execution on ${resource.databaseName} to backend...`);
     const response = await fetch(`${API_BASE_URL}/query/execute`, {
         method: 'POST',
