@@ -2,17 +2,27 @@ import { SavedQuery } from '../types';
 import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { mockDelay, mockSavedQueries } from './mockData';
+import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
 
 const getAccessToken = async (): Promise<string> => {
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-        throw new Error("No signed-in user found.");
+    try {
+        const accounts = msalInstance.getAllAccounts();
+        if (accounts.length === 0) {
+            throw new Error("No signed-in user found.");
+        }
+        const response = await msalInstance.acquireTokenSilent({
+            ...loginRequest,
+            account: accounts[0],
+        });
+        return response.accessToken;
+    } catch (error) {
+        // Handle authentication errors with user-friendly messages
+        if (isAuthenticationExpiredError(error)) {
+            throw new Error(getAuthErrorMessage(error));
+        }
+        // Re-throw other errors as-is
+        throw error;
     }
-    const response = await msalInstance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
-    });
-    return response.accessToken;
 };
 
 /**
