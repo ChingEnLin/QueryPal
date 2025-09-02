@@ -7,6 +7,7 @@ import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
 import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep, SavedQuery } from '../types';
 import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult, mockSavedQueries } from '../services/mockData';
+import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
 import QueryDisplay from '../components/QueryDisplay';
 import QueryResult from '../components/QueryResult';
 import Loader from '../components/Loader';
@@ -431,7 +432,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         setAzureAccounts(accounts);
       } catch (e) {
         if (e instanceof Error) {
-            if (e.message.includes('AuthorizationFailed') || e.message.includes('403')) {
+            // Check for authentication-related errors
+            if (isAuthenticationExpiredError(e)) {
+                setDbError(getAuthErrorMessage(e));
+            } else if (e.message.includes('AuthorizationFailed') || e.message.includes('403')) {
                 setDbError("Permission Denied: You may not have the required permissions to list Azure resources. Please contact your administrator.");
             } else {
                 setDbError("Could not load Azure accounts from server. Ensure the backend is running and you have permissions.");
@@ -450,8 +454,12 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         const queries = await getSavedQueries();
         setSavedQueries(queries);
     } catch(e) {
-        // Handle error silently in the UI for now
-        console.error("Failed to fetch saved queries:", e);
+        // Log error details for debugging
+        if (e instanceof Error && isAuthenticationExpiredError(e)) {
+            console.error("Failed to fetch saved queries due to authentication error:", getAuthErrorMessage(e));
+        } else {
+            console.error("Failed to fetch saved queries:", e);
+        }
     } finally {
         setIsLoadingSavedQueries(false);
     }
@@ -552,7 +560,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         setAccountDatabases(dbs);
     } catch(e) {
         if (e instanceof Error) {
-            if (e.message.includes('AuthorizationFailed') || e.message.includes('403')) {
+            // Check for authentication-related errors first
+            if (isAuthenticationExpiredError(e)) {
+                setDbError(getAuthErrorMessage(e));
+            } else if (e.message.includes('AuthorizationFailed') || e.message.includes('403')) {
                 setDbError("Permission Denied: You may not have the required Azure role (e.g., 'Cosmos DB Operator') to access databases for this account. Please check your permissions.");
             } else {
                 setDbError(e.message);
