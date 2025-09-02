@@ -1,3 +1,9 @@
+## [2.2.0](https://github.com/ChingEnLin/QueryPal/compare/v2.1.0...v2.2.0) (2025-09-02)
+
+### Features
+
+* Implement authentication error handling utilities and integrate into services ([fbe4540](https://github.com/ChingEnLin/QueryPal/commit/fbe4540fd1f52af9586d5eeb3c445e3d1e93317c))
+
 ## [2.1.0](https://github.com/ChingEnLin/QueryPal/compare/v2.0.0...v2.1.0) (2025-09-01)
 
 ### Features
