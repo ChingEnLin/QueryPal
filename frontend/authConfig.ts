@@ -14,7 +14,7 @@ export const msalConfig: Configuration = {
     },
     cache: {
         cacheLocation: "localStorage", // This configures where your cache will be stored
-        storeAuthStateInCookie: false, // Set this to "true" if you are having issues on IE11 or Edge
+        storeAuthStateInCookie: true, // Enable cookies for better session persistence across browser sessions
     },
 };
 
