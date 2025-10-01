@@ -46,6 +46,26 @@ export const isAuthenticationExpiredError = (error: any): boolean => {
 };
 
 /**
+ * Check if an error is recoverable through interactive authentication (popup/redirect)
+ */
+export const isRecoverableAuthError = (error: any): boolean => {
+  if (error instanceof InteractionRequiredAuthError) {
+    return true;
+  }
+
+  if (error instanceof AuthError) {
+    const recoverableCodes = [
+      'interaction_required',
+      'consent_required',
+      'login_required'
+    ];
+    return recoverableCodes.some(code => error.errorCode?.includes(code));
+  }
+
+  return false;
+};
+
+/**
  * Get a user-friendly error message for authentication errors
  */
 export const getAuthErrorMessage = (error: any): string => {

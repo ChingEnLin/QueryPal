@@ -2,7 +2,7 @@ import { SavedQuery } from '../types';
 import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { mockDelay, mockSavedQueries } from './mockData';
-import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
+import { getAuthErrorMessage, isAuthenticationExpiredError, isRecoverableAuthError } from '../utils/authErrorHandler';
 
 const getAccessToken = async (): Promise<string> => {
     try {
@@ -10,15 +10,26 @@ const getAccessToken = async (): Promise<string> => {
         if (accounts.length === 0) {
             throw new Error("No signed-in user found.");
         }
+        
+        // Try silent token acquisition first
         const response = await msalInstance.acquireTokenSilent({
             ...loginRequest,
             account: accounts[0],
         });
         return response.accessToken;
     } catch (error) {
-        // Handle authentication errors with user-friendly messages
-        if (isAuthenticationExpiredError(error)) {
-            throw new Error(getAuthErrorMessage(error));
+        // If silent token acquisition fails, check if we can recover with interactive auth
+        if (isRecoverableAuthError(error) || isAuthenticationExpiredError(error)) {
+            try {
+                console.log('Silent token acquisition failed, attempting popup refresh...');
+                // Try popup for token refresh
+                const response = await msalInstance.acquireTokenPopup(loginRequest);
+                return response.accessToken;
+            } catch (popupError) {
+                console.error('Popup token refresh also failed:', popupError);
+                // Only after both silent and popup fail, throw the user-friendly error
+                throw new Error(getAuthErrorMessage(error));
+            }
         }
         // Re-throw other errors as-is
         throw error;
