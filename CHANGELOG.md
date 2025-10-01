@@ -1,3 +1,9 @@
+## [2.3.0](https://github.com/ChingEnLin/QueryPal/compare/v2.2.0...v2.3.0) (2025-10-01)
+
+### Features
+
+* Implement token renewal service and integrate with authentication flow ([a0da761](https://github.com/ChingEnLin/QueryPal/commit/a0da7611858e180686f371e52bdca6ef6f5ac5c6))
+
 ## [2.2.0](https://github.com/ChingEnLin/QueryPal/compare/v2.1.0...v2.2.0) (2025-09-02)
 
 ### Features
