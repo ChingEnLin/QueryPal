@@ -25,12 +25,10 @@ if is_production:
 else:
     # Development: Allow localhost origins
     allowed_origins = [
-        "http://localhost:3000",
+        "http://localhost:8000",
         "http://localhost:5173",
-        "http://localhost:8080",
-        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
         "http://127.0.0.1:5173",
-        "http://127.0.0.1:8080",
     ]
 
 print(f"🔧 CORS Configuration - Production mode: {is_production}")
