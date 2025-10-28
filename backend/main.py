@@ -10,9 +10,7 @@ app = FastAPI()
 # Check for production indicators
 is_production = (
     os.getenv("ENVIRONMENT") == "production"
-    or os.getenv("GAE_APPLICATION")  # Google App Engine
-    or os.getenv("GOOGLE_CLOUD_PROJECT")  # Google Cloud
-    or os.getenv("K_SERVICE")  # Google Cloud Run
+    or os.getenv("K_SERVICE") is not None  # Google Cloud Run
 )
 
 if is_production:
