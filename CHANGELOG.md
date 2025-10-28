@@ -1,3 +1,17 @@
+## [2.4.0](https://github.com/ChingEnLin/QueryPal/compare/v2.3.0...v2.4.0) (2025-10-28)
+
+### Features
+
+* Enhance CORS configuration for production and development environments ([08afe20](https://github.com/ChingEnLin/QueryPal/commit/08afe20909a8239c41e93df5c26791961c3a8854))
+
+### Bug Fixes
+
+* Update allowed origins for development environment in CORS configuration ([0ba7b95](https://github.com/ChingEnLin/QueryPal/commit/0ba7b95f3ce9781d80299962f6ca30843bc7081b))
+
+### Styling
+
+* Refactor CORS configuration logic and improve formatting in main.py ([a5a335f](https://github.com/ChingEnLin/QueryPal/commit/a5a335f3f1411e36f6fc5d95d67ef196b3638c2f))
+
 ## [2.3.0](https://github.com/ChingEnLin/QueryPal/compare/v2.2.0...v2.3.0) (2025-10-01)
 
 ### Features
