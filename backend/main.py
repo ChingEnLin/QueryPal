@@ -45,11 +45,10 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint that also shows CORS configuration."""
+    """Health check endpoint."""
     return {
         "status": "healthy",
         "cors_production_mode": is_production,
-        "cors_allowed_origins": allowed_origins,
     }
 
 
