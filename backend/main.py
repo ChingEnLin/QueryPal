@@ -9,10 +9,10 @@ app = FastAPI()
 # Configure CORS origins based on environment
 # Check for production indicators
 is_production = (
-    os.getenv("ENVIRONMENT") == "production" or
-    os.getenv("GAE_APPLICATION") or  # Google App Engine
-    os.getenv("GOOGLE_CLOUD_PROJECT") or  # Google Cloud
-    os.getenv("K_SERVICE")  # Google Cloud Run
+    os.getenv("ENVIRONMENT") == "production"
+    or os.getenv("GAE_APPLICATION")  # Google App Engine
+    or os.getenv("GOOGLE_CLOUD_PROJECT")  # Google Cloud
+    or os.getenv("K_SERVICE")  # Google Cloud Run
 )
 
 if is_production:
@@ -42,14 +42,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint that also shows CORS configuration."""
     return {
         "status": "healthy",
         "cors_production_mode": is_production,
-        "cors_allowed_origins": allowed_origins
+        "cors_allowed_origins": allowed_origins,
     }
+
 
 app.include_router(query.router, prefix="/query", tags=["Query"])
 app.include_router(azure.router, prefix="/azure", tags=["Azure"])
