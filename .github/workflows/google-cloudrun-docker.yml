@@ -63,6 +63,7 @@ jobs:
           region: '${{ env.REGION }}'
           image: 'gcr.io/${{ env.PROJECT_ID }}/${{ env.BACKEND_SERVICE }}:${{ github.sha }}'
           env_vars: |
+            ENVIRONMENT=production
             AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}
             AZURE_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}
             AZURE_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}
