@@ -4,6 +4,7 @@ import QueryGeneratorPageWrapper from './pages/QueryGeneratorPageWrapper';
 import DataExplorerPageWrapper from './pages/DataExplorerPageWrapper';
 import NotFoundPage from './pages/NotFoundPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import AuditPage from './pages/AuditPage';
 
 export const router = createBrowserRouter([
   {
@@ -13,6 +14,14 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginPage />,
+  },
+  {
+    path: "/audit",
+    element: (
+      <ProtectedRoute>
+        <AuditPage />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/query-generator",
