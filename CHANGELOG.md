@@ -1,3 +1,14 @@
+## [2.5.0](https://github.com/ChingEnLin/QueryPal/compare/v2.4.0...v2.5.0) (2026-01-12)
+
+### Features
+
+* add AuditPage for analyzing audit logs with visualization and markdown support ([a8f13ea](https://github.com/ChingEnLin/QueryPal/commit/a8f13ea390d8f7aa450118970ad5ea8225037849))
+
+### Bug Fixes
+
+* mock return of test ([495a85f](https://github.com/ChingEnLin/QueryPal/commit/495a85f68d4e1a61bbd1714128bafd4dcd699fe8))
+* static code analysis ([d57c968](https://github.com/ChingEnLin/QueryPal/commit/d57c968e01a05337d40d219817d6945d9a9940d2))
+
 ## [2.4.0](https://github.com/ChingEnLin/QueryPal/compare/v2.3.0...v2.4.0) (2025-10-28)
 
 ### Features
