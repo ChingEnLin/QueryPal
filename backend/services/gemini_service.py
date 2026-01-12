@@ -1,6 +1,20 @@
 from google import genai
 from google.genai import types
 from models.schemas import GeneratedCode, CollectionContext, DebugSuggestionResponse
+from pydantic import BaseModel, Field
+from typing import Optional, List, Any, Dict
+
+class VisualizationConfig(BaseModel):
+    available: bool = Field(description="Whether a chart is recommended for this data")
+    type: Optional[str] = Field(description="Type of chart: 'bar', 'line', 'pie', 'scatter'")
+    x_key: Optional[str] = Field(description="Key for X-axis data")
+    y_key: Optional[str] = Field(description="Key for Y-axis data")
+    title: Optional[str] = Field(description="Title for the chart")
+    data_keys: Optional[List[str]] = Field(description="Keys to include in the chart data points (e.g. ['count', 'date'])")
+
+class AuditSummaryResponse(BaseModel):
+    summary: str = Field(description="Markdown summary of the results")
+    visualization: VisualizationConfig = Field(description="Configuration for data visualization")
 
 PROMPT_TEMPLATE_QUERY = """
 You are an assistant that converts user requests into MongoDB query code.
@@ -132,3 +146,89 @@ def generate_suggestion_from_query_error(query: str, error_message: str) -> str:
         response.text.strip() if hasattr(response, "text") else str(response).strip
     )
     return DebugSuggestionResponse(suggestion=suggestion)
+
+
+PROMPT_TEMPLATE_AUDIT_SQL = """
+You are a PostgreSQL expert. Convert the user's natural language question into a read-only SQL query for the `write_audit_log` table.
+Table Schema:
+- user_email (text): Email of the user who performed the operation.
+- operation (text): 'insert', 'update', or 'delete'.
+- database_name (text): Name of the database (format: account.database).
+- collection_name (text): Name of the collection.
+- document_id (text): ID of the affected document.
+- diff_data (jsonb): JSON containing the changes (for updates, it has 'before' and 'after' fields).
+- timestamp_utc (timestamptz): When the operation occurred.
+
+User Question: "{user_input}"
+
+Rules:
+1. Return ONLY the SQL query. No markdown, no explanations.
+2. The query MUST be a SELECT statement.
+3. Use LIMIT 100 if no limit is specified.
+4. If the user asks for "recent", order by timestamp_utc DESC.
+"""
+
+PROMPT_TEMPLATE_AUDIT_SUMMARY = """
+You are a data analyst. Analyze the following SQL query and its results.
+
+User Question: "{user_input}"
+SQL Query: "{sql_query}"
+Results:
+{results}
+
+Tasks:
+1. Provide a concise markdown summary identifying patterns or answering the specific question.
+2. Determine if the data is suitable for visualization (e.g., time series, counts, comparisons).
+3. If suitable, structure a visualization configuration (type, keys, title).
+   - For time series, prefer 'line' or 'bar'.
+   - For categorical counts, use 'bar' or 'pie'.
+"""
+
+
+def generate_audit_sql(user_input: str) -> str:
+    full_prompt = PROMPT_TEMPLATE_AUDIT_SQL.format(user_input=user_input)
+    client = genai.Client()
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=full_prompt,
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
+        ),
+    )
+    sql = extract_python_code(response.text)
+    # Basic safety check
+    if not sql.lower().startswith("select"):
+        return "SELECT 'Error: Generated query was not a SELECT statement' as error;"
+    return sql
+
+
+def summarize_audit_results(user_input: str, sql_query: str, results: list) -> AuditSummaryResponse:
+    # Truncate results if too large to avoid token limits
+    results_str = str(results)[:10000]
+    full_prompt = PROMPT_TEMPLATE_AUDIT_SUMMARY.format(
+        user_input=user_input, sql_query=sql_query, results=results_str
+    )
+    client = genai.Client()
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=full_prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=AuditSummaryResponse,
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
+        ),
+    )
+    
+    if hasattr(response, 'parsed') and response.parsed:
+        return response.parsed
+    
+    import json
+    try:
+        data = json.loads(response.text)
+        return AuditSummaryResponse(**data)
+    except Exception as e:
+        print(f"Error parsing Gemini response: {e}")
+        return AuditSummaryResponse(
+            summary="Could not generate summary due to parsing error.",
+            visualization=VisualizationConfig(available=False)
+        )
