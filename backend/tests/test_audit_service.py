@@ -23,7 +23,11 @@ class TestAuditService(unittest.TestCase):
         mock_cursor.description = [("user_email",), ("operation",)]
         mock_cursor.fetchall.return_value = [("test@example.com", "insert")]
 
-        mock_summarize.return_value = "Summary of results."
+        # Mock Summary Response
+        mock_response = MagicMock()
+        mock_response.summary = "Summary of results."
+        mock_response.visualization = None
+        mock_summarize.return_value = mock_response
 
         # Execute
         result = process_audit_question("Show me inserts")
