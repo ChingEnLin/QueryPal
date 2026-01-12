@@ -2,19 +2,28 @@ from google import genai
 from google.genai import types
 from models.schemas import GeneratedCode, CollectionContext, DebugSuggestionResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any, Dict
+from typing import Optional, List
+
 
 class VisualizationConfig(BaseModel):
     available: bool = Field(description="Whether a chart is recommended for this data")
-    type: Optional[str] = Field(description="Type of chart: 'bar', 'line', 'pie', 'scatter'")
+    type: Optional[str] = Field(
+        description="Type of chart: 'bar', 'line', 'pie', 'scatter'"
+    )
     x_key: Optional[str] = Field(description="Key for X-axis data")
     y_key: Optional[str] = Field(description="Key for Y-axis data")
     title: Optional[str] = Field(description="Title for the chart")
-    data_keys: Optional[List[str]] = Field(description="Keys to include in the chart data points (e.g. ['count', 'date'])")
+    data_keys: Optional[List[str]] = Field(
+        description="Keys to include in the chart data points (e.g. ['count', 'date'])"
+    )
+
 
 class AuditSummaryResponse(BaseModel):
     summary: str = Field(description="Markdown summary of the results")
-    visualization: VisualizationConfig = Field(description="Configuration for data visualization")
+    visualization: VisualizationConfig = Field(
+        description="Configuration for data visualization"
+    )
+
 
 PROMPT_TEMPLATE_QUERY = """
 You are an assistant that converts user requests into MongoDB query code.
@@ -202,7 +211,9 @@ def generate_audit_sql(user_input: str) -> str:
     return sql
 
 
-def summarize_audit_results(user_input: str, sql_query: str, results: list) -> AuditSummaryResponse:
+def summarize_audit_results(
+    user_input: str, sql_query: str, results: list
+) -> AuditSummaryResponse:
     # Truncate results if too large to avoid token limits
     results_str = str(results)[:10000]
     full_prompt = PROMPT_TEMPLATE_AUDIT_SUMMARY.format(
@@ -215,14 +226,15 @@ def summarize_audit_results(user_input: str, sql_query: str, results: list) -> A
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=AuditSummaryResponse,
-            thinking_config=types.ThinkingConfig(thinking_budget=0)
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )
-    
-    if hasattr(response, 'parsed') and response.parsed:
+
+    if hasattr(response, "parsed") and response.parsed:
         return response.parsed
-    
+
     import json
+
     try:
         data = json.loads(response.text)
         return AuditSummaryResponse(**data)
@@ -230,5 +242,5 @@ def summarize_audit_results(user_input: str, sql_query: str, results: list) -> A
         print(f"Error parsing Gemini response: {e}")
         return AuditSummaryResponse(
             summary="Could not generate summary due to parsing error.",
-            visualization=VisualizationConfig(available=False)
+            visualization=VisualizationConfig(available=False),
         )
