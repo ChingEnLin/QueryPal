@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { CheckIcon, ChevronDownIcon, ClipboardIcon, SearchIcon, XIcon, ArrowUpwardIcon, ArrowDownwardIcon, CaseSensitiveIcon, WholeWordIcon, RegexIcon } from './icons/material-icons-imports';
+import { CheckIcon, ChevronDownIcon, ClipboardIcon, SearchIcon, XIcon, ArrowUpwardIcon, ArrowDownwardIcon, CaseSensitiveIcon, WholeWordIcon, RegexIcon, ImageIcon } from './icons/material-icons-imports';
 
 // Search context for highlighting and navigation
 interface SearchState {
@@ -201,6 +201,96 @@ const ObjectIdDisplay: React.FC<{
   );
 };
 
+const Base64ImagePreview: React.FC<{
+  base64String: string;
+  searchRegex: RegExp | null;
+}> = ({ base64String, searchRegex }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [previewPos, setPreviewPos] = useState<{ x: number; y: number } | null>(null);
+  const iconRef = useRef<HTMLSpanElement>(null);
+
+  const handleMouseEnter = () => {
+    if (iconRef.current) {
+      const rect = iconRef.current.getBoundingClientRect();
+      const previewHeight = 220; // Approx max height
+      const previewWidth = 220; // Approx max width
+
+      // Default to showing above
+      let top = rect.top - previewHeight - 8;
+      let left = rect.left;
+
+      // If not enough space on top, show below
+      if (top < 10) {
+        top = rect.bottom + 8;
+      }
+
+      // Prevent right overflow
+      if (left + previewWidth > window.innerWidth) {
+        left = window.innerWidth - previewWidth - 10;
+      }
+
+      // Prevent left overflow
+      if (left < 10) left = 10;
+
+      setPreviewPos({ x: left, y: top });
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setPreviewPos(null);
+  };
+
+  if (isExpanded) {
+    return (
+      <span
+        className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 rounded px-1 -ml-1 transition-colors"
+        onClick={() => setIsExpanded(false)}
+        title="Click to collapse back to icon"
+      >
+        <span className="text-emerald-700 dark:text-emerald-300">"
+          {searchRegex ? highlightText(base64String, searchRegex) : base64String}"
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="inline-flex items-center gap-2 group relative select-none"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <span
+        ref={iconRef}
+        className="cursor-pointer"
+        onClick={() => {
+          setIsExpanded(true);
+          setPreviewPos(null);
+        }}
+      >
+        <ImageIcon className="w-5 h-5 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 transition-colors" />
+      </span>
+
+      {/* Tooltip Image Preview - Uses fixed positioning to escape container clipping */}
+      {previewPos && (
+        <div
+          className="fixed z-[9999] bg-white dark:bg-slate-800 p-2 rounded-lg shadow-xl border border-slate-200 dark:border-slate-600 pointer-events-none"
+          style={{
+            left: `${previewPos.x}px`,
+            top: `${previewPos.y}px`
+          }}
+        >
+          <img
+            src={base64String}
+            alt="Preview"
+            className="max-w-[200px] max-h-[200px] object-contain rounded bg-slate-100 dark:bg-slate-900"
+          />
+        </div>
+      )}
+    </span>
+  );
+};
+
 // A single, recursive component to render all parts of the JSON object.
 const JsonNode: React.FC<{
   nodeValue: any;
@@ -384,6 +474,11 @@ const JsonNode: React.FC<{
             </span>
           );
         }
+
+        if (nodeValue.startsWith("data:image/png;base64,")) {
+          return <Base64ImagePreview base64String={nodeValue} searchRegex={searchRegex} />;
+        }
+
         return <span className="text-emerald-700 dark:text-emerald-300">"
           {searchRegex ? highlightText(nodeValue, searchRegex) : nodeValue}"
         </span>;
