@@ -61,4 +61,7 @@ export { default as NoteAddIcon } from '@mui/icons-material/NoteAdd';
 export { default as HistoryIcon } from '@mui/icons-material/History';
 export { default as AccessTimeIcon } from '@mui/icons-material/AccessTime';
 export { default as AddIcon } from '@mui/icons-material/Add';
+export { default as CaseSensitiveIcon } from '@mui/icons-material/Abc';
+export { default as WholeWordIcon } from '@mui/icons-material/ShortText';
+export { default as RegexIcon } from '@mui/icons-material/Code';
 export { default as DeleteIcon } from '@mui/icons-material/Delete';
