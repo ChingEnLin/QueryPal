@@ -1,3 +1,10 @@
+## [2.6.0](https://github.com/ChingEnLin/QueryPal/compare/v2.5.0...v2.6.0) (2026-02-02)
+
+### Features
+
+* Add search option icons and enhance JSON display highlighting with regex support. ([66e774c](https://github.com/ChingEnLin/QueryPal/commit/66e774c6834610c16646bf0251352824752514fd))
+* Implement base64 image preview with hover tooltip and expand functionality in JsonDisplay. ([438e46a](https://github.com/ChingEnLin/QueryPal/commit/438e46af7da238fe2121efea7166a1820782b782))
+
 ## [2.5.0](https://github.com/ChingEnLin/QueryPal/compare/v2.4.0...v2.5.0) (2026-01-12)
 
 ### Features
