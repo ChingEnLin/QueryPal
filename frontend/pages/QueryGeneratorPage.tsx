@@ -619,7 +619,19 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         throw new Error("No account ID available for query generation.");
       }
 
-      const result = await generateMongoQuery(prompt, accountId, connectedDbInfo ?? undefined, collectionCtx, intermediateContext?.data);
+      // Map selected collection names to their full info objects
+      const selectedCollectionInfos = selectedCollections
+        .map(name => collectionDetailsMap[name])
+        .filter((info): info is CollectionInfo => !!info);
+
+      const result = await generateMongoQuery(
+        prompt,
+        accountId,
+        connectedDbInfo ?? undefined,
+        collectionCtx,
+        intermediateContext?.data,
+        selectedCollectionInfos // Pass full info objects
+      );
       setQueryResult(result);
       setIntermediateContext(null); // Clear context after use
 
@@ -1058,7 +1070,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     if (isPromptUnchanged) return 'Query Generated';
     if (selectedCollections.length > 0) {
       if (selectedCollections.length === 1) return `Generate Query for ${selectedCollections[0]} collection`;
-      return `Generate Query for ${selectedCollections.length} collections`;
+      return `Generate Query across ${selectedCollections.length} collections`;
     }
     return 'Generate Query';
   }, [isLoading, selectedCollections, isPromptUnchanged]);

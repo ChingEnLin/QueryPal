@@ -30,9 +30,7 @@ class QueryPrompt(BaseModel):
     user_input: str
     account_id: str  # Added for cross-collection schema fetching
     db_context: DBContext
-    collection_context: CollectionContext | None = (
-        None  # Optional context for specific collection
-    )
+    collection_context: list[CollectionContext] = []  # List of contexts for selected collections
     intermediate_context: object | None = (
         None  # Optional intermediate context for complex queries
     )

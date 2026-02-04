@@ -18,8 +18,9 @@ export const generateMongoQuery = async (
     userInput: string,
     accountId: string,
     dbInfo?: DbInfo,
-    collectionContext?: CollectionInfo,
+    collectionContext?: CollectionInfo, // Kept for backward compatibility/single select
     intermediateContext?: any,
+    selectedCollections: CollectionInfo[] = [],
 ): Promise<QueryResultData> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
@@ -66,7 +67,11 @@ export const generateMongoQuery = async (
             user_input: userInput,
             account_id: accountId,
             db_context: dbInfo, // Send DB context to the backend for more accurate queries
-            collection_context: collectionContext, // Optional: send collection context if available
+            // Send mapping of selected collections as context
+            collection_context: selectedCollections.length > 0 ? selectedCollections.map(col => ({
+                name: col.name || "",
+                sampleDocument: col.sampleDocument
+            })) : (collectionContext ? [collectionContext] : []), // Fallback to single context as array
             intermediate_context: intermediateContext, // Optional: send data from a previous query
         }),
     });

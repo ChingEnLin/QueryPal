@@ -31,10 +31,20 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
     try:
         user_token = authorization.replace("Bearer ", "")
         access_token = exchange_token_obo(user_token)
-        # Fetch schema summary
-        # Note: We need the connection string to fetch the schema
-        # Ideally we might cache this, but for now we fetch it live
-        schema_summary = get_database_schema_summary(prompt.account_id, prompt.db_context.name, access_token)
+        # Use provided contexts if available to avoid re-fetch and ensure consistency
+        if prompt.collection_context:
+            summary = []
+            for ctx in prompt.collection_context:
+                 doc_str = str(ctx.sampleDocument) if ctx.sampleDocument else "No documents found"
+                 summary.append(f"Collection: {ctx.name}\nSample Document: {doc_str}")
+            schema_summary = "\n\n".join(summary)
+        # Fallback: fetch schema summary from DB
+        else:
+             schema_summary = get_database_schema_summary(
+                prompt.account_id, 
+                prompt.db_context.name, 
+                access_token
+             )
     except Exception as e:
         print(f"Error fetching schema context: {e}")
         schema_summary = "Could not fetch schema summary."
@@ -44,8 +54,8 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
         prompt.user_input,
         collections,
         prompt.db_context.name,
-        prompt.collection_context,
-        prompt.intermediate_context,
+        collection_context=None,
+        intermediate_context=prompt.intermediate_context,
         all_collections_schema=schema_summary
     )
 
