@@ -1,11 +1,10 @@
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { generateMongoQuery, debugMongoQuery, analyzeQueryResult } from '../services/geminiService';
+import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
-import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep, SavedQuery } from '../types';
+import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep, SavedQuery, SchemaRelationshipsResponse, Relationship } from '../types';
 import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult, mockSavedQueries } from '../services/mockData';
 import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
 import QueryDisplay from '../components/QueryDisplay';
@@ -388,10 +387,17 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // State for collection details
-  const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
-  const [collectionInfo, setCollectionInfo] = useState<CollectionInfo | null>(null);
-  const [isFetchingCollectionInfo, setIsFetchingCollectionInfo] = useState<boolean>(false);
+  const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
+
+  const [collectionDetailsMap, setCollectionDetailsMap] = useState<Record<string, CollectionInfo>>({});
+  const [loadingCollections, setLoadingCollections] = useState<Record<string, boolean>>({});
+  const [expandedCollectionSchemas, setExpandedCollectionSchemas] = useState<Record<string, boolean>>({}); // Track open/close state for stacking
   const [collectionInfoError, setCollectionInfoError] = useState<string | null>(null);
+
+  // State for relationship inference
+  const [relationships, setRelationships] = useState<SchemaRelationshipsResponse | null>(null);
+  const [isAnalyzingRelationships, setIsAnalyzingRelationships] = useState<boolean>(false);
+  const [relationshipError, setRelationshipError] = useState<string | null>(null);
 
   // State for cache clearing
   const [isClearingCache, setIsClearingCache] = useState<boolean>(false);
@@ -512,13 +518,15 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setExecutionError(null);
     setDebuggingResult(null);
     setDebugError(null);
+    setAnalysisResult(null);
+    setAnalysisError(null);
     setCodeHistory([]);
     setHistoryIndex(-1);
     setIntermediateContext(null);
     setQuerySourceCollection(null);
-    setAnalysisResult(null);
-    setAnalysisError(null);
     setCurrentQueryContextSource(null);
+    setRelationships(null); // Clear relationships
+    setRelationshipError(null); // Clear relationship error
   }, []);
 
   const handleDisconnect = useCallback(() => {
@@ -526,8 +534,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setConnectedResource(null);
     clearQueryState();
     setUserInput('');
-    setSelectedCollection(null);
-    setCollectionInfo(null);
+    setSelectedCollections([]);
+    setCollectionDetailsMap({});
   }, [clearQueryState]);
 
   const handleSelectAccount = useCallback(async (accountId: string) => {
@@ -605,7 +613,12 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
 
     try {
-      const result = await generateMongoQuery(prompt, connectedDbInfo ?? undefined, collectionCtx, intermediateContext?.data);
+      const accountId = connectedResource?.accountId || selectedAccountId;
+      if (!accountId) {
+        throw new Error("No account ID available for query generation.");
+      }
+
+      const result = await generateMongoQuery(prompt, accountId, connectedDbInfo ?? undefined, collectionCtx, intermediateContext?.data);
       setQueryResult(result);
       setIntermediateContext(null); // Clear context after use
 
@@ -623,7 +636,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } finally {
       setIsLoading(false);
     }
-  }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext]);
+  }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext, connectedResource, selectedAccountId]);
 
   const handleGenerateQueryClick = useCallback(() => {
     if (intermediateContext) {
@@ -631,12 +644,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } else {
       setCurrentQueryContextSource(null);
     }
-    setQuerySourceCollection(selectedCollection);
+    // For now, if multiple are selected, we might want to prioritize one for the "source" tag or change how it works.
+    // Let's us the first selected one, or a joined string.
+    setQuerySourceCollection(selectedCollections.length > 0 ? selectedCollections.join(', ') : null);
     setLastSuccessfulPrompt(userInput);
     // If a collection is selected, pass its info as context.
-    // Otherwise, this will be undefined, and the query will be against the whole DB.
-    handleGenerateQuery(userInput, collectionInfo ?? undefined);
-  }, [userInput, intermediateContext, selectedCollection, collectionInfo, handleGenerateQuery]);
+    const primaryContext = selectedCollections.length > 0 ? collectionDetailsMap[selectedCollections[0]] : undefined;
+    handleGenerateQuery(userInput, primaryContext);
+  }, [userInput, intermediateContext, selectedCollections, collectionDetailsMap, handleGenerateQuery]);
 
   const handleRunQuery = useCallback(async () => {
     if (!editableCode.trim() || !connectedDbInfo || !connectedResource) {
@@ -681,7 +696,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } finally {
       setIsExecuting(false);
     }
-  }, [editableCode, connectedDbInfo, connectedResource, selectedAccountId, lastSuccessfulPrompt, currentQueryContextSource]);
+  }, [editableCode, connectedDbInfo, connectedResource, lastSuccessfulPrompt, currentQueryContextSource]);
 
   const handleDebugQuery = useCallback(async () => {
     if (!editableCode || !executionError) return;
@@ -719,34 +734,107 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     }
   }, []);
 
-  const handleCollectionClick = useCallback(async (collectionName: string) => {
+  const handleCollectionClick = useCallback(async (collectionName: string, event?: React.MouseEvent) => {
     if (!connectedResource) return;
-    if (selectedCollection === collectionName) {
-      setSelectedCollection(null);
-      setCollectionInfo(null);
+
+    // Clear previous relationship analysis when selection changes
+    setRelationships(null);
+    setRelationshipError(null);
+
+    const isModifierPressed = event ? (event.ctrlKey || event.metaKey) : false;
+
+    let newSelection: string[] = [];
+
+    if (isModifierPressed) {
+      // Multi-selection logic
+      if (selectedCollections.includes(collectionName)) {
+        newSelection = selectedCollections.filter(c => c !== collectionName);
+      } else {
+        newSelection = [...selectedCollections, collectionName];
+      }
+    } else {
+      // Single selection functionality (toggle off if same clicked, otherwise set new)
+      if (selectedCollections.length === 1 && selectedCollections[0] === collectionName) {
+        newSelection = [];
+      } else {
+        newSelection = [collectionName];
+      }
+    }
+
+    setSelectedCollections(newSelection);
+
+    if (newSelection.length === 0) {
+      // Clear errors if any
       return;
     }
-    setSelectedCollection(collectionName);
-    setIsFetchingCollectionInfo(true);
-    setCollectionInfoError(null);
-    setCollectionInfo(null);
-    try {
-      const info = await getCollectionInfo(collectionName, connectedResource);
-      setCollectionInfo(info);
-    } catch (e) {
-      if (e instanceof Error) {
-        if (e.message.includes('AuthorizationFailed') || e.message.includes('403')) {
-          setCollectionInfoError("Permission Denied: You do not have permission to view details for this collection.");
-        } else {
-          setCollectionInfoError(e.message);
+
+    // Fetch details for any newly selected collection that we don't have yet
+    newSelection.forEach(async (col) => {
+      if (!collectionDetailsMap[col] && !loadingCollections[col]) {
+        setLoadingCollections(prev => ({ ...prev, [col]: true }));
+        try {
+          // Use the existing getCollectionInfo. 
+          // Note: getCollectionInfo signature might be (accountId, dbName, collectionName) or (collectionName, resource).
+          // I need to check the import or usage elsewhere. 
+          // Line 4 import says: import { ... getCollectionInfo ... } from '../services/dbService';
+          // Line 764 usage (in previous view) was: getCollectionInfo(newSelection[0], connectedResource);
+          // But typically it is (accountId, databaseName, collectionName).
+          // Let's assume (collectionName, connectedResource) based on previous usage or check dbService.
+          // Actually in Step 382 I wrote: getCollectionInfo(connectedResource!.accountId, connectedResource!.databaseName, col);
+          // Let's stick to what works. I will use the pattern that was there or verify signature.
+          // In Step 374, import is from dbService.
+          // In Step 382, I tried to use explicit args.
+          // Let's assume signature: getCollectionInfo(collectionName, connectedResource) based on line 764 of previous original code?
+          // Wait, original code was: `const info = await getCollectionInfo(newSelection[0], connectedResource);` in Step 382 diff (LEFT side).
+          // So I should use that signature.
+          const info = await getCollectionInfo(col, connectedResource);
+          setCollectionDetailsMap(prev => ({ ...prev, [col]: info }));
+        } catch (e: any) {
+          console.error(`Failed to load details for ${col}`, e);
+        } finally {
+          setLoadingCollections(prev => ({ ...prev, [col]: false }));
         }
-      } else {
-        setCollectionInfoError("Failed to fetch collection details.");
       }
+    });
+  }, [connectedResource, selectedCollections, collectionDetailsMap, loadingCollections]);
+
+  const handleAnalyzeRelationships = useCallback(async () => {
+    if (!connectedResource || selectedCollections.length < 2) return;
+
+    setIsAnalyzingRelationships(true);
+    setRelationshipError(null);
+    // Don't clear immediately to prevent flashing if we are just refreshing? 
+    // Actually for new selection we want to clear.
+
+    try {
+      const result = await inferSchemaRelationships(
+        connectedResource.accountId,
+        connectedResource.databaseName,
+        selectedCollections
+      );
+      setRelationships(result);
+    } catch (e: any) {
+      setRelationshipError(e.message || "Failed to analyze relationships.");
     } finally {
-      setIsFetchingCollectionInfo(false);
+      setIsAnalyzingRelationships(false);
     }
-  }, [selectedCollection, connectedResource]);
+  }, [connectedResource, selectedCollections]);
+
+  // Debounced effect to trigger analysis when selections change
+  useEffect(() => {
+    // Clean up previous state if selection is insufficient
+    if (selectedCollections.length < 2) {
+      setRelationships(null);
+      setRelationshipError(null);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      handleAnalyzeRelationships();
+    }, 800); // 800ms debounce
+
+    return () => clearTimeout(timer);
+  }, [selectedCollections, handleAnalyzeRelationships]);
 
   const handleNavigateHistory = useCallback((direction: 'prev' | 'next') => {
     const newIndex = direction === 'prev' ? historyIndex - 1 : historyIndex + 1;
@@ -952,20 +1040,27 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const dbInfoForRender = demoActive ? mockECommerceDbInfo : connectedDbInfo;
   const accountNameForRender = demoActive ? 'prod-ecommerce-db' : connectedAccountName;
 
-  const selectedCollectionForRender = isDemoModeForCollectionStep ? 'users' : selectedCollection;
-  const collectionInfoForRender = isDemoModeForCollectionStep ? mockCollectionInfoMap.get('users')! : collectionInfo;
-  const showCollectionPanel = isDemoModeForCollectionStep || isFetchingCollectionInfo || (collectionInfo && selectedCollection === collectionInfo.name) || collectionInfoError;
+  const selectedCollectionsForRender = isDemoModeForCollectionStep ? ['users'] : selectedCollections;
+
+  // For demo/tutorial purposes, ensure appropriate data is in the map if simulated
+  const collectionDetailsMapForRender = useMemo(() => {
+    if (isDemoModeForCollectionStep) {
+      return { 'users': mockCollectionInfoMap.get('users')! };
+    }
+    return collectionDetailsMap;
+  }, [isDemoModeForCollectionStep, collectionDetailsMap]);
 
   const isPromptUnchanged = userInput.trim() === lastSuccessfulPrompt.trim() && !!editableCode;
 
   const generateButtonText = useMemo(() => {
     if (isLoading) return 'Generating...';
     if (isPromptUnchanged) return 'Query Generated';
-    if (selectedCollection) {
-      return `Generate Query for ${selectedCollection} collection`;
+    if (selectedCollections.length > 0) {
+      if (selectedCollections.length === 1) return `Generate Query for ${selectedCollections[0]} collection`;
+      return `Generate Query for ${selectedCollections.length} collections`;
     }
     return 'Generate Query';
-  }, [isLoading, selectedCollection, isPromptUnchanged]);
+  }, [isLoading, selectedCollections, isPromptUnchanged]);
 
   // --- Demo Mode Context Banner ---
   const showContextBanner = intermediateContext || isDemoModeForContextActiveStep;
@@ -1115,13 +1210,16 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     <p className="text-slate-900 dark:text-slate-100 font-semibold text-lg">{dbInfoForRender.size ?? 'N/A'}</p>
                   </div>
                   <div className="bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg col-span-1 md:col-span-3">
-                    <p className="text-slate-600 dark:text-slate-300 mb-2 flex items-center gap-2 font-medium"><ServerIcon className="w-4 h-4" /> Collections</p>
+                    <p className="text-slate-600 dark:text-slate-300 mb-2 flex items-center gap-2 font-medium">
+                      <ServerIcon className="w-4 h-4" /> Collections
+                      <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Hold Ctrl/Cmd to select multiple)</span>
+                    </p>
                     <div className="flex flex-wrap gap-2">
                       {dbInfoForRender.collections.map(col => (
                         <button
                           key={col.name}
-                          onClick={() => handleCollectionClick(col.name)}
-                          className={`text-xs font-mono px-3 py-1 rounded-full transition-all duration-200 ${selectedCollectionForRender === col.name ? 'bg-blue-500 text-white font-bold ring-2 ring-blue-300 dark:bg-blue-600 dark:ring-blue-500' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'}`}
+                          onClick={(e) => handleCollectionClick(col.name, e)}
+                          className={`text-xs font-mono px-3 py-1 rounded-full transition-all duration-200 ${selectedCollectionsForRender.includes(col.name) ? 'bg-blue-500 text-white font-bold ring-2 ring-blue-300 dark:bg-blue-600 dark:ring-blue-500' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'}`}
                           title={`View details for the ${col.name} collection`}
                         >
                           {col.name}
@@ -1130,21 +1228,117 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     </div>
                   </div>
                 </div>
-                {/* Collection Action Panel */}
-                {showCollectionPanel && (
-                  <div id="tutorial-collection-panel" className="mt-4">
-                    {isFetchingCollectionInfo && !isDemoModeForCollectionStep && <div className="text-center p-4 text-slate-500 dark:text-slate-400">Fetching collection details...</div>}
-                    {collectionInfoError && !isDemoModeForCollectionStep && (
-                      <div className="text-red-600 bg-red-50 border border-red-200 text-sm mt-4 p-3 rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
+
+                {/* Multi-Collection Analysis Panel */}
+                {selectedCollectionsForRender.length > 1 && (
+                  <div className="mt-6 bg-slate-50 dark:bg-slate-700/30 rounded-lg p-4 border border-slate-200 dark:border-slate-700 animate-fade-in">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-md font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        <span className="text-blue-500">🔗</span> Schema Connections
+                      </h3>
+                      <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 text-xs px-2 py-1 rounded border border-blue-100 dark:border-blue-800/30 flex items-center gap-1">
+                        <span>✨ AI Inferred</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 italic">
+                      Note: These connections are inferred by AI based on the schema and may not reflect strict foreign key constraints.
+                    </p>
+
+                    {(isAnalyzingRelationships || !relationships) && !relationshipError && (
+                      <div className="flex items-center justify-center p-6 text-slate-500 dark:text-slate-400">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 mr-2"></div>
+                        Searching for connections...
+                      </div>
+                    )}
+
+                    {relationshipError && (
+                      <div className="text-red-600 bg-red-50 border border-red-200 text-sm p-3 rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
+                        {relationshipError}
+                      </div>
+                    )}
+
+                    {relationships && !isAnalyzingRelationships && (
+                      <div className="grid gap-3 animate-fade-in">
+                        {(() => {
+                          // Strict filtering: Only show if both source and target are in the selection
+                          const filteredRelationships = relationships.relationships.filter(
+                            rel => selectedCollections.includes(rel.source_collection) && selectedCollections.includes(rel.target_collection)
+                          );
+
+                          if (filteredRelationships.length === 0) {
+                            return <p className="text-sm text-slate-500 italic">No obvious relationships found between the selected collections.</p>;
+                          }
+
+                          return filteredRelationships.map((rel, idx) => (
+                            <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
+                              <div className="flex items-center gap-2 text-sm font-mono overflow-x-auto">
+                                <span className="text-slate-700 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-700/60 px-2 py-1 rounded border border-slate-200 dark:border-slate-600">{rel.source_collection}.{rel.source_field}</span>
+                                <span className="text-slate-400">→</span>
+                                <span className="text-slate-700 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-700/60 px-2 py-1 rounded border border-slate-200 dark:border-slate-600">{rel.target_collection}.{rel.target_field}</span>
+                              </div>
+                              <div className="flex flex-col sm:items-end">
+                                <span className="text-xs text-slate-500 dark:text-slate-400">{rel.description}</span>
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Collection Action Panel (Single or Stacked) */}
+                {selectedCollectionsForRender.length > 0 && (
+                  <div id="tutorial-collection-panel" className="mt-4 space-y-2">
+                    {/* Error Display */}
+                    {collectionInfoError && (
+                      <div className="text-red-600 bg-red-50 border border-red-200 text-sm p-3 rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
                         {collectionInfoError}
                       </div>
                     )}
-                    {collectionInfoForRender && selectedCollectionForRender === collectionInfoForRender.name && (
-                      <CollectionActionPanel
-                        info={collectionInfoForRender}
-                        onClose={() => { setSelectedCollection(null); setCollectionInfo(null); }}
-                      />
-                    )}
+
+                    {selectedCollectionsForRender.map(colName => {
+                      const info = collectionDetailsMapForRender[colName];
+                      const isLoading = loadingCollections[colName];
+                      const isExpanded = expandedCollectionSchemas[colName] || (selectedCollectionsForRender.length === 1); // Default expanded if single
+
+                      return (
+                        <div key={colName} className="bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                          <button
+                            onClick={() => setExpandedCollectionSchemas(prev => ({ ...prev, [colName]: !prev[colName] }))}
+                            className="w-full flex items-center justify-between p-3 text-left hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                              <span className="font-bold text-slate-700 dark:text-slate-200">{colName}</span>
+                              {isLoading && <SpinnerIcon className="w-4 h-4 animate-spin text-blue-500" />}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              {info && <span>{info.documentCount.toLocaleString()} docs</span>}
+                            </div>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                              {isLoading ? (
+                                <div className="py-4 text-center text-slate-500 text-sm">Loading details...</div>
+                              ) : info ? (
+                                <CollectionActionPanel
+                                  info={info}
+                                  onClose={() => {
+                                    // Deselect this collection
+                                    setSelectedCollections(prev => prev.filter(c => c !== colName));
+                                  }}
+                                />
+                              ) : (
+                                <div className="py-4 text-center text-red-500 text-sm">Failed to load details.</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1247,7 +1441,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     }
                   }
                 }}
-                placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : (selectedCollection ? `Querying '${selectedCollection}'... e.g., 'Find all users from Canada'` : "e.g., 'Find all users from Canada and sort them by name'")}
+                placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : (selectedCollections.length > 0 ? `Querying ${selectedCollections.length > 1 ? `${selectedCollections.length} collections` : `'${selectedCollections[0]}'`}... e.g., 'Find all users from Canada'` : "e.g., 'Find all users from Canada and sort them by name'")}
                 className="w-full h-28 p-4 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none"
                 disabled={isLoading || isQuerySectionDisabled}
               />

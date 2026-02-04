@@ -28,6 +28,7 @@ class CollectionContext(BaseModel):
 
 class QueryPrompt(BaseModel):
     user_input: str
+    account_id: str  # Added for cross-collection schema fetching
     db_context: DBContext
     collection_context: CollectionContext | None = (
         None  # Optional context for specific collection
@@ -54,3 +55,22 @@ class DebugQueryRequest(BaseModel):
 
 class DebugSuggestionResponse(BaseModel):
     suggestion: str
+
+
+class SchemaRelationshipsRequest(BaseModel):
+    account_id: str
+    database_name: str
+    collection_names: list[str]
+
+
+class Relationship(BaseModel):
+    source_collection: str
+    source_field: str
+    target_collection: str
+    target_field: str
+    description: str
+    confidence: float  # 0.0 to 1.0
+
+
+class SchemaRelationshipsResponse(BaseModel):
+    relationships: list[Relationship]

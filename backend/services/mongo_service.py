@@ -56,3 +56,33 @@ def transform_mongo_result(result):
     elif isinstance(result, DeleteResult):
         return {"deleted_count": result.deleted_count}
     return result
+
+
+def get_database_schema_summary(account_id: str, database: str, access_token: str, collection_filter: list[str] = None) -> str:
+    from services.azure_cosmos_resources import get_connection_string
+    
+    try:
+        connection_string = get_connection_string(account_id, access_token)
+        client = pymongo.MongoClient(connection_string)
+        db = client[database]
+        summary = []
+        
+        # Determine which collections to scan
+        if collection_filter:
+            target_collections = collection_filter
+        else:
+            target_collections = db.list_collection_names()
+
+        for collection_name in target_collections:
+            # Skip system collections if scanning all (if explicit filter, try to fetch)
+            if not collection_filter and collection_name.startswith("system."):
+                continue
+                
+            doc = db[collection_name].find_one()
+            doc_str = str(doc) if doc else "No documents found"
+            summary.append(f"Collection: {collection_name}\nSample Document: {doc_str}")
+            
+        return "\n\n".join(summary)
+    except Exception as e:
+        print(f"Error fetching schema summary: {e}")
+        return "Could not fetch schema summary."
