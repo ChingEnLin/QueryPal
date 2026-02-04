@@ -4,7 +4,7 @@ import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRel
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
-import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep, SavedQuery, SchemaRelationshipsResponse, Relationship } from '../types';
+import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep, SavedQuery, SchemaRelationshipsResponse } from '../types';
 import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult, mockSavedQueries } from '../services/mockData';
 import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
 import QueryDisplay from '../components/QueryDisplay';
@@ -13,6 +13,7 @@ import Loader from '../components/Loader';
 import Tutorial from '../components/Tutorial';
 import JsonDisplay from '../components/JsonDisplay';
 import CollectionActionPanel from '../components/CollectionActionPanel';
+import SchemaRelationshipGraph from '../components/SchemaRelationshipGraph';
 import SavedQueriesPanel from '../components/SavedQueriesPanel';
 import SaveQueryDialog from '../components/SaveQueryDialog';
 import ShareQueryDialog from '../components/ShareQueryDialog';
@@ -1259,30 +1260,11 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     )}
 
                     {relationships && !isAnalyzingRelationships && (
-                      <div className="grid gap-3 animate-fade-in">
-                        {(() => {
-                          // Strict filtering: Only show if both source and target are in the selection
-                          const filteredRelationships = relationships.relationships.filter(
-                            rel => selectedCollections.includes(rel.source_collection) && selectedCollections.includes(rel.target_collection)
-                          );
-
-                          if (filteredRelationships.length === 0) {
-                            return <p className="text-sm text-slate-500 italic">No obvious relationships found between the selected collections.</p>;
-                          }
-
-                          return filteredRelationships.map((rel, idx) => (
-                            <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
-                              <div className="flex items-center gap-2 text-sm font-mono overflow-x-auto">
-                                <span className="text-slate-700 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-700/60 px-2 py-1 rounded border border-slate-200 dark:border-slate-600">{rel.source_collection}.{rel.source_field}</span>
-                                <span className="text-slate-400">→</span>
-                                <span className="text-slate-700 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-700/60 px-2 py-1 rounded border border-slate-200 dark:border-slate-600">{rel.target_collection}.{rel.target_field}</span>
-                              </div>
-                              <div className="flex flex-col sm:items-end">
-                                <span className="text-xs text-slate-500 dark:text-slate-400">{rel.description}</span>
-                              </div>
-                            </div>
-                          ));
-                        })()}
+                      <div className="animate-fade-in w-full flex justify-center">
+                        <SchemaRelationshipGraph
+                          relationships={relationships}
+                          selectedCollections={selectedCollections}
+                        />
                       </div>
                     )}
                   </div>
