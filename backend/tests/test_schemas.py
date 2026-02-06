@@ -91,19 +91,22 @@ def test_query_prompt():
 
     prompt = QueryPrompt(
         user_input="Find all users",
+        account_id="test-account",
         db_context=db_context,
-        collection_context=collection_context,
+        collection_context=[collection_context],
         intermediate_context={"key": "value"},
     )
 
     assert prompt.user_input == "Find all users"
     assert prompt.db_context.name == "test-db"
-    assert prompt.collection_context.name == "users"
+    assert prompt.collection_context[0].name == "users"
     assert prompt.intermediate_context == {"key": "value"}
 
     # Test with minimal required fields
-    minimal_prompt = QueryPrompt(user_input="Find all users", db_context=db_context)
-    assert minimal_prompt.collection_context is None
+    minimal_prompt = QueryPrompt(
+        user_input="Find all users", account_id="test-account", db_context=db_context
+    )
+    assert minimal_prompt.collection_context == []
     assert minimal_prompt.intermediate_context is None
 
 
