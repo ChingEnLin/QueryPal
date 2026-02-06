@@ -138,12 +138,10 @@ interface HeaderUIProps {
   onStartTutorial: () => void;
   onShowSavedQueries: () => void;
   onShowShortcuts: () => void;
-  onNavigateToExplorer: () => void;
-  isExplorerNavEnabled: boolean;
   isUserMenuForcedOpen?: boolean;
 }
 
-const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial, onShowSavedQueries, onShowShortcuts, onNavigateToExplorer, isExplorerNavEnabled, isUserMenuForcedOpen }) => {
+const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isClearingCache, cacheClearStatus, onStartTutorial, onShowSavedQueries, onShowShortcuts, isUserMenuForcedOpen }) => {
   const { theme, toggleTheme } = useTheme();
 
   return (
@@ -156,15 +154,6 @@ const HeaderUI: React.FC<HeaderUIProps> = ({ name, onLogout, onClearCache, isCle
         </div>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
-        <button
-          onClick={onNavigateToExplorer}
-          disabled={!isExplorerNavEnabled}
-          className="h-9 flex items-center justify-center gap-2 px-3 border text-sm font-medium rounded-md transition-all duration-300 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Explore and manage data"
-        >
-          <DataGridIcon className="w-5 h-5" />
-          <span className="hidden md:inline">Data Explorer</span>
-        </button>
         <button
           onClick={toggleTheme}
           className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -977,17 +966,44 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     }
   };
 
-  const handleNavigateToExplorer = () => {
-    if (connectedResource && connectedDbInfo) {
-      onNavigateToExplorer({
-        resource: connectedResource,
-        dbInfo: connectedDbInfo,
-        accountName: connectedAccountName,
-        availableDbs: accountDatabases,
-        availableAccounts: azureAccounts,
-      });
+  const handleLaunchExplorer = useCallback((targetDb: DbInfo, targetAccount: CosmosDBAccount, explicitDbs?: DbInfo[]) => {
+    // Determine the list of available DBs.
+    // If explicitDbs is provided (e.g. from quick explore fetch), use it.
+    // Else if we are launching for the currently selected account (in the list), use the state accountDatabases.
+    // Otherwise fallback to just the target DB (which limits switching capabilities).
+    const dbsForExplorer = explicitDbs ||
+      ((selectedAccountId === targetAccount.id && accountDatabases.length > 0)
+        ? accountDatabases
+        : [targetDb]);
+
+    onNavigateToExplorer({
+      resource: { accountId: targetAccount.id, databaseName: targetDb.name },
+      dbInfo: targetDb,
+      accountName: targetAccount.name,
+      availableDbs: dbsForExplorer,
+      availableAccounts: azureAccounts,
+    });
+  }, [onNavigateToExplorer, selectedAccountId, accountDatabases, azureAccounts]);
+
+  const handleQuickExploreAccount = useCallback(async (account: CosmosDBAccount) => {
+    // If we already have the DBs for this account in state (because it's selected)
+    if (selectedAccountId === account.id && accountDatabases.length > 0) {
+      handleLaunchExplorer(accountDatabases[0], account, accountDatabases);
+      return;
     }
-  };
+
+    try {
+      const dbs = await getDatabasesForAccount(account.id);
+      if (dbs.length > 0) {
+        handleLaunchExplorer(dbs[0], account, dbs);
+      } else {
+        setError(`No databases found in '${account.name}'. Cannot launch Data Explorer.`);
+      }
+    } catch (e) {
+      console.error("Quick explorer failed", e);
+      setError(`Failed to load databases for '${account.name}'.`);
+    }
+  }, [selectedAccountId, accountDatabases, handleLaunchExplorer]);
 
   // --- Tutorial Demo Mode Logic ---
   const isDemoModeForCollectionStep = isTutorialActive && tutorialStepIndex === 2;
@@ -1188,8 +1204,6 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
           onStartTutorial={() => setIsTutorialActive(true)}
           onShowSavedQueries={() => setIsSavedQueriesPanelOpen(true)}
           onShowShortcuts={() => setIsShortcutCheatsheetOpen(true)}
-          onNavigateToExplorer={handleNavigateToExplorer}
-          isExplorerNavEnabled={!!connectedResource}
           isUserMenuForcedOpen={isUserMenuOpenForTutorial}
         />
 
@@ -1205,13 +1219,23 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                       Connected to: {accountNameForRender} / <span className="font-bold">{dbInfoForRender.name}</span>
                     </p>
                   </div>
-                  <button
-                    onClick={handleDisconnect}
-                    className="px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/50 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors"
-                    title="Disconnect from database"
-                  >
-                    Disconnect
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => connectedDbInfo && connectedResource && handleLaunchExplorer(connectedDbInfo, azureAccounts.find(a => a.id === connectedResource.accountId) || azureAccounts[0])}
+                      className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
+                      title="Open in Data Explorer"
+                    >
+                      <DataGridIcon className="w-4 h-4" />
+                      Explorer
+                    </button>
+                    <button
+                      onClick={handleDisconnect}
+                      className="px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/50 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors"
+                      title="Disconnect from database"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                   <div className="bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg">
@@ -1354,15 +1378,25 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                   <div className="mt-4 space-y-4">
                     {azureAccounts.map(account => (
                       <div key={account.id} className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border dark:border-slate-700">
-                        <button
-                          onClick={() => handleSelectAccount(account.id)}
-                          disabled={isLoadingDatabases}
-                          className="w-full text-left font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
-                          title={`Load databases for ${account.name}`}
-                        >
-                          <CloudIcon className="w-5 h-5 text-slate-500" />
-                          {account.name}
-                        </button>
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            onClick={() => handleSelectAccount(account.id)}
+                            disabled={isLoadingDatabases}
+                            className="flex-grow text-left font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            title={`Load databases for ${account.name}`}
+                          >
+                            <CloudIcon className="w-5 h-5 text-slate-500" />
+                            {account.name}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleQuickExploreAccount(account); }}
+                            className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-md transition-colors shadow-sm ml-2"
+                            title={`Quickly open Data Explorer for ${account.name} (first database)`}
+                          >
+                            <DataGridIcon className="w-4 h-4" />
+                            <span className="hidden sm:inline">Explorer</span>
+                          </button>
+                        </div>
                         {selectedAccountId === account.id && (
                           <div className="mt-3 pl-7 animate-fade-in">
                             {isLoadingDatabases ? (
@@ -1376,8 +1410,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                                 {accountDatabases.map(db => (
                                   <button
                                     key={db.name}
+                                    type="button"
                                     onClick={() => handleConnectDatabase(db)}
-                                    className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
+                                    className="px-4 py-2 border border-blue-600 dark:border-blue-500 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
                                     title={`Connect to the ${db.name} database`}
                                   >
                                     {db.name}
