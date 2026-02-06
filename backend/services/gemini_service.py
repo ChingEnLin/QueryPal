@@ -1,6 +1,11 @@
 from google import genai
 from google.genai import types
-from models.schemas import GeneratedCode, CollectionContext, DebugSuggestionResponse, SchemaRelationshipsResponse
+from models.schemas import (
+    GeneratedCode,
+    CollectionContext,
+    DebugSuggestionResponse,
+    SchemaRelationshipsResponse,
+)
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
@@ -113,7 +118,7 @@ def generate_query_from_prompt(
     database: str,
     collection_context: CollectionContext = None,
     intermediate_context: dict = None,
-    all_collections_schema: str = ""
+    all_collections_schema: str = "",
 ) -> GeneratedCode:
     # Prune intermediate_context to remove image/large data
     safe_intermediate_context = (
@@ -278,7 +283,7 @@ Output Format (Json):
 
 def generate_schema_relationships(schema_summary: str) -> SchemaRelationshipsResponse:
     from models.schemas import SchemaRelationshipsResponse
-    
+
     full_prompt = PROMPT_TEMPLATE_RELATIONSHIPS.format(schema_summary=schema_summary)
     client = genai.Client()
     response = client.models.generate_content(
@@ -295,6 +300,7 @@ def generate_schema_relationships(schema_summary: str) -> SchemaRelationshipsRes
         return response.parsed
 
     import json
+
     try:
         data = json.loads(response.text)
         return SchemaRelationshipsResponse(**data)

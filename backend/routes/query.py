@@ -16,7 +16,11 @@ from services.gemini_service import (
     generate_suggestion_from_query_error,
     generate_schema_relationships,
 )
-from services.mongo_service import execute_mongo_query, transform_mongo_result, get_database_schema_summary
+from services.mongo_service import (
+    execute_mongo_query,
+    transform_mongo_result,
+    get_database_schema_summary,
+)
 from models.analyze import AnalyzeRequest, AnalyzeResponse
 from services.analyze_service import analyze_query_result
 
@@ -35,16 +39,18 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
         if prompt.collection_context:
             summary = []
             for ctx in prompt.collection_context:
-                 doc_str = str(ctx.sampleDocument) if ctx.sampleDocument else "No documents found"
-                 summary.append(f"Collection: {ctx.name}\nSample Document: {doc_str}")
+                doc_str = (
+                    str(ctx.sampleDocument)
+                    if ctx.sampleDocument
+                    else "No documents found"
+                )
+                summary.append(f"Collection: {ctx.name}\nSample Document: {doc_str}")
             schema_summary = "\n\n".join(summary)
         # Fallback: fetch schema summary from DB
         else:
-             schema_summary = get_database_schema_summary(
-                prompt.account_id, 
-                prompt.db_context.name, 
-                access_token
-             )
+            schema_summary = get_database_schema_summary(
+                prompt.account_id, prompt.db_context.name, access_token
+            )
     except Exception as e:
         print(f"Error fetching schema context: {e}")
         schema_summary = "Could not fetch schema summary."
@@ -56,29 +62,31 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
         prompt.db_context.name,
         collection_context=None,
         intermediate_context=prompt.intermediate_context,
-        all_collections_schema=schema_summary
+        all_collections_schema=schema_summary,
     )
 
 
 @router.post("/infer-relationships", response_model=SchemaRelationshipsResponse)
-def infer_relationships(request: SchemaRelationshipsRequest = Body(...), authorization: str = Header(...)):
+def infer_relationships(
+    request: SchemaRelationshipsRequest = Body(...), authorization: str = Header(...)
+):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
-    
+
     try:
         user_token = authorization.replace("Bearer ", "")
         access_token = exchange_token_obo(user_token)
-        
+
         # Fetch schema summary ONLY for correct collections
         schema_summary = get_database_schema_summary(
-            request.account_id, 
-            request.database_name, 
-            access_token, 
-            collection_filter=request.collection_names
+            request.account_id,
+            request.database_name,
+            access_token,
+            collection_filter=request.collection_names,
         )
-        
+
         return generate_schema_relationships(schema_summary)
-    
+
     except Exception as e:
         print(f"Error inferring relationships: {e}")
         raise HTTPException(status_code=500, detail=str(e))
