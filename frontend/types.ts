@@ -17,7 +17,7 @@ export interface DbConfig {
 }
 
 export interface QueryResultData {
-  generated_code: string;
+    generated_code: string;
 }
 
 /**
@@ -47,10 +47,10 @@ export type SelectedResource = {
  * Represents the detailed information of a successfully connected database.
  */
 export interface DbInfo {
-  name:string;
-  collections: CollectionSummary[];
-  totalDocuments: number;
-  size: string | null;
+    name: string;
+    collections: CollectionSummary[];
+    totalDocuments: number;
+    size: string | null;
 }
 
 /**
@@ -75,7 +75,7 @@ export interface ChartJSDataset {
     borderColor?: string | string[];
     borderWidth?: number;
     // Allow other chart.js dataset properties
-    [key: string]: any; 
+    [key: string]: any;
 }
 
 export interface ChartJSData {
@@ -100,13 +100,13 @@ export interface AnalysisResult {
  * Represents a single step in the user's query workflow for notebook generation.
  */
 export interface NotebookStep {
-  id: string;
-  type: 'query' | 'note'; // Add type to distinguish steps
-  prompt: string; // For query: NL prompt. For note: markdown content.
-  query?: string; // Query code is optional now (for notes)
-  resultSample?: any; // Result sample is optional (for notes)
-  contextSource?: string;
-  isEditing?: boolean; // Transient state for UI editing of notes
+    id: string;
+    type: 'query' | 'note'; // Add type to distinguish steps
+    prompt: string; // For query: NL prompt. For note: markdown content.
+    query?: string; // Query code is optional now (for notes)
+    resultSample?: any; // Result sample is optional (for notes)
+    contextSource?: string;
+    isEditing?: boolean; // Transient state for UI editing of notes
 }
 
 /**
@@ -170,4 +170,23 @@ export interface DocumentHistoryResponse {
     document_id: string;
     history_entries: DocumentHistoryEntry[];
     total_entries: number;
+}
+
+/**
+ * Represents an inferred relationship between two collections.
+ */
+export interface Relationship {
+    source_collection: string;
+    source_field: string;
+    target_collection: string;
+    target_field: string;
+    description: string;
+    confidence: number;
+}
+
+/**
+ * Represents the response from the schema relationship inference endpoint.
+ */
+export interface SchemaRelationshipsResponse {
+    relationships: Relationship[];
 }
