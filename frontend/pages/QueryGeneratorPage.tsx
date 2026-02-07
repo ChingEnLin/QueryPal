@@ -346,6 +346,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [connectedResource, setConnectedResource] = useState<SelectedResource | null>(null);
   const [connectedDbInfo, setConnectedDbInfo] = useState<DbInfo | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
+  const [isConnectingToDb, setIsConnectingToDb] = useState<string | null>(null);
+  const [quickExploringAccountId, setQuickExploringAccountId] = useState<string | null>(null);
 
   // State for AI query generation
   const [queryResult, setQueryResult] = useState<QueryResultData | null>(null);
@@ -574,9 +576,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     }
   }, [selectedAccountId, connectedResource, azureAccounts, handleDisconnect]);
 
-  const handleConnectDatabase = useCallback((dbInfo: DbInfo) => {
+  const handleConnectDatabase = useCallback(async (dbInfo: DbInfo) => {
     const account = azureAccounts.find(acc => acc.id === selectedAccountId);
     if (!account) return;
+
+    setIsConnectingToDb(dbInfo.name);
+    // Simulate connection delay for better UX
+    await new Promise(resolve => setTimeout(resolve, 800));
 
     setConnectedResource({
       accountId: account.id,
@@ -584,6 +590,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     });
     setConnectedDbInfo(dbInfo);
     clearQueryState();
+    setIsConnectingToDb(null);
   }, [selectedAccountId, azureAccounts, clearQueryState]);
 
   const handleGenerateQuery = useCallback(async (prompt: string, collectionCtx?: CollectionInfo) => {
@@ -992,6 +999,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       return;
     }
 
+    setQuickExploringAccountId(account.id);
     try {
       const dbs = await getDatabasesForAccount(account.id);
       if (dbs.length > 0) {
@@ -1002,6 +1010,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } catch (e) {
       console.error("Quick explorer failed", e);
       setError(`Failed to load databases for '${account.name}'.`);
+    } finally {
+      setQuickExploringAccountId(null);
     }
   }, [selectedAccountId, accountDatabases, handleLaunchExplorer]);
 
@@ -1387,13 +1397,21 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                           >
                             <CloudIcon className="w-5 h-5 text-slate-500" />
                             {account.name}
+                            {selectedAccountId === account.id && isLoadingDatabases && (
+                              <SpinnerIcon className="w-4 h-4 animate-spin text-blue-500 ml-2" />
+                            )}
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); handleQuickExploreAccount(account); }}
-                            className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-md transition-colors shadow-sm ml-2"
+                            disabled={quickExploringAccountId !== null}
+                            className={`flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-md transition-colors shadow-sm ml-2 ${quickExploringAccountId !== null && quickExploringAccountId !== account.id ? 'opacity-50' : ''}`}
                             title={`Quickly open Data Explorer for ${account.name} (first database)`}
                           >
-                            <DataGridIcon className="w-4 h-4" />
+                            {quickExploringAccountId === account.id ? (
+                              <SpinnerIcon className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <DataGridIcon className="w-4 h-4" />
+                            )}
                             <span className="hidden sm:inline">Explorer</span>
                           </button>
                         </div>
@@ -1412,10 +1430,18 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                                     key={db.name}
                                     type="button"
                                     onClick={() => handleConnectDatabase(db)}
-                                    className="px-4 py-2 border border-blue-600 dark:border-blue-500 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
+                                    disabled={isConnectingToDb !== null}
+                                    className={`px-4 py-2 border border-blue-600 dark:border-blue-500 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors flex items-center gap-2 ${isConnectingToDb !== null && isConnectingToDb !== db.name ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     title={`Connect to the ${db.name} database`}
                                   >
-                                    {db.name}
+                                    {isConnectingToDb === db.name ? (
+                                      <>
+                                        <SpinnerIcon className="w-4 h-4 animate-spin" />
+                                        Connecting...
+                                      </>
+                                    ) : (
+                                      db.name
+                                    )}
                                   </button>
                                 ))}
                               </div>
