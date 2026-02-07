@@ -1,3 +1,18 @@
+## [2.7.0](https://github.com/ChingEnLin/QueryPal/compare/v2.6.0...v2.7.0) (2026-02-07)
+
+### Features
+
+* Add an interactive SVG schema relationship graph component to visualize collection relationships on the query generator page. ([605119d](https://github.com/ChingEnLin/QueryPal/commit/605119d366e63d10911c86f6ec49ef722f52b4e7))
+* Enable multi-collection query generation by updating context handling to pass a list of selected collections to the backend. ([943cf44](https://github.com/ChingEnLin/QueryPal/commit/943cf44bb9872ad1961a579cc9c588ecc9696f20))
+* Implement schema relationship inference and enhance NL2Query with cross-collection schema context. ([c6ef8db](https://github.com/ChingEnLin/QueryPal/commit/c6ef8dbf67dd1f7aacf1f45c917507c5773ac4ea))
+* Replace global Data Explorer button with context-specific explorer buttons and add quick explore options for accounts. ([a268708](https://github.com/ChingEnLin/QueryPal/commit/a268708f42c8abbf395576d88620ee4a4cca9a9c))
+* update usability ([a7fea1b](https://github.com/ChingEnLin/QueryPal/commit/a7fea1b1886a6f11ffe4eb3b64bae4eacf3dcf24))
+
+### Bug Fixes
+
+* black format ([53014ed](https://github.com/ChingEnLin/QueryPal/commit/53014ed30da1551598ea30f279365e86441e0c09))
+* update test ([a154d65](https://github.com/ChingEnLin/QueryPal/commit/a154d65821928f68346ad0734b1c30d7d7c10703))
+
 ## [2.6.0](https://github.com/ChingEnLin/QueryPal/compare/v2.5.0...v2.6.0) (2026-02-02)
 
 ### Features
