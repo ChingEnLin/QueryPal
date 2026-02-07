@@ -15,7 +15,10 @@ from models.analyze import AnalyzeRequest
 def test_nl2query(client):
     """Test natural language to query conversion."""
     # Mock dependencies
-    with patch("routes.query.generate_query_from_prompt") as mock_generate:
+    with (
+        patch("routes.query.generate_query_from_prompt") as mock_generate,
+        patch("routes.query.exchange_token_obo") as mock_exchange,
+    ):
         mock_generate.return_value = {"generated_code": "db.users.find({})"}
 
         # Create test data
@@ -25,11 +28,15 @@ def test_nl2query(client):
 
         prompt = QueryPrompt(
             user_input="Find all users",
+            account_id="test-account",
             db_context=db_context,
-            collection_context=collection_context,
+            collection_context=[collection_context],
         )
 
-        response = client.post("/query/nl2query", json=prompt.model_dump())
+        headers = {"authorization": "Bearer valid-token"}
+        response = client.post(
+            "/query/nl2query", json=prompt.model_dump(), headers=headers
+        )
 
         assert response.status_code == 200
         data = response.json()

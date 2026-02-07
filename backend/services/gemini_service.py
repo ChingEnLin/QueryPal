@@ -1,6 +1,11 @@
 from google import genai
 from google.genai import types
-from models.schemas import GeneratedCode, CollectionContext, DebugSuggestionResponse
+from models.schemas import (
+    GeneratedCode,
+    CollectionContext,
+    DebugSuggestionResponse,
+    SchemaRelationshipsResponse,
+)
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
@@ -31,6 +36,7 @@ User said: "{user_input}"
 Database: {database}
 Available collections: {collections}
 Sample collection document (optional): {collection_context}
+Schema summary for ALL collections (for JOINs/lookups): {all_collections_schema}
 Intermediate context (optional): {intermediate_context}
 Return:
 only one line of pure pymongo query code (e.g., db["collection"].find(...))
@@ -112,6 +118,7 @@ def generate_query_from_prompt(
     database: str,
     collection_context: CollectionContext = None,
     intermediate_context: dict = None,
+    all_collections_schema: str = "",
 ) -> GeneratedCode:
     # Prune intermediate_context to remove image/large data
     safe_intermediate_context = (
@@ -124,6 +131,7 @@ def generate_query_from_prompt(
         collection_context=(
             collection_context.sampleDocument if collection_context else ""
         ),
+        all_collections_schema=all_collections_schema,
         intermediate_context=safe_intermediate_context,
     )
     client = genai.Client()
@@ -244,3 +252,58 @@ def summarize_audit_results(
             summary="Could not generate summary due to parsing error.",
             visualization=VisualizationConfig(available=False),
         )
+
+
+PROMPT_TEMPLATE_RELATIONSHIPS = """
+You are a database architect. Analyze the provided MongoDB document samples to identify likely foreign key relationships and JOIN conditions between collections.
+
+Schema/Samples:
+{schema_summary}
+
+Tasks:
+1. Identify likely relationships (e.g., `userId` in `orders` -> `_id` in `users`).
+2. Provide a confidence score (0.0 - 1.0) and a brief description for each.
+3. Return a JSON object with a "relationships" key containing a list of these findings.
+
+Output Format (Json):
+{{
+  "relationships": [
+    {{
+      "source_collection": "orders",
+      "source_field": "userId",
+      "target_collection": "users",
+      "target_field": "_id",
+      "description": "Orders belong to Users",
+      "confidence": 0.95
+    }}
+  ]
+}}
+"""
+
+
+def generate_schema_relationships(schema_summary: str) -> SchemaRelationshipsResponse:
+    from models.schemas import SchemaRelationshipsResponse
+
+    full_prompt = PROMPT_TEMPLATE_RELATIONSHIPS.format(schema_summary=schema_summary)
+    client = genai.Client()
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=full_prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=SchemaRelationshipsResponse,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        ),
+    )
+
+    if hasattr(response, "parsed") and response.parsed:
+        return response.parsed
+
+    import json
+
+    try:
+        data = json.loads(response.text)
+        return SchemaRelationshipsResponse(**data)
+    except Exception as e:
+        print(f"Error parsing Gemini relationship response: {e}")
+        return SchemaRelationshipsResponse(relationships=[])
