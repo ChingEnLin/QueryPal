@@ -40,27 +40,27 @@ import { useTheme } from '../contexts/ThemeContext';
  * @returns The coerced value (boolean, number) or the original string.
  */
 const getCoercedFilterValue = (value: string): any => {
-    const trimmedValue = value.trim();
+  const trimmedValue = value.trim();
 
-    // Don't convert empty string to 0
-    if (trimmedValue === '') {
-        return value;
-    }
+  // Don't convert empty string to 0
+  if (trimmedValue === '') {
+    return value;
+  }
 
-    if (trimmedValue.toLowerCase() === 'true') {
-        return true;
-    }
-    if (trimmedValue.toLowerCase() === 'false') {
-        return false;
-    }
-    
-    // Check if it's a valid number representation.
-    // isFinite is crucial to reject partially-valid numbers like "1.2.3" or "42px".
-    if (!isNaN(Number(trimmedValue)) && isFinite(Number(trimmedValue))) {
-        return Number(trimmedValue);
-    }
+  if (trimmedValue.toLowerCase() === 'true') {
+    return true;
+  }
+  if (trimmedValue.toLowerCase() === 'false') {
+    return false;
+  }
 
-    return value; // Return original string if no conversion was possible.
+  // Check if it's a valid number representation.
+  // isFinite is crucial to reject partially-valid numbers like "1.2.3" or "42px".
+  if (!isNaN(Number(trimmedValue)) && isFinite(Number(trimmedValue))) {
+    return Number(trimmedValue);
+  }
+
+  return value; // Return original string if no conversion was possible.
 };
 
 
@@ -83,23 +83,23 @@ interface PinnedDocument {
  * A recursive component that renders a tree of schema keys as indented <option> tags.
  */
 const RenderOptions: React.FC<{ nodes: SchemaKeyNode[], level: number }> = ({ nodes, level }) => {
-    // Using 2 non-breaking spaces per level for indentation
-    const indent = '\u00A0\u00A0'.repeat(level);
+  // Using 2 non-breaking spaces per level for indentation
+  const indent = '\u00A0\u00A0'.repeat(level);
 
-    return (
-        <>
-            {nodes.map(node => (
-                <React.Fragment key={node.path}>
-                    <option value={node.path}>
-                        {indent}{node.key}
-                    </option>
-                    {node.children && (
-                        <RenderOptions nodes={node.children} level={level + 1} />
-                    )}
-                </React.Fragment>
-            ))}
-        </>
-    );
+  return (
+    <>
+      {nodes.map(node => (
+        <React.Fragment key={node.path}>
+          <option value={node.path}>
+            {indent}{node.key}
+          </option>
+          {node.children && (
+            <RenderOptions nodes={node.children} level={level + 1} />
+          )}
+        </React.Fragment>
+      ))}
+    </>
+  );
 };
 
 // Delete Document Confirmation Dialog
@@ -152,14 +152,14 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   onNavigateBack
 }) => {
   const navigate = useNavigate();
-  
+
   // --- Account & DB State ---
   const [currentAccount, setCurrentAccount] = useState<CosmosDBAccount>(() => availableAccounts.find(a => a.id === resource.accountId)!);
   const [currentDb, setCurrentDb] = useState<DbInfo | null>(dbInfo);
   const [currentResource, setCurrentResource] = useState<SelectedResource>(resource);
   const [currentAccountDbs, setCurrentAccountDbs] = useState<DbInfo[]>(availableDbs);
   const [isLoadingDbsForAccount, setIsLoadingDbsForAccount] = useState(false);
-  
+
   // --- UI State for Switchers ---
   const [isAccountSwitcherOpen, setIsAccountSwitcherOpen] = useState(false);
   const [isDbSwitcherOpen, setIsDbSwitcherOpen] = useState(false);
@@ -171,7 +171,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   const [documents, setDocuments] = useState<Record<string, any>[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // --- Pagination State ---
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -327,7 +327,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
   // --- Cache State ---
   const [cacheClearStatus, setCacheClearStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  
+
   const getDocId = (doc: Record<string, any>): string => {
     const id = doc?._id?.$oid || doc?._id;
     return String(id ?? JSON.stringify(doc)); // Fallback for docs without ID
@@ -352,7 +352,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setBreadcrumbs([]);
     // Do not reset pinned documents here, as they should persist across DB/collection changes.
   }, []);
-  
+
   // Debounce search input
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -365,7 +365,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
   // Sync page input with current page
   useEffect(() => setPageInput(String(currentPage)), [currentPage]);
-  
+
   // Handle clicks outside dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -375,41 +375,41 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-  
+
   // --- Pinned Documents Handlers ---
   const isDocumentPinned = useCallback((doc: Record<string, any>): boolean => {
-      if (!doc) return false;
-      const docId = getDocId(doc);
-      return pinnedDocuments.some(pinned => getDocId(pinned.doc) === docId);
+    if (!doc) return false;
+    const docId = getDocId(doc);
+    return pinnedDocuments.some(pinned => getDocId(pinned.doc) === docId);
   }, [pinnedDocuments]);
 
   const handleTogglePin = useCallback((docToPin: Record<string, any>, collectionName: string) => {
-      if (!docToPin || !collectionName) return;
+    if (!docToPin || !collectionName) return;
 
-      const docId = getDocId(docToPin);
-      const alreadyPinned = pinnedDocuments.some(p => getDocId(p.doc) === docId);
+    const docId = getDocId(docToPin);
+    const alreadyPinned = pinnedDocuments.some(p => getDocId(p.doc) === docId);
 
-      if (alreadyPinned) {
-          setPinnedDocuments(prev => prev.filter(p => getDocId(p.doc) !== docId));
-      } else {
-          setPinnedDocuments(prev => [...prev, { doc: docToPin, collectionName }]);
-      }
+    if (alreadyPinned) {
+      setPinnedDocuments(prev => prev.filter(p => getDocId(p.doc) !== docId));
+    } else {
+      setPinnedDocuments(prev => [...prev, { doc: docToPin, collectionName }]);
+    }
   }, [pinnedDocuments]);
 
   const handleClearAllPins = () => {
-      setPinnedDocuments([]);
+    setPinnedDocuments([]);
   };
 
   useEffect(() => {
-      // Automatically open the drawer when a new document is pinned, but allow the user to close it.
-      if (pinnedDocuments.length > prevPinnedCount.current) {
-          setIsPinnedDrawerOpen(true);
-      }
-      // If all documents are unpinned, close the drawer automatically.
-      if (pinnedDocuments.length === 0) {
-          setIsPinnedDrawerOpen(false);
-      }
-      prevPinnedCount.current = pinnedDocuments.length;
+    // Automatically open the drawer when a new document is pinned, but allow the user to close it.
+    if (pinnedDocuments.length > prevPinnedCount.current) {
+      setIsPinnedDrawerOpen(true);
+    }
+    // If all documents are unpinned, close the drawer automatically.
+    if (pinnedDocuments.length === 0) {
+      setIsPinnedDrawerOpen(false);
+    }
+    prevPinnedCount.current = pinnedDocuments.length;
   }, [pinnedDocuments]);
 
   const fetchDocuments = useCallback(async () => {
@@ -436,10 +436,10 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       setIsLoading(false);
     }
   }, [selectedCollection, currentResource, currentPage, filterKey, debouncedFilterValue]);
-  
+
   useEffect(() => {
-      if (breadcrumbs.length > 0 && selectedDocument) return;
-      fetchDocuments();
+    if (breadcrumbs.length > 0 && selectedDocument) return;
+    fetchDocuments();
   }, [fetchDocuments, breadcrumbs.length, selectedDocument]);
 
   const fetchSchemaForCollection = useCallback(async (collectionName: string) => {
@@ -453,7 +453,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       if (info.sampleDocument) {
         setSchemaTree(extractSchemaTree(info.sampleDocument));
       }
-    } catch(e) {
+    } catch (e) {
       console.error("Failed to fetch schema for filters:", e);
     } finally {
       setIsFetchingSchema(false);
@@ -465,7 +465,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     const handleInitialDocumentSelection = async () => {
       console.log('useEffect triggered - initialDocumentId:', initialDocumentId);
       console.log('currentDb:', currentDb, 'currentResource:', currentResource);
-      
+
       if (!currentDb || !currentResource || !initialDocumentId) {
         console.log('Missing required data for initial document selection - initialDocumentId:', initialDocumentId, 'currentDb:', !!currentDb);
         return;
@@ -475,18 +475,18 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         setIsLoading(true);
         const collectionNames = currentDb.collections.map(c => c.name);
         console.log('Searching for document:', initialDocumentId, 'across all collections');
-        
+
         const result = await findDocumentById(initialDocumentId, currentResource, collectionNames);
         console.log('Found document in collection:', result.collectionName);
-        
+
         // Set the collection that contains the document
         setSelectedCollection(result.collectionName);
         await fetchSchemaForCollection(result.collectionName);
-        
+
         // Set the found document
         console.log('Setting selected document:', result.document);
         setSelectedDocument(result.document);
-        
+
       } catch (error) {
         console.error('Failed to load initial document:', error);
         setError(`Document with ID '${initialDocumentId}' not found in any collection`);
@@ -500,26 +500,26 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
   const handleAccountSwitch = useCallback(async (newAccount: CosmosDBAccount) => {
     if (newAccount.id === currentAccount.id) return;
-  
+
     setIsAccountSwitcherOpen(false);
     setIsLoadingDbsForAccount(true);
     setError(null);
-    
+
     // Don't reset explorer state immediately - let it blur out instead
-    
+
     try {
       const dbs = await getDatabasesForAccount(newAccount.id);
-      
+
       // Only update state and reset explorer after successful data fetch
       setCurrentAccount(newAccount);
       setCurrentAccountDbs(dbs);
       resetExplorerState();
-  
+
       if (dbs.length > 0) {
         const firstDb = dbs[0];
         setCurrentDb(firstDb);
         setCurrentResource({ accountId: newAccount.id, databaseName: firstDb.name });
-        
+
         // Navigate to the new URL with the updated account and database
         const encodedAccountId = encodeURIComponent(newAccount.id);
         const encodedDatabaseName = encodeURIComponent(firstDb.name);
@@ -541,19 +541,19 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
   const handleDbSwitch = useCallback((newDb: DbInfo) => {
     if (newDb.name === currentDb?.name) return;
-  
+
     setIsDbSwitcherOpen(false);
     setCurrentDb(newDb);
     setCurrentResource(prev => ({ ...prev, databaseName: newDb.name }));
-    
+
     resetExplorerState();
-    
+
     // Navigate to the new URL with the updated database
     const encodedAccountId = encodeURIComponent(currentAccount.id);
     const encodedDatabaseName = encodeURIComponent(newDb.name);
     navigate(`/data-explorer/${encodedAccountId}/${encodedDatabaseName}`, { replace: true });
   }, [currentDb, currentAccount.id, resetExplorerState, navigate]);
-  
+
   const handleCollectionClick = useCallback(async (collectionName: string) => {
     if (selectedCollection === collectionName) return;
     setSelectedCollection(collectionName);
@@ -573,13 +573,13 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     fetchSchemaForCollection(selectedCollection);
     fetchDocuments();
   }, [selectedCollection, fetchSchemaForCollection, fetchDocuments]);
-  
+
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
     setCurrentPage(newPage);
     setSelectedDocument(null);
   }
-  
+
   const handlePageInputSubmit = (e: React.KeyboardEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement>) => {
     if (e.type === 'keydown' && (e as React.KeyboardEvent).key !== 'Enter') return;
     const newPageNum = parseInt(pageInput, 10);
@@ -598,7 +598,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       setCollectionSortOrder(key === 'name' ? 'asc' : 'desc');
     }
   };
-  
+
   const sortedCollections = useMemo(() => {
     if (!currentDb) return [];
     return [...currentDb.collections].sort((a, b) => {
@@ -612,7 +612,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
   const handleObjectIdClick = useCallback(async (objectId: string, keyContext?: string, openInNewTab?: boolean) => {
     if (!selectedDocument || !selectedCollection || !currentDb) return;
-    
+
     if (openInNewTab) {
       // Generate URL for new tab - let backend find which collection contains the document
       const encodedAccountId = encodeURIComponent(currentAccount.id);
@@ -622,7 +622,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       window.open(newTabUrl, '_blank', 'noopener,noreferrer');
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
 
@@ -631,12 +631,12 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     try {
       const collectionNames = currentDb.collections.map(c => c.name);
       const result = await findDocumentById(objectId, currentResource, collectionNames, keyContext);
-      
+
       setBreadcrumbs(prev => [...prev, currentBreadcrumb]);
       setSelectedCollection(result.collectionName);
       setSelectedDocument(result.document);
       await fetchSchemaForCollection(result.collectionName);
-    } catch(e) {
+    } catch (e) {
       if (e instanceof Error) setError(e.message);
       else setError("An unknown error occurred while finding the document.");
     } finally {
@@ -658,14 +658,14 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setCacheClearStatus('loading');
     setError(null);
     try {
-        await clearDocumentsCache();
-        setCacheClearStatus('success');
+      await clearDocumentsCache();
+      setCacheClearStatus('success');
     } catch (e) {
-        setCacheClearStatus('error');
-        if (e instanceof Error) setError(e.message);
-        else setError("An unknown error occurred while clearing the document cache.");
+      setCacheClearStatus('error');
+      if (e instanceof Error) setError(e.message);
+      else setError("An unknown error occurred while clearing the document cache.");
     } finally {
-        setTimeout(() => setCacheClearStatus('idle'), 3000);
+      setTimeout(() => setCacheClearStatus('idle'), 3000);
     }
   }, []);
 
@@ -683,13 +683,13 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         </div>
       );
     }
-    
+
     if (error && !isLoading) {
-        return (
-            <div className="p-4 text-red-600 bg-red-50 border border-red-200 text-sm rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
-                {error}
-            </div>
-        );
+      return (
+        <div className="p-4 text-red-600 bg-red-50 border border-red-200 text-sm rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
+          {error}
+        </div>
+      );
     }
 
     if (!selectedCollection) {
@@ -714,84 +714,84 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         <div className={`flex-grow overflow-y-auto ${isLoading ? 'opacity-50' : ''}`}>
           <ul className="divide-y divide-slate-200 dark:divide-slate-700">
             {documents.map((doc) => {
-                const docId = getDocId(doc);
-                const isSelected = selectedDocument && getDocId(selectedDocument) === docId;
-                const isPinned = isDocumentPinned(doc);
+              const docId = getDocId(doc);
+              const isSelected = selectedDocument && getDocId(selectedDocument) === docId;
+              const isPinned = isDocumentPinned(doc);
 
-                return (
-                    <li
-                        key={docId}
-                        className={`flex items-center justify-between transition-colors group ${isSelected ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+              return (
+                <li
+                  key={docId}
+                  className={`flex items-center justify-between transition-colors group ${isSelected ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                >
+                  <button
+                    onClick={() => setSelectedDocument(doc)}
+                    className="flex-grow text-left p-3 text-sm"
+                  >
+                    <p className="font-mono text-slate-800 dark:text-slate-200 truncate" title={String(doc._id?.$oid || doc._id)}>{String(doc._id?.$oid || doc._id)}</p>
+                  </button>
+                  <div className="flex items-center gap-1 mr-2">
+                    {/* Delete button */}
+                    <button
+                      onClick={() => {
+                        setDeleteTargetDoc(doc);
+                        setIsDeleteDialogOpen(true);
+                      }}
+                      className="p-2 rounded-full transition-colors text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 focus:outline-none focus:ring-2 focus:ring-red-400 opacity-0 group-hover:opacity-100"
+                      title="Delete document"
+                      aria-label="Delete document"
                     >
-                        <button
-                            onClick={() => setSelectedDocument(doc)}
-                            className="flex-grow text-left p-3 text-sm"
-                        >
-                            <p className="font-mono text-slate-800 dark:text-slate-200 truncate" title={String(doc._id?.$oid || doc._id)}>{String(doc._id?.$oid || doc._id)}</p>
-                        </button>
-                        <div className="flex items-center gap-1 mr-2">
-                          {/* Delete button */}
-                          <button
-                            onClick={() => {
-                              setDeleteTargetDoc(doc);
-                              setIsDeleteDialogOpen(true);
-                            }}
-                            className="p-2 rounded-full transition-colors text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 focus:outline-none focus:ring-2 focus:ring-red-400 opacity-0 group-hover:opacity-100"
-                            title="Delete document"
-                            aria-label="Delete document"
-                          >
-                            <TrashIcon className="w-5 h-5" />
-                          </button>
-                          {/* Copy as new document button */}
-                          <button
-                            onClick={() => {
-                              const { _id, ...rest } = doc;
-                              setCreateDocInitial(rest);
-                              setIsCreateDialogOpen(true);
-                            }}
-                            className="p-2 rounded-full transition-colors text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-400 opacity-0 group-hover:opacity-100"
-                            title="Copy as new document"
-                            aria-label="Copy as new document"
-                          >
-                            <FileCopyIcon className="w-5 h-5" />
-                          </button>
-                          {/* Pin button */}
-                          <button
-                            onClick={() => handleTogglePin(doc, selectedCollection!)}
-                            className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isPinned ? 'text-blue-500 hover:bg-blue-200/50 dark:hover:bg-blue-900/40' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'} ${!isPinned ? 'opacity-0 group-hover:opacity-100' : ''}`}
-                            title={isPinned ? 'Unpin document' : 'Pin document'}
-                            aria-label={isPinned ? 'Unpin document' : 'Pin document'}
-                          >
-                            <PinIcon className={`w-5 h-5 ${isPinned ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                          </button>
-                        </div>
-                    </li>
-                );
+                      <TrashIcon className="w-5 h-5" />
+                    </button>
+                    {/* Copy as new document button */}
+                    <button
+                      onClick={() => {
+                        const { _id, ...rest } = doc;
+                        setCreateDocInitial(rest);
+                        setIsCreateDialogOpen(true);
+                      }}
+                      className="p-2 rounded-full transition-colors text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-400 opacity-0 group-hover:opacity-100"
+                      title="Copy as new document"
+                      aria-label="Copy as new document"
+                    >
+                      <FileCopyIcon className="w-5 h-5" />
+                    </button>
+                    {/* Pin button */}
+                    <button
+                      onClick={() => handleTogglePin(doc, selectedCollection!)}
+                      className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isPinned ? 'text-blue-500 hover:bg-blue-200/50 dark:hover:bg-blue-900/40' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'} ${!isPinned ? 'opacity-0 group-hover:opacity-100' : ''}`}
+                      title={isPinned ? 'Unpin document' : 'Pin document'}
+                      aria-label={isPinned ? 'Unpin document' : 'Pin document'}
+                    >
+                      <PinIcon className={`w-5 h-5 ${isPinned ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                    </button>
+                  </div>
+                </li>
+              );
             })}
           </ul>
         </div>
         {/* Pagination Controls */}
         <div className="flex-shrink-0 p-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage <= 1 || isLoading} className="px-3 py-1 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                Previous
-            </button>
-            <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                <span>Page</span>
-                <input
-                    type="text"
-                    value={pageInput}
-                    onChange={(e) => setPageInput(e.target.value)}
-                    onKeyDown={handlePageInputSubmit}
-                    onBlur={handlePageInputSubmit}
-                    disabled={isLoading || totalPages <= 1}
-                    className="w-12 text-center bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md text-sm text-slate-900 dark:text-slate-100 disabled:opacity-50"
-                    aria-label="Current page"
-                />
-                <span>of {totalPages}</span>
-            </div>
-             <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages || isLoading} className="px-3 py-1 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                Next
-            </button>
+          <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage <= 1 || isLoading} className="px-3 py-1 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            Previous
+          </button>
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+            <span>Page</span>
+            <input
+              type="text"
+              value={pageInput}
+              onChange={(e) => setPageInput(e.target.value)}
+              onKeyDown={handlePageInputSubmit}
+              onBlur={handlePageInputSubmit}
+              disabled={isLoading || totalPages <= 1}
+              className="w-12 text-center bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md text-sm text-slate-900 dark:text-slate-100 disabled:opacity-50"
+              aria-label="Current page"
+            />
+            <span>of {totalPages}</span>
+          </div>
+          <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages || isLoading} className="px-3 py-1 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            Next
+          </button>
         </div>
       </div>
     );
@@ -852,13 +852,13 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       );
     }
     return (
-      <div className={`space-y-4 ${isLoading ? 'opacity-50' : 'animate-fade-in-fast'}`}> 
+      <div className={`space-y-4 ${isLoading ? 'opacity-50' : 'animate-fade-in-fast'}`}>
         {/* Toolbar for edit/view mode */}
         {/* Toolbar removed: Pin/Edit/Cancel now handled in header ID row */}
         {/* Read-only view */}
         {!editMode && (
           <div className="bg-slate-100 dark:bg-slate-800 rounded p-3 text-xs overflow-x-auto text-slate-800 dark:text-slate-100">
-            <JsonDisplay data={selectedDocument} onObjectIdClick={handleObjectIdClick}/>
+            <JsonDisplay data={selectedDocument} onObjectIdClick={handleObjectIdClick} />
           </div>
         )}
         {/* Edit mode: render DocumentEditView */}
@@ -918,7 +918,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
           </button>
           {/* Card size drag handles (universal for all cards) */}
           {isPinnedDrawerOpen && pinnedDocuments.length > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 select-none" style={{minHeight:'32px',height:'32px'}}>
+            <div className="flex items-center gap-2 px-3 py-1 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 select-none" style={{ minHeight: '32px', height: '32px' }}>
               <div
                 tabIndex={0}
                 aria-label="Drag to resize pinned document cards"
@@ -962,11 +962,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                   boxSizing: 'border-box',
                 }}
               >
-                <div style={{position:'absolute',right:0,bottom:0,width:20,height:20,display:'flex',alignItems:'flex-end',justifyContent:'flex-end',pointerEvents:'none'}}>
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="6" y="16" width="8" height="2" rx="1" fill="#60a5fa"/><rect x="12" y="10" width="2" height="8" rx="1" fill="#60a5fa"/></svg>
+                <div style={{ position: 'absolute', right: 0, bottom: 0, width: 20, height: 20, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', pointerEvents: 'none' }}>
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="6" y="16" width="8" height="2" rx="1" fill="#60a5fa" /><rect x="12" y="10" width="2" height="8" rx="1" fill="#60a5fa" /></svg>
                 </div>
               </div>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium" style={{marginLeft:4}}>{pinnedCardWidth}×{pinnedCardHeight}px</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium" style={{ marginLeft: 4 }}>{pinnedCardWidth}×{pinnedCardHeight}px</span>
             </div>
           )}
           <div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-900" style={{ display: isPinnedDrawerOpen ? 'block' : 'none' }}>
@@ -1011,7 +1011,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
       <div className="flex flex-col h-screen relative">
-        
+
         {/* Loading Overlay */}
         {isLoadingDbsForAccount && (
           <div className="absolute inset-0 z-50 bg-black/20 dark:bg-black/40 backdrop-blur-sm flex items-center justify-center">
@@ -1021,7 +1021,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
             </div>
           </div>
         )}
-        
+
         {/* Header */}
         <header className="flex-shrink-0 bg-white dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1031,90 +1031,90 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                 <div>
                   <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Data Explorer</h1>
                   <div className="flex items-center gap-2 font-mono text-xs text-blue-600 dark:text-blue-400">
-                      <div className="relative" ref={accountSwitcherRef}>
-                        <button 
-                          onClick={() => setIsAccountSwitcherOpen(!isAccountSwitcherOpen)}
-                          disabled={availableAccounts.length <= 1}
-                          className="flex items-center gap-1 font-bold px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 disabled:cursor-default disabled:hover:bg-transparent"
-                          title="Switch account"
-                        >
-                            {currentAccount.name}
-                            {availableAccounts.length > 1 && <ChevronDownIcon className={`w-3 h-3 transition-transform ${isAccountSwitcherOpen ? 'rotate-180' : ''}`} />}
-                        </button>
-                        {isAccountSwitcherOpen && (
-                           <div className="absolute top-full mt-2 w-60 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 animate-fade-in-fast">
-                                <div className="p-2">
-                                    {availableAccounts.map(acc => (
-                                        <button 
-                                            key={acc.id}
-                                            onClick={() => handleAccountSwitch(acc)}
-                                            className={`w-full text-left px-3 py-2 text-sm rounded-md ${acc.id === currentAccount.id ? 'font-bold bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-                                        >
-                                            {acc.name}
-                                        </button>
-                                    ))}
-                                </div>
-                           </div>
-                        )}
-                      </div>
-                      <span>/</span>
-                      <div className="relative" ref={dbSwitcherRef}>
-                        <button 
-                          onClick={() => setIsDbSwitcherOpen(!isDbSwitcherOpen)}
-                          disabled={currentAccountDbs.length <= 1 || isLoadingDbsForAccount}
-                          className="flex items-center gap-1 font-bold px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 disabled:cursor-default disabled:hover:bg-transparent"
-                          title="Switch database"
-                        >
-                            {isLoadingDbsForAccount ? 'Loading...' : (currentDb?.name || 'Select Database')}
-                            {!isLoadingDbsForAccount && currentAccountDbs.length > 1 && <ChevronDownIcon className={`w-3 h-3 transition-transform ${isDbSwitcherOpen ? 'rotate-180' : ''}`} />}
-                        </button>
-                        {isDbSwitcherOpen && (
-                           <div className="absolute top-full mt-2 w-60 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 animate-fade-in-fast">
-                                <div className="p-2">
-                                    {currentAccountDbs.map(db => (
-                                        <button 
-                                            key={db.name}
-                                            onClick={() => handleDbSwitch(db)}
-                                            className={`w-full text-left px-3 py-2 text-sm rounded-md ${db.name === currentDb?.name ? 'font-bold bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-                                        >
-                                            {db.name}
-                                        </button>
-                                    ))}
-                                </div>
-                           </div>
-                        )}
-                      </div>
+                    <div className="relative" ref={accountSwitcherRef}>
+                      <button
+                        onClick={() => setIsAccountSwitcherOpen(!isAccountSwitcherOpen)}
+                        disabled={availableAccounts.length <= 1}
+                        className="flex items-center gap-1 font-bold px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 disabled:cursor-default disabled:hover:bg-transparent"
+                        title="Switch account"
+                      >
+                        {currentAccount.name}
+                        {availableAccounts.length > 1 && <ChevronDownIcon className={`w-3 h-3 transition-transform ${isAccountSwitcherOpen ? 'rotate-180' : ''}`} />}
+                      </button>
+                      {isAccountSwitcherOpen && (
+                        <div className="absolute top-full mt-2 w-60 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 animate-fade-in-fast">
+                          <div className="p-2">
+                            {availableAccounts.map(acc => (
+                              <button
+                                key={acc.id}
+                                onClick={() => handleAccountSwitch(acc)}
+                                className={`w-full text-left px-3 py-2 text-sm rounded-md ${acc.id === currentAccount.id ? 'font-bold bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                              >
+                                {acc.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <span>/</span>
+                    <div className="relative" ref={dbSwitcherRef}>
+                      <button
+                        onClick={() => setIsDbSwitcherOpen(!isDbSwitcherOpen)}
+                        disabled={currentAccountDbs.length <= 1 || isLoadingDbsForAccount}
+                        className="flex items-center gap-1 font-bold px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 disabled:cursor-default disabled:hover:bg-transparent"
+                        title="Switch database"
+                      >
+                        {isLoadingDbsForAccount ? 'Loading...' : (currentDb?.name || 'Select Database')}
+                        {!isLoadingDbsForAccount && currentAccountDbs.length > 1 && <ChevronDownIcon className={`w-3 h-3 transition-transform ${isDbSwitcherOpen ? 'rotate-180' : ''}`} />}
+                      </button>
+                      {isDbSwitcherOpen && (
+                        <div className="absolute top-full mt-2 w-60 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 animate-fade-in-fast">
+                          <div className="p-2">
+                            {currentAccountDbs.map(db => (
+                              <button
+                                key={db.name}
+                                onClick={() => handleDbSwitch(db)}
+                                className={`w-full text-left px-3 py-2 text-sm rounded-md ${db.name === currentDb?.name ? 'font-bold bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                              >
+                                {db.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
-                    onClick={toggleTheme}
-                    className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                    aria-label="Toggle theme"
-                    title="Toggle light/dark mode"
+                  onClick={toggleTheme}
+                  className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  aria-label="Toggle theme"
+                  title="Toggle light/dark mode"
                 >
-                    {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
+                  {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
                 </button>
                 <button
-                    onClick={handleClearDocCache}
-                    disabled={cacheClearStatus !== 'idle'}
-                    className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    title="Clear the server cache for linked document lookups"
-                    aria-label="Clear cache"
+                  onClick={handleClearDocCache}
+                  disabled={cacheClearStatus !== 'idle'}
+                  className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  title="Clear the server cache for linked document lookups"
+                  aria-label="Clear cache"
                 >
-                    {cacheClearStatus === 'loading' && <SpinnerIcon className="w-5 h-5 animate-spin" />}
-                    {cacheClearStatus === 'success' && <CheckIcon className="w-5 h-5 text-green-500" />}
-                    {cacheClearStatus === 'error' && <XIcon className="w-5 h-5 text-red-500" />}
-                    {cacheClearStatus === 'idle' && <CachedIcon className="w-5 h-5" />}
+                  {cacheClearStatus === 'loading' && <SpinnerIcon className="w-5 h-5 animate-spin" />}
+                  {cacheClearStatus === 'success' && <CheckIcon className="w-5 h-5 text-green-500" />}
+                  {cacheClearStatus === 'error' && <XIcon className="w-5 h-5 text-red-500" />}
+                  {cacheClearStatus === 'idle' && <CachedIcon className="w-5 h-5" />}
                 </button>
                 <button
-                    onClick={onNavigateBack}
-                    className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                    title="Return to the query generator"
+                  onClick={onNavigateBack}
+                  className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  title="Return to the query generator"
                 >
-                    <ArrowLeftIcon className="w-4 h-4" />
-                    <span>Back to Query Generator</span>
+                  <ArrowLeftIcon className="w-4 h-4" />
+                  <span>Back to Query Generator</span>
                 </button>
               </div>
             </div>
@@ -1129,41 +1129,41 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Collections</h2>
                 <div className="flex items-center gap-1 p-0.5 bg-slate-200 dark:bg-slate-700 rounded-md">
-                    <button 
-                        onClick={() => handleSortCollections('name')}
-                        className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors ${collectionSortKey === 'name' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
-                        title={`Sort by name (${collectionSortKey === 'name' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
-                    >
-                        Name {renderSortArrow('name')}
-                    </button>
-                    <button 
-                        onClick={() => handleSortCollections('count')}
-                        className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors ${collectionSortKey === 'count' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
-                        title={`Sort by count (${collectionSortKey === 'count' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
-                    >
-                        Count {renderSortArrow('count')}
-                    </button>
+                  <button
+                    onClick={() => handleSortCollections('name')}
+                    className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors ${collectionSortKey === 'name' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
+                    title={`Sort by name (${collectionSortKey === 'name' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
+                  >
+                    Name {renderSortArrow('name')}
+                  </button>
+                  <button
+                    onClick={() => handleSortCollections('count')}
+                    className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors ${collectionSortKey === 'count' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
+                    title={`Sort by count (${collectionSortKey === 'count' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
+                  >
+                    Count {renderSortArrow('count')}
+                  </button>
                 </div>
               </div>
               <div className="space-y-2">
-                 {isLoadingDbsForAccount ? (
-                    <div className="text-center p-4 text-slate-500 dark:text-slate-400">Loading collections...</div>
-                 ) : sortedCollections.length > 0 ? (
-                    sortedCollections.map(col => (
-                        <button 
-                            key={col.name}
-                            onClick={() => handleCollectionClick(col.name)}
-                            className={`w-full text-left p-3 rounded-md text-sm font-medium transition-colors ${selectedCollection === col.name ? 'bg-blue-500 text-white shadow-md' : 'bg-white dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`}
-                        >
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold">{col.name}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${selectedCollection === col.name ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-600'}`}>{col.count.toLocaleString()}</span>
-                          </div>
-                        </button>
-                    ))
-                 ) : (
-                    <div className="text-center p-4 text-slate-500 dark:text-slate-400">No collections found.</div>
-                 )}
+                {isLoadingDbsForAccount ? (
+                  <div className="text-center p-4 text-slate-500 dark:text-slate-400">Loading collections...</div>
+                ) : sortedCollections.length > 0 ? (
+                  sortedCollections.map(col => (
+                    <button
+                      key={col.name}
+                      onClick={() => handleCollectionClick(col.name)}
+                      className={`w-full text-left p-3 rounded-md text-sm font-medium transition-colors ${selectedCollection === col.name ? 'bg-blue-500 text-white shadow-md' : 'bg-white dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold">{col.name}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${selectedCollection === col.name ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-600'}`}>{col.count.toLocaleString()}</span>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-center p-4 text-slate-500 dark:text-slate-400">No collections found.</div>
+                )}
               </div>
             </div>
           </div>
@@ -1171,59 +1171,59 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
           {/* Column 2: Documents */}
           <div className="w-1/4 xl:w-1/5 bg-white dark:bg-slate-800/50 border-r border-slate-200 dark:border-slate-700 flex flex-col">
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-                <div className="flex justify-between items-center mb-2">
-                    <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">
-                        Documents {totalDocuments > 0 && `(${totalDocuments.toLocaleString()})`}
-                    </h2>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleOpenCreateDialog}
-                        disabled={!selectedCollection || isLoading || isFetchingSchema}
-                        className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 ${isCreateDialogOpen ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : ''}`}
-                        title="Create new document"
-                        aria-label="Create new document"
-                      >
-                        <NoteAddIcon className={`w-5 h-5 ${isCreateDialogOpen ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                      </button>
-                      <button
-                        onClick={handleRefresh}
-                        disabled={!selectedCollection || isLoading || isFetchingSchema}
-                        className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Refresh documents and schema"
-                      >
-                        <ClearAllIcon className={`w-4 h-4 ${(isLoading || isFetchingSchema) ? 'animate-pulse' : ''}`} />
-                      </button>
-                    </div>
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">
+                  Documents {totalDocuments > 0 && `(${totalDocuments.toLocaleString()})`}
+                </h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleOpenCreateDialog}
+                    disabled={!selectedCollection || isLoading || isFetchingSchema}
+                    className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 ${isCreateDialogOpen ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : ''}`}
+                    title="Create new document"
+                    aria-label="Create new document"
+                  >
+                    <NoteAddIcon className={`w-5 h-5 ${isCreateDialogOpen ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                  </button>
+                  <button
+                    onClick={handleRefresh}
+                    disabled={!selectedCollection || isLoading || isFetchingSchema}
+                    className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Refresh documents and schema"
+                  >
+                    <ClearAllIcon className={`w-4 h-4 ${(isLoading || isFetchingSchema) ? 'animate-pulse' : ''}`} />
+                  </button>
                 </div>
-                <div className="space-y-2">
-                  <div className="relative">
-                     <select
-                      value={filterKey}
-                      onChange={(e) => setFilterKey(e.target.value)}
-                      disabled={!selectedCollection || isFetchingSchema}
-                      className="w-full text-sm appearance-none cursor-pointer p-2 pr-8 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
-                      title="Select a field to filter by"
-                    >
-                      <option value="all">All Fields</option>
-                      <RenderOptions nodes={schemaTree} level={0} />
-                    </select>
-                    <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
-                  </div>
-                  <div className="relative">
-                    <input
-                        type="text"
-                        placeholder={isFetchingSchema ? 'Loading schema...' : 'Filter value...'}
-                        value={filterValue}
-                        onChange={(e) => setFilterValue(e.target.value)}
-                        disabled={!selectedCollection || isFetchingSchema}
-                        className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
-                    />
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                  </div>
+              </div>
+              <div className="space-y-2">
+                <div className="relative">
+                  <select
+                    value={filterKey}
+                    onChange={(e) => setFilterKey(e.target.value)}
+                    disabled={!selectedCollection || isFetchingSchema}
+                    className="w-full text-sm appearance-none cursor-pointer p-2 pr-8 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                    title="Select a field to filter by"
+                  >
+                    <option value="all">All Fields</option>
+                    <RenderOptions nodes={schemaTree} level={0} />
+                  </select>
+                  <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
                 </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder={isFetchingSchema ? 'Loading schema...' : 'Filter value...'}
+                    value={filterValue}
+                    onChange={(e) => setFilterValue(e.target.value)}
+                    disabled={!selectedCollection || isFetchingSchema}
+                    className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                  />
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                </div>
+              </div>
             </div>
             <div className="flex-grow overflow-hidden">
-             {renderDocumentList()}
+              {renderDocumentList()}
             </div>
           </div>
 
@@ -1231,138 +1231,138 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
           <div className="w-2/4 xl:w-3/5 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
             <div className="p-4 space-y-4">
               <header className="flex justify-between items-center">
-                 <div className="flex items-center gap-4">
-                    <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Editor</h2>
-                    {selectedDocument && (
-                        <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-slate-400 dark:text-slate-500">ID:</span>
-                            <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{getDocId(selectedDocument)}</span>
-                            <button
-                                onClick={() => handleTogglePin(selectedDocument, selectedCollection!)}
-                                className={`ml-2 p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isDocumentPinned(selectedDocument) ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-                                title={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
-                                aria-label={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
-                            >
-                                <PinIcon className={`w-5 h-5 ${isDocumentPinned(selectedDocument) ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                            </button>
-                            <button
-                                onClick={async () => {
-                                  if (selectedCollection && selectedDocument) {
-                                    setIsLoading(true);
-                                    try {
-                                      const refreshed = await getSingleDocument(
-                                        currentResource.accountId,
-                                        currentResource.databaseName,
-                                        selectedCollection,
-                                        getDocId(selectedDocument)
-                                      );
-                                      setSelectedDocument(refreshed);
-                                      setPinnedDocuments(prev => prev.map(p =>
-                                        getDocId(p.doc) === getDocId(selectedDocument)
-                                          ? { ...p, doc: refreshed }
-                                          : p
-                                      ));
-                                    } catch (e) {
-                                      // Optionally set error
-                                    } finally {
-                                      setIsLoading(false);
-                                    }
-                                  }
-                                }}
-                                className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                                title="Refresh document"
-                                aria-label="Refresh document"
-                                disabled={isLoading}
-                            >
-                                <RefreshIcon className="w-5 h-5" />
-                            </button>
-                            {!editMode && (
-                              <>
-                                <button
-                                  className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-                                  onClick={() => setEditMode(true)}
-                                  disabled={isLoading}
-                                  title="Edit document"
-                                  aria-label="Edit document"
-                                >
-                                  <EditIcon className={`w-5 h-5 ${editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                                </button>
-                                <button
-                                  className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                                  onClick={() => {
-                                    if (selectedDocument) {
-                                      // Remove _id from copy if present
-                                      const { _id, ...rest } = selectedDocument;
-                                      setCreateDocInitial(rest);
-                                      setIsCreateDialogOpen(true);
-                                    }
-                                  }}
-                                  disabled={isLoading || !selectedDocument}
-                                  title="Insert copy as new document"
-                                  aria-label="Insert copy as new document"
-                                >
-                                  <FileCopyIcon className="w-5 h-5 stroke-current transition-colors" />
-                                </button>
-                                <button
-                                  className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40"
-                                  onClick={() => {
-                                    if (selectedDocument) {
-                                      setDeleteTargetDoc(selectedDocument);
-                                      setIsDeleteDialogOpen(true);
-                                    }
-                                  }}
-                                  disabled={isLoading || !selectedDocument}
-                                  title="Delete document"
-                                  aria-label="Delete document"
-                                >
-                                  <TrashIcon className="w-5 h-5" />
-                                </button>
-                                <button
-                                  className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                                  onClick={() => setIsHistoryDialogOpen(true)}
-                                  disabled={isLoading || !selectedDocument}
-                                  title="View document history"
-                                  aria-label="View document history"
-                                >
-                                  <HistoryIcon className="w-5 h-5" />
-                                </button>
-                              </>
-                            )}
-                            {editMode && (
-                              <button
-                                className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                                onClick={() => setEditMode(false)}
-                                disabled={isLoading}
-                                title="Cancel edit"
-                                aria-label="Cancel edit"
-                              >
-                                <XIcon className="w-5 h-5" />
-                              </button>
-                            )}
-                        </div>
-                    )}
+                <div className="flex items-center gap-4">
+                  <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Editor</h2>
+                  {selectedDocument && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-slate-400 dark:text-slate-500">ID:</span>
+                      <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{getDocId(selectedDocument)}</span>
+                      <button
+                        onClick={() => handleTogglePin(selectedDocument, selectedCollection!)}
+                        className={`ml-2 p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isDocumentPinned(selectedDocument) ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                        title={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
+                        aria-label={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
+                      >
+                        <PinIcon className={`w-5 h-5 ${isDocumentPinned(selectedDocument) ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (selectedCollection && selectedDocument) {
+                            setIsLoading(true);
+                            try {
+                              const refreshed = await getSingleDocument(
+                                currentResource.accountId,
+                                currentResource.databaseName,
+                                selectedCollection,
+                                getDocId(selectedDocument)
+                              );
+                              setSelectedDocument(refreshed);
+                              setPinnedDocuments(prev => prev.map(p =>
+                                getDocId(p.doc) === getDocId(selectedDocument)
+                                  ? { ...p, doc: refreshed }
+                                  : p
+                              ));
+                            } catch (e) {
+                              // Optionally set error
+                            } finally {
+                              setIsLoading(false);
+                            }
+                          }
+                        }}
+                        className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                        title="Refresh document"
+                        aria-label="Refresh document"
+                        disabled={isLoading}
+                      >
+                        <RefreshIcon className="w-5 h-5" />
+                      </button>
+                      {!editMode && (
+                        <>
+                          <button
+                            className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                            onClick={() => setEditMode(true)}
+                            disabled={isLoading}
+                            title="Edit document"
+                            aria-label="Edit document"
+                          >
+                            <EditIcon className={`w-5 h-5 ${editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                          </button>
+                          <button
+                            className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                            onClick={() => {
+                              if (selectedDocument) {
+                                // Remove _id from copy if present
+                                const { _id, ...rest } = selectedDocument;
+                                setCreateDocInitial(rest);
+                                setIsCreateDialogOpen(true);
+                              }
+                            }}
+                            disabled={isLoading || !selectedDocument}
+                            title="Insert copy as new document"
+                            aria-label="Insert copy as new document"
+                          >
+                            <FileCopyIcon className="w-5 h-5 stroke-current transition-colors" />
+                          </button>
+                          <button
+                            className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40"
+                            onClick={() => {
+                              if (selectedDocument) {
+                                setDeleteTargetDoc(selectedDocument);
+                                setIsDeleteDialogOpen(true);
+                              }
+                            }}
+                            disabled={isLoading || !selectedDocument}
+                            title="Delete document"
+                            aria-label="Delete document"
+                          >
+                            <TrashIcon className="w-5 h-5" />
+                          </button>
+                          <button
+                            className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                            onClick={() => setIsHistoryDialogOpen(true)}
+                            disabled={isLoading || !selectedDocument}
+                            title="View document history"
+                            aria-label="View document history"
+                          >
+                            <HistoryIcon className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
+                      {editMode && (
+                        <button
+                          className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                          onClick={() => setEditMode(false)}
+                          disabled={isLoading}
+                          title="Cancel edit"
+                          aria-label="Cancel edit"
+                        >
+                          <XIcon className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {selectedDocument && <button onClick={() => { setSelectedDocument(null); setBreadcrumbs([]); }} className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Close document view"><XIcon className="w-4 h-4"/></button>}
+                {selectedDocument && !editMode && <button onClick={() => { setSelectedDocument(null); setBreadcrumbs([]); }} className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Close document view"><XIcon className="w-4 h-4" /></button>}
               </header>
 
               {/* Breadcrumbs */}
               {breadcrumbs.length > 0 && selectedDocument && (
                 <div className="flex items-center flex-wrap gap-1 text-sm text-slate-500 dark:text-slate-400 p-2 bg-slate-200 dark:bg-slate-800 rounded-md">
-                    {breadcrumbs.map((crumb, i) => (
-                        <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
-                            <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline hover:text-blue-500 dark:hover:text-blue-400 truncate max-w-[20ch]">
-                                <span className="font-semibold">{crumb.collectionName}</span>
-                                <span className="font-mono"> / {getDocId(crumb.document)}</span>
-                            </button>
-                            <ChevronRightIcon className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
-                        </React.Fragment>
-                    ))}
-                    <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[20ch]">
-                        {selectedCollection} / <span className="font-mono">{getDocId(selectedDocument)}</span>
-                    </span>
+                  {breadcrumbs.map((crumb, i) => (
+                    <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
+                      <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline hover:text-blue-500 dark:hover:text-blue-400 truncate max-w-[20ch]">
+                        <span className="font-semibold">{crumb.collectionName}</span>
+                        <span className="font-mono"> / {getDocId(crumb.document)}</span>
+                      </button>
+                      <ChevronRightIcon className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                    </React.Fragment>
+                  ))}
+                  <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[20ch]">
+                    {selectedCollection} / <span className="font-mono">{getDocId(selectedDocument)}</span>
+                  </span>
                 </div>
               )}
-               {renderEditorPanel()}
+              {renderEditorPanel()}
             </div>
           </div>
         </main>
