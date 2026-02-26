@@ -14,7 +14,7 @@ export const isAuthenticationExpiredError = (error: any): boolean => {
     // Common MSAL error codes for expired sessions
     const expiredSessionCodes = [
       'interaction_required',
-      'invalid_grant', 
+      'invalid_grant',
       'token_expired',
       'refresh_token_expired'
     ];
@@ -24,7 +24,7 @@ export const isAuthenticationExpiredError = (error: any): boolean => {
   // Check error message for AADSTS codes that indicate session issues
   if (typeof error === 'object' && error?.message) {
     const errorMessage = error.message.toLowerCase();
-    
+
     // AADSTS160021: User session does not exist
     // AADSTS50078: User session has expired
     // AADSTS50079: User is required to enroll in multifactor authentication
@@ -36,9 +36,10 @@ export const isAuthenticationExpiredError = (error: any): boolean => {
       'interaction_required',
       'user session which does not exist',
       'session has expired',
-      'refresh token has expired'
+      'refresh token has expired',
+      'monitor_window_timeout'
     ];
-    
+
     return sessionExpiredPatterns.some(pattern => errorMessage.includes(pattern));
   }
 
@@ -57,7 +58,8 @@ export const isRecoverableAuthError = (error: any): boolean => {
     const recoverableCodes = [
       'interaction_required',
       'consent_required',
-      'login_required'
+      'login_required',
+      'monitor_window_timeout'
     ];
     return recoverableCodes.some(code => error.errorCode?.includes(code));
   }
@@ -90,11 +92,11 @@ export const getAuthErrorMessage = (error: any): string => {
   // Handle HTTP errors that might be authentication related
   if (typeof error === 'object' && error?.message) {
     const message = error.message.toLowerCase();
-    
+
     if (message.includes('401') || message.includes('unauthorized')) {
       return "Your session has expired. Please sign out and sign in again to continue.";
     }
-    
+
     if (message.includes('403') || message.includes('forbidden')) {
       return "You don't have permission to access this resource. Please check your permissions or contact your administrator.";
     }
@@ -107,6 +109,6 @@ export const getAuthErrorMessage = (error: any): string => {
  * Check if an error suggests the user should be redirected to login
  */
 export const shouldRedirectToLogin = (error: any): boolean => {
-  return isAuthenticationExpiredError(error) || 
-         (error instanceof AuthError && error.errorCode === 'no_account_found');
+  return isAuthenticationExpiredError(error) ||
+    (error instanceof AuthError && error.errorCode === 'no_account_found');
 };

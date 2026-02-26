@@ -422,13 +422,22 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     return azureAccounts.find(acc => acc.id === connectedResource.accountId)?.name ?? 'Unknown Account';
   }, [connectedResource, azureAccounts]);
 
+  const [isWaitingForAuth, setIsWaitingForAuth] = useState<boolean>(false);
+
   const fetchAccounts = useCallback(async () => {
     setIsLoadingAccounts(true);
     setDbError(null);
+    let interactionInProgress = false;
     try {
       const accounts = await getAzureCosmosAccounts();
       setAzureAccounts(accounts);
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.errorCode === 'interaction_in_progress') {
+        console.warn("fetchAccounts skipped due to interaction in progress.");
+        interactionInProgress = true;
+        setIsWaitingForAuth(true);
+        return;
+      }
       if (e instanceof Error) {
         // Check for authentication-related errors
         if (isAuthenticationExpiredError(e)) {
@@ -436,13 +445,17 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         } else if (e.message.includes('AuthorizationFailed') || e.message.includes('403')) {
           setDbError("Permission Denied: You may not have the required permissions to list Azure resources. Please contact your administrator.");
         } else {
-          setDbError("Could not load Azure accounts from server. Ensure the backend is running and you have permissions.");
+          setDbError("Could not load Azure accounts from server. " + (e.message || "Ensure the backend is running and you have permissions."));
         }
       } else {
         setDbError("An unknown error occurred while fetching Azure accounts.");
       }
     } finally {
       setIsLoadingAccounts(false);
+      // Only set waiting for auth false if we actually finished without detecting an interaction
+      if (!interactionInProgress) {
+        setIsWaitingForAuth(false);
+      }
     }
   }, []);
 
@@ -1378,6 +1391,12 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                 )}
                 {isLoadingAccounts ? (
                   <div className="text-center p-8 text-slate-500 dark:text-slate-400">Loading your Azure accounts...</div>
+                ) : isWaitingForAuth ? (
+                  <div className="text-center p-8 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-900/20 rounded-lg mt-4 animate-pulse">
+                    Waiting for authentication...
+                    <br />
+                    <span className="text-xs">Please complete the sign-in pop-up, or allow pop-ups if blocked.</span>
+                  </div>
                 ) : !dbError && azureAccounts.length === 0 ? (
                   <div className="text-center p-8 text-slate-500 dark:text-slate-400 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg mt-4">
                     No accessible Cosmos DB accounts found.

@@ -12,15 +12,7 @@ export async function deleteDocument(collectionName: string, resource: SelectedR
     return Promise.resolve(true);
   }
   // --- END DEVELOPMENT MOCK ---
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) {
-    throw new Error("No signed-in user found.");
-  }
-  const tokenResponse = await msalInstance.acquireTokenSilent({
-    ...loginRequest,
-    account: accounts[0],
-  });
-  const accessToken = tokenResponse.accessToken;
+  const accessToken = await getAuthenticatedToken();
   const response = await fetch(`${API_BASE_URL}/data/delete_document`, {
     method: 'POST',
     headers: {
@@ -44,21 +36,21 @@ export async function deleteDocument(collectionName: string, resource: SelectedR
 import { DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, PaginatedDocumentsResponse, FoundDocumentResponse, DocumentHistoryResponse } from '../types';
 import { msalInstance, loginRequest } from '../authConfig';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
-import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
-import { 
-    mockCosmosAccounts, 
-    mockDatabasesByAccountId, 
-    mockCollectionInfoMap, 
-    mockUserFindResult,
-    mockProductUpdateResult,
-    mockGenericExecutionResult,
-    mockDelay,
-    mockCacheClearResult,
-    mockDocCacheClearResult,
-    mockUsersDocuments,
-    mockProductsDocuments,
-    mockOrdersCollectionInfo,
-    mockUpdateDocument
+import { getAuthErrorMessage, isAuthenticationExpiredError, isRecoverableAuthError } from '../utils/authErrorHandler';
+import {
+  mockCosmosAccounts,
+  mockDatabasesByAccountId,
+  mockCollectionInfoMap,
+  mockUserFindResult,
+  mockProductUpdateResult,
+  mockGenericExecutionResult,
+  mockDelay,
+  mockCacheClearResult,
+  mockDocCacheClearResult,
+  mockUsersDocuments,
+  mockProductsDocuments,
+  mockOrdersCollectionInfo,
+  mockUpdateDocument
 } from './mockData';
 
 /**
@@ -78,11 +70,19 @@ const getAuthenticatedToken = async (): Promise<string> => {
 
     return response.accessToken;
   } catch (error) {
-    // Handle authentication errors with user-friendly messages
-    if (isAuthenticationExpiredError(error)) {
-      throw new Error(getAuthErrorMessage(error));
+    if (isRecoverableAuthError(error) || isAuthenticationExpiredError(error)) {
+      try {
+        console.log('Silent token acquisition failed, attempting popup refresh...');
+        const response = await msalInstance.acquireTokenPopup(loginRequest);
+        return response.accessToken;
+      } catch (popupError: any) {
+        console.error('Popup token refresh also failed:', popupError);
+        if (popupError?.errorCode === 'interaction_in_progress') {
+          throw popupError;
+        }
+        throw new Error(getAuthErrorMessage(error));
+      }
     }
-    // Re-throw other errors as-is
     throw error;
   }
 };
@@ -100,43 +100,26 @@ export const getAzureCosmosAccounts = async (): Promise<CosmosDBAccount[]> => {
   }
   // --- END DEVELOPMENT MOCK ---
 
-  try {
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-      throw new Error("No signed-in user found.");
-    }
+  const accessToken = await getAuthenticatedToken();
 
-    // acquire token for backend API (must be set in loginRequest.scopes)
-    const response = await msalInstance.acquireTokenSilent({
-      ...loginRequest,
-      account: accounts[0],
-    });
+  console.log("Fetching Azure cosmosdb accounts from backend...");
+  const responseApi = await fetch(`${API_BASE_URL}/azure/cosmos_accounts`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
 
-    const accessToken = response.accessToken;
-    
-    console.log("Fetching Azure cosmosdb accounts from backend...");
-    const responseApi = await fetch(`${API_BASE_URL}/azure/cosmos_accounts`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!responseApi.ok) {
-      const errorData = await responseApi.json().catch(() => ({}));
-      const errorMessage = errorData.detail || errorData.message || `Could not load Azure resource list from server. Status: ${responseApi.status}`;
-      throw new Error(errorMessage);
+  if (!responseApi.ok) {
+    if (responseApi.status === 401 || responseApi.status === 403) {
+      throw new Error("Authentication failed or permission denied while fetching Azure accounts.");
     }
-    
-    return responseApi.json();
-  } catch (error) {
-    // Handle authentication errors with user-friendly messages
-    if (isAuthenticationExpiredError(error)) {
-      throw new Error(getAuthErrorMessage(error));
-    }
-    // Re-throw other errors as-is
-    throw error;
+    const errorData = await responseApi.json().catch(() => ({}));
+    const errorMessage = errorData.detail || errorData.message || `Could not load Azure resource list from server. Status: ${responseApi.status}`;
+    throw new Error(errorMessage);
   }
+
+  return responseApi.json();
 };
 
 
@@ -148,40 +131,40 @@ export const getAzureCosmosAccounts = async (): Promise<CosmosDBAccount[]> => {
 export const getDatabasesForAccount = async (accountId: string): Promise<DbInfo[]> => {
   // --- DEVELOPMENT MOCK ---
   if (!USE_MSAL_AUTH) {
-      console.log(`DEV MODE: Returning mock databases for account ID ${accountId}.`);
-      await mockDelay(1000);
+    console.log(`DEV MODE: Returning mock databases for account ID ${accountId}.`);
+    await mockDelay(1000);
 
-      // Simulate authorization failure for the special 'dev-empty-db'
-      if (accountId.includes('dev-empty-db')) {
-          return Promise.reject(new Error('Failed to fetch connection string: 403 {"error":{"code":"AuthorizationFailed"}}'));
-      }
-      
-      const dbs = mockDatabasesByAccountId.get(accountId);
-      if (dbs) {
-          return Promise.resolve(dbs);
-      }
-      return Promise.reject(new Error(`Mock databases not found for account ID ${accountId}`));
+    // Simulate authorization failure for the special 'dev-empty-db'
+    if (accountId.includes('dev-empty-db')) {
+      return Promise.reject(new Error('Failed to fetch connection string: 403 {"error":{"code":"AuthorizationFailed"}}'));
+    }
+
+    const dbs = mockDatabasesByAccountId.get(accountId);
+    if (dbs) {
+      return Promise.resolve(dbs);
+    }
+    return Promise.reject(new Error(`Mock databases not found for account ID ${accountId}`));
   }
   // --- END DEVELOPMENT MOCK ---
 
   console.log(`Fetching databases for account ID ${accountId} from backend...`);
-  
+
   // Use helper function to get authenticated token with proper error handling
   const accessToken = await getAuthenticatedToken();
 
   const response = await fetch(`${API_BASE_URL}/azure/account_details`, {
-      method: 'POST',
-      headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ account_id: accountId }),
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ account_id: accountId }),
   });
 
   if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.detail || errorData.message || `Failed to fetch databases. Status: ${response.status}`;
-      throw new Error(errorMessage);
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.detail || errorData.message || `Failed to fetch databases. Status: ${response.status}`;
+    throw new Error(errorMessage);
   }
 
   return response.json();
@@ -195,42 +178,42 @@ export const getDatabasesForAccount = async (accountId: string): Promise<DbInfo[
  * @returns A promise that resolves with detailed collection information.
  */
 export const getCollectionInfo = async (collectionName: string, resource: SelectedResource): Promise<CollectionInfo> => {
-    // --- DEVELOPMENT MOCK ---
-    if (!USE_MSAL_AUTH) {
-        console.log(`DEV MODE: Returning mock collection info for ${collectionName}.`);
-        await mockDelay(600);
-        const info = mockCollectionInfoMap.get(collectionName);
-        if (info) {
-            return Promise.resolve(info);
-        }
-        return Promise.reject(new Error(`Mock collection info not found for ${collectionName}`));
+  // --- DEVELOPMENT MOCK ---
+  if (!USE_MSAL_AUTH) {
+    console.log(`DEV MODE: Returning mock collection info for ${collectionName}.`);
+    await mockDelay(600);
+    const info = mockCollectionInfoMap.get(collectionName);
+    if (info) {
+      return Promise.resolve(info);
     }
-    // --- END DEVELOPMENT MOCK ---
-    
-    // Use helper function to get authenticated token with proper error handling
-    const accessToken = await getAuthenticatedToken();
+    return Promise.reject(new Error(`Mock collection info not found for ${collectionName}`));
+  }
+  // --- END DEVELOPMENT MOCK ---
 
-    console.log(`Fetching info for collection: ${collectionName} from backend...`);
-    const response = await fetch(`${API_BASE_URL}/azure/collection_info`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
-          },
-        body: JSON.stringify({ 
-            account_id: resource.accountId,
-            database_name: resource.databaseName,
-            collection_name: collectionName 
-        }),
-    });
+  // Use helper function to get authenticated token with proper error handling
+  const accessToken = await getAuthenticatedToken();
 
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.detail || errorData.message || `Failed to fetch collection details. Status: ${response.status}`;
-        throw new Error(errorMessage);
-    }
+  console.log(`Fetching info for collection: ${collectionName} from backend...`);
+  const response = await fetch(`${API_BASE_URL}/azure/collection_info`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`
+    },
+    body: JSON.stringify({
+      account_id: resource.accountId,
+      database_name: resource.databaseName,
+      collection_name: collectionName
+    }),
+  });
 
-    return response.json();
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.detail || errorData.message || `Failed to fetch collection details. Status: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
 };
 
 /**
@@ -240,89 +223,80 @@ export const getCollectionInfo = async (collectionName: string, resource: Select
  * @returns A promise that resolves with the query result.
  */
 export const runMongoQuery = async (accountId: string, query: string, resource: SelectedResource): Promise<any> => {
-    // --- DEVELOPMENT MOCK ---
-    if (!USE_MSAL_AUTH) {
-        console.log(`DEV MODE: Returning mock execution result for query on ${resource.databaseName}.`);
-        await mockDelay(1000);
-        const lowerQuery = query.toLowerCase();
+  // --- DEVELOPMENT MOCK ---
+  if (!USE_MSAL_AUTH) {
+    console.log(`DEV MODE: Returning mock execution result for query on ${resource.databaseName}.`);
+    await mockDelay(1000);
+    const lowerQuery = query.toLowerCase();
 
-        if (lowerQuery.includes('.find') && lowerQuery.includes('users')) {
-            return Promise.resolve(mockUserFindResult);
-        }
-        if (lowerQuery.includes('.update_many') && lowerQuery.includes('products')) {
-            return Promise.resolve(mockProductUpdateResult);
-        }
-        // Mock a failure for debugging demo
-        if (lowerQuery.includes('sor')) {
-            return Promise.reject(new Error('MongoDB query error: unknown operator: $sor (MongoServerError)'));
-        }
-        return Promise.resolve(mockGenericExecutionResult);
+    if (lowerQuery.includes('.find') && lowerQuery.includes('users')) {
+      return Promise.resolve(mockUserFindResult);
     }
-    // --- END DEVELOPMENT MOCK ---
-    console.log(`Fetching databases for account ID ${accountId} from backend...`);
-    
-    // Use helper function to get authenticated token with proper error handling
-    const accessToken = await getAuthenticatedToken();
-    
-    console.log(`Sending query for execution on ${resource.databaseName} to backend...`);
-    const response = await fetch(`${API_BASE_URL}/query/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-         },
-        body: JSON.stringify({
-          account_id: resource.accountId,
-          database_name: resource.databaseName,
-          query: query,
-        }),
-    });
+    if (lowerQuery.includes('.update_many') && lowerQuery.includes('products')) {
+      return Promise.resolve(mockProductUpdateResult);
+    }
+    // Mock a failure for debugging demo
+    if (lowerQuery.includes('sor')) {
+      return Promise.reject(new Error('MongoDB query error: unknown operator: $sor (MongoServerError)'));
+    }
+    return Promise.resolve(mockGenericExecutionResult);
+  }
+  // --- END DEVELOPMENT MOCK ---
+  console.log(`Fetching databases for account ID ${accountId} from backend...`);
 
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.detail || errorData.message || `Query execution failed. Status: ${response.status}`;
-        throw new Error(errorMessage);
-    }
-    
-    return response.json();
+  // Use helper function to get authenticated token with proper error handling
+  const accessToken = await getAuthenticatedToken();
+
+  console.log(`Sending query for execution on ${resource.databaseName} to backend...`);
+  const response = await fetch(`${API_BASE_URL}/query/execute`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      account_id: resource.accountId,
+      database_name: resource.databaseName,
+      query: query,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.detail || errorData.message || `Query execution failed. Status: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
 };
 
 /**
  * Sends a request to the backend to clear any server-side caches.
  */
 export const clearSystemCache = async (): Promise<{ message: string }> => {
-    // --- DEVELOPMENT MOCK ---
-    if (!USE_MSAL_AUTH) {
-        console.log("DEV MODE: Simulating system cache clear.");
-        await mockDelay(800);
-        return Promise.resolve(mockCacheClearResult);
-    }
-    // --- END DEVELOPMENT MOCK ---
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-        throw new Error("No signed-in user found.");
-    }
+  // --- DEVELOPMENT MOCK ---
+  if (!USE_MSAL_AUTH) {
+    console.log("DEV MODE: Simulating system cache clear.");
+    await mockDelay(800);
+    return Promise.resolve(mockCacheClearResult);
+  }
+  // --- END DEVELOPMENT MOCK ---
+  const accessToken = await getAuthenticatedToken();
 
-    // acquire token for backend API
-    const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
-    });
+  const response = await fetch(`${API_BASE_URL}/system/clear_cache`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
 
-    const response = await fetch(`${API_BASE_URL}/system/clear_cache`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${tokenResponse.accessToken}`,
-        },
-    });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.detail || errorData.message || `Failed to clear server cache. Status: ${response.status}`;
+    throw new Error(errorMessage);
+  }
 
-     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.detail || errorData.message || `Failed to clear server cache. Status: ${response.status}`;
-        throw new Error(errorMessage);
-    }
-    
-    return response.json();
+  return response.json();
 };
 
 
@@ -336,102 +310,93 @@ export const clearSystemCache = async (): Promise<{ message: string }> => {
  * @returns A promise resolving to a paginated list of documents.
  */
 export const getDocuments = async (
-    collectionName: string, 
-    resource: SelectedResource, 
-    page: number, 
-    limit: number, 
-    filter?: { key: string, value: any }
+  collectionName: string,
+  resource: SelectedResource,
+  page: number,
+  limit: number,
+  filter?: { key: string, value: any }
 ): Promise<PaginatedDocumentsResponse> => {
-    // --- DEVELOPMENT MOCK ---
-    if (!USE_MSAL_AUTH) {
-        console.log(`DEV MODE: Fetching documents for ${collectionName}, page ${page}, filter:`, filter);
-        await mockDelay(800);
-        
-        // Helper to access nested properties by a dot-notation string
-        const getNestedValue = (obj: any, path: string): any => {
-            return path.split('.').reduce((o, k) => (o && o[k] !== undefined) ? o[k] : null, obj);
-        };
+  // --- DEVELOPMENT MOCK ---
+  if (!USE_MSAL_AUTH) {
+    console.log(`DEV MODE: Fetching documents for ${collectionName}, page ${page}, filter:`, filter);
+    await mockDelay(800);
 
-        const sourceDocs = collectionName === 'users'
-            ? mockUsersDocuments
-            : collectionName === 'products'
-            ? mockProductsDocuments
-            : collectionName === 'orders'
-            ? [mockOrdersCollectionInfo.sampleDocument]
-            : [];
-        
-        const filteredDocs = (filter && filter.value !== null && filter.value !== undefined && filter.value !== '')
-            ? sourceDocs.filter(doc => {
-                const searchVal = filter.value;
-                if (filter.key === 'all') {
-                    // Global search: convert search value to string and do a substring search
-                    const searchTerm = String(searchVal).toLowerCase();
-                    return JSON.stringify(doc).toLowerCase().includes(searchTerm);
-                }
-                
-                // Targeted field search
-                const docValue = getNestedValue(doc, filter.key);
+    // Helper to access nested properties by a dot-notation string
+    const getNestedValue = (obj: any, path: string): any => {
+      return path.split('.').reduce((o, k) => (o && o[k] !== undefined) ? o[k] : null, obj);
+    };
 
-                if (docValue === null || docValue === undefined) return false;
+    const sourceDocs = collectionName === 'users'
+      ? mockUsersDocuments
+      : collectionName === 'products'
+        ? mockProductsDocuments
+        : collectionName === 'orders'
+          ? [mockOrdersCollectionInfo.sampleDocument]
+          : [];
 
-                // if search value is a string, do case-insensitive contains.
-                if (typeof searchVal === 'string') {
-                    return String(docValue).toLowerCase().includes(searchVal.toLowerCase());
-                }
-                
-                // for other types, do an exact match
-                return docValue === searchVal;
-            })
-            : sourceDocs;
+    const filteredDocs = (filter && filter.value !== null && filter.value !== undefined && filter.value !== '')
+      ? sourceDocs.filter(doc => {
+        const searchVal = filter.value;
+        if (filter.key === 'all') {
+          // Global search: convert search value to string and do a substring search
+          const searchTerm = String(searchVal).toLowerCase();
+          return JSON.stringify(doc).toLowerCase().includes(searchTerm);
+        }
 
-        const totalDocuments = filteredDocs.length;
-        const totalPages = Math.ceil(totalDocuments / limit);
-        const startIndex = (page - 1) * limit;
-        const endIndex = startIndex + limit;
-        const documents = filteredDocs.slice(startIndex, endIndex);
+        // Targeted field search
+        const docValue = getNestedValue(doc, filter.key);
 
-        return Promise.resolve({
-            documents,
-            currentPage: page,
-            totalPages,
-            totalDocuments,
-        });
-    }
-    // --- END DEVELOPMENT MOCK ---
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-        throw new Error("No signed-in user found.");
-    }
+        if (docValue === null || docValue === undefined) return false;
 
-    const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
+        // if search value is a string, do case-insensitive contains.
+        if (typeof searchVal === 'string') {
+          return String(docValue).toLowerCase().includes(searchVal.toLowerCase());
+        }
+
+        // for other types, do an exact match
+        return docValue === searchVal;
+      })
+      : sourceDocs;
+
+    const totalDocuments = filteredDocs.length;
+    const totalPages = Math.ceil(totalDocuments / limit);
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const documents = filteredDocs.slice(startIndex, endIndex);
+
+    return Promise.resolve({
+      documents,
+      currentPage: page,
+      totalPages,
+      totalDocuments,
     });
-    const accessToken = tokenResponse.accessToken;
+  }
+  // --- END DEVELOPMENT MOCK ---
+  const accessToken = await getAuthenticatedToken();
 
-    const response = await fetch(`${API_BASE_URL}/data/documents`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-            account_id: resource.accountId,
-            database_name: resource.databaseName,
-            collection_name: collectionName,
-            page,
-            limit,
-            filter: filter && (filter.value !== '' && filter.value !== null && filter.value !== undefined) ? filter : undefined,
-        }),
-    });
+  const response = await fetch(`${API_BASE_URL}/data/documents`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      account_id: resource.accountId,
+      database_name: resource.databaseName,
+      collection_name: collectionName,
+      page,
+      limit,
+      filter: filter && (filter.value !== '' && filter.value !== null && filter.value !== undefined) ? filter : undefined,
+    }),
+  });
 
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.detail || errorData.message || `Failed to fetch documents. Status: ${response.status}`;
-        throw new Error(errorMessage);
-    }
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.detail || errorData.message || `Failed to fetch documents. Status: ${response.status}`;
+    throw new Error(errorMessage);
+  }
 
-    return response.json();
+  return response.json();
 };
 
 /**
@@ -443,75 +408,65 @@ export const getDocuments = async (
  * @returns A promise that resolves with the found document and its collection name.
  */
 export const findDocumentById = async (
-    documentId: string,
-    resource: SelectedResource,
-    collectionNames: string[],
-    keyContext?: string
+  documentId: string,
+  resource: SelectedResource,
+  collectionNames: string[],
+  keyContext?: string
 ): Promise<FoundDocumentResponse> => {
-    // --- DEVELOPMENT MOCK ---
-    if (!USE_MSAL_AUTH) {
-        console.log(`DEV MODE: Finding document with ID ${documentId} (context: ${keyContext}) across collections.`);
-        await mockDelay(700);
-        
-        // Prioritize search based on keyContext hint
-        const lowerKeyContext = keyContext?.toLowerCase() ?? '';
-        if (lowerKeyContext.includes('product') || lowerKeyContext.includes('item')) {
-            const productDoc = mockProductsDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
-            if (productDoc) return Promise.resolve({ document: productDoc, collectionName: 'products' });
-        }
-        if (lowerKeyContext.includes('user') || lowerKeyContext.includes('patient')) {
-            const userDoc = mockUsersDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
-            if (userDoc) return Promise.resolve({ document: userDoc, collectionName: 'users' });
-        }
+  // --- DEVELOPMENT MOCK ---
+  if (!USE_MSAL_AUTH) {
+    console.log(`DEV MODE: Finding document with ID ${documentId} (context: ${keyContext}) across collections.`);
+    await mockDelay(700);
 
-        // Fallback: search all mock collections if context hint fails
-        const userDoc = mockUsersDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
-        if (userDoc) return Promise.resolve({ document: userDoc, collectionName: 'users' });
-        
-        const productDoc = mockProductsDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
-        if (productDoc) return Promise.resolve({ document: productDoc, collectionName: 'products' });
-
-        if ((mockOrdersCollectionInfo.sampleDocument._id?.$oid ?? mockOrdersCollectionInfo.sampleDocument._id) === documentId) {
-             return Promise.resolve({ document: mockOrdersCollectionInfo.sampleDocument, collectionName: 'orders' });
-        }
-        
-        return Promise.reject(new Error(`Document with ID '${documentId}' not found in any mock collections.`));
+    // Prioritize search based on keyContext hint
+    const lowerKeyContext = keyContext?.toLowerCase() ?? '';
+    if (lowerKeyContext.includes('product') || lowerKeyContext.includes('item')) {
+      const productDoc = mockProductsDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
+      if (productDoc) return Promise.resolve({ document: productDoc, collectionName: 'products' });
     }
-    // --- END DEVELOPMENT MOCK ---
-    
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-        throw new Error("No signed-in user found.");
+    if (lowerKeyContext.includes('user') || lowerKeyContext.includes('patient')) {
+      const userDoc = mockUsersDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
+      if (userDoc) return Promise.resolve({ document: userDoc, collectionName: 'users' });
     }
 
-    const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
-    });
-    const accessToken = tokenResponse.accessToken;
+    // Fallback: search all mock collections if context hint fails
+    const userDoc = mockUsersDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
+    if (userDoc) return Promise.resolve({ document: userDoc, collectionName: 'users' });
 
-    const response = await fetch(`${API_BASE_URL}/data/find_by_id`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-            account_id: resource.accountId,
-            database_name: resource.databaseName,
-            collection_names: collectionNames,
-            document_id: documentId,
-            key_context: keyContext, // Pass the context hint to the backend
-        }),
-    });
-    
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.detail || errorData.message || `Failed to find document. Status: ${response.status}`;
-        throw new Error(errorMessage);
+    const productDoc = mockProductsDocuments.find(doc => (doc._id?.$oid ?? doc._id) === documentId);
+    if (productDoc) return Promise.resolve({ document: productDoc, collectionName: 'products' });
+
+    if ((mockOrdersCollectionInfo.sampleDocument._id?.$oid ?? mockOrdersCollectionInfo.sampleDocument._id) === documentId) {
+      return Promise.resolve({ document: mockOrdersCollectionInfo.sampleDocument, collectionName: 'orders' });
     }
 
-    return response.json();
+    return Promise.reject(new Error(`Document with ID '${documentId}' not found in any mock collections.`));
+  }
+  // --- END DEVELOPMENT MOCK ---
+  const accessToken = await getAuthenticatedToken();
+
+  const response = await fetch(`${API_BASE_URL}/data/find_by_id`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      account_id: resource.accountId,
+      database_name: resource.databaseName,
+      collection_names: collectionNames,
+      document_id: documentId,
+      key_context: keyContext, // Pass the context hint to the backend
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.detail || errorData.message || `Failed to find document. Status: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
 };
 
 /**
@@ -519,37 +474,29 @@ export const findDocumentById = async (
  * @returns A promise that resolves with a confirmation message.
  */
 export const clearDocumentsCache = async (): Promise<{ message: string }> => {
-    // --- DEVELOPMENT MOCK ---
-    if (!USE_MSAL_AUTH) {
-        console.log("DEV MODE: Simulating document cache clear.");
-        await mockDelay(700);
-        return Promise.resolve(mockDocCacheClearResult);
-    }
-    // --- END DEVELOPMENT MOCK ---
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-        throw new Error("No signed-in user found.");
-    }
+  // --- DEVELOPMENT MOCK ---
+  if (!USE_MSAL_AUTH) {
+    console.log("DEV MODE: Simulating document cache clear.");
+    await mockDelay(700);
+    return Promise.resolve(mockDocCacheClearResult);
+  }
+  // --- END DEVELOPMENT MOCK ---
+  const accessToken = await getAuthenticatedToken();
 
-    const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
-    });
+  const response = await fetch(`${API_BASE_URL}/system/clear_documents_cache`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
 
-    const response = await fetch(`${API_BASE_URL}/system/clear_documents_cache`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${tokenResponse.accessToken}`,
-        },
-    });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.detail || errorData.message || `Failed to clear document cache. Status: ${response.status}`;
+    throw new Error(errorMessage);
+  }
 
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.detail || errorData.message || `Failed to clear document cache. Status: ${response.status}`;
-        throw new Error(errorMessage);
-    }
-    
-    return response.json();
+  return response.json();
 };
 
 /**
@@ -565,25 +512,18 @@ export async function updateDocument(accountId: string, databaseName: string, co
     return mockUpdateDocument(collection, id, content);
   }
   // --- END DEVELOPMENT MOCK ---
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) {
-    throw new Error("No signed-in user found.");
-  }
-  const tokenResponse = await msalInstance.acquireTokenSilent({
-    ...loginRequest,
-    account: accounts[0],
-  });
-  const accessToken = tokenResponse.accessToken;
+  const accessToken = await getAuthenticatedToken();
   const response = await fetch(`${API_BASE_URL}/data/documents`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ 
-        account_id: accountId,
-        database_name: databaseName,
-        collection, id, content }),
+    body: JSON.stringify({
+      account_id: accountId,
+      database_name: databaseName,
+      collection, id, content
+    }),
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -601,15 +541,7 @@ export async function updateDocument(accountId: string, databaseName: string, co
  * @returns A promise that resolves with the document data.
  */
 export async function getSingleDocument(accountId: string, databaseName: string, collectionName: string, documentId: string) {
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) {
-    throw new Error("No signed-in user found.");
-  }
-  const tokenResponse = await msalInstance.acquireTokenSilent({
-    ...loginRequest,
-    account: accounts[0],
-  });
-  const accessToken = tokenResponse.accessToken;
+  const accessToken = await getAuthenticatedToken();
   const response = await fetch(`${API_BASE_URL}/data/document`, {
     method: 'POST',
     headers: {
@@ -645,15 +577,7 @@ export async function addDocument(collectionName: string, resource: SelectedReso
     return Promise.resolve(newDoc);
   }
   // --- END DEVELOPMENT MOCK ---
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) {
-    throw new Error("No signed-in user found.");
-  }
-  const tokenResponse = await msalInstance.acquireTokenSilent({
-    ...loginRequest,
-    account: accounts[0],
-  });
-  const accessToken = tokenResponse.accessToken;
+  const accessToken = await getAuthenticatedToken();
   const response = await fetch(`${API_BASE_URL}/data/insert_document`, {
     method: 'POST',
     headers: {
@@ -746,25 +670,15 @@ export async function getDocumentHistory(resource: SelectedResource, collectionN
         }
       ]
     };
-    
+
     // Simulate API delay
     return new Promise(resolve => {
       setTimeout(() => resolve(mockHistoryData), 800);
     });
   }
   // --- END DEVELOPMENT MOCK ---
-  
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) {
-    throw new Error("No signed-in user found.");
-  }
-  
-  const tokenResponse = await msalInstance.acquireTokenSilent({
-    ...loginRequest,
-    account: accounts[0],
-  });
-  const accessToken = tokenResponse.accessToken;
-  
+  const accessToken = await getAuthenticatedToken();
+
   const response = await fetch(`${API_BASE_URL}/data/document_history`, {
     method: 'POST',
     headers: {
@@ -778,11 +692,11 @@ export async function getDocumentHistory(resource: SelectedResource, collectionN
       document_id: documentId,
     }),
   });
-  
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || 'Failed to load document history.');
   }
-  
+
   return response.json();
 }
