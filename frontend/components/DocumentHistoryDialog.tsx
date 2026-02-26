@@ -43,7 +43,7 @@ const DocumentHistoryDialog: React.FC<DocumentHistoryDialogProps> = ({
   const fetchDocumentHistory = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await getDocumentHistory(resource, collectionName, documentId);
       setHistoryData(response);
@@ -130,11 +130,15 @@ const DocumentHistoryDialog: React.FC<DocumentHistoryDialogProps> = ({
 
   const renderDiffData = (entry: DocumentHistoryEntry) => {
     if (entry.operation === 'insert') {
+      const insertData = { ...(entry.diff_data as Record<string, any>) };
+      delete insertData['datetime_creation'];
+      delete insertData['datetime_last_modified'];
+
       return (
         <div className="mt-2 p-3 bg-green-100 dark:bg-green-900/30 rounded border">
           <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Document created with initial data:</p>
           <div className="text-xs font-mono bg-white dark:bg-gray-800 p-2 rounded border max-h-48 overflow-y-auto">
-            <pre className="whitespace-pre-wrap break-words overflow-wrap-anywhere">{JSON.stringify(entry.diff_data, null, 2)}</pre>
+            <pre className="whitespace-pre-wrap break-words overflow-wrap-anywhere">{JSON.stringify(insertData, null, 2)}</pre>
           </div>
         </div>
       );
@@ -149,8 +153,12 @@ const DocumentHistoryDialog: React.FC<DocumentHistoryDialogProps> = ({
     }
 
     // Update operation
-    const changes = Object.entries(entry.diff_data as Record<string, any>);
-    
+    const diffData = { ...(entry.diff_data as Record<string, any>) };
+    delete diffData['datetime_creation'];
+    delete diffData['datetime_last_modified'];
+
+    const changes = Object.entries(diffData);
+
     return (
       <div className="mt-2 space-y-2">
         {changes.map(([field, change], index) => (
@@ -238,7 +246,10 @@ const DocumentHistoryDialog: React.FC<DocumentHistoryDialogProps> = ({
                   {historyData.history_entries.map((entry: DocumentHistoryEntry) => {
                     const timestamp = formatTimestamp(entry.timestamp_utc);
                     const isExpanded = expandedEntries.has(entry.id);
-                    const hasChanges = entry.operation === 'update' && Object.keys(entry.diff_data).length > 0;
+                    const diffDataKeys = Object.keys(entry.diff_data || {}).filter(k =>
+                      !['datetime_creation', 'datetime_last_modified'].includes(k)
+                    );
+                    const hasChanges = entry.operation === 'update' && diffDataKeys.length > 0;
 
                     return (
                       <div
@@ -250,7 +261,7 @@ const DocumentHistoryDialog: React.FC<DocumentHistoryDialogProps> = ({
                             <div className="flex-shrink-0 mt-0.5">
                               {getOperationIcon(entry.operation)}
                             </div>
-                            
+
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">
@@ -262,7 +273,7 @@ const DocumentHistoryDialog: React.FC<DocumentHistoryDialogProps> = ({
                                   <span>{entry.user_email}</span>
                                 </div>
                               </div>
-                              
+
                               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
                                 <AccessTimeIcon className="w-3 h-3" />
                                 <span>{timestamp.relative}</span>
@@ -276,7 +287,7 @@ const DocumentHistoryDialog: React.FC<DocumentHistoryDialogProps> = ({
                                   className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition-colors"
                                 >
                                   {isExpanded ? <ChevronDownIcon className="w-3 h-3" /> : <ChevronRightIcon className="w-3 h-3" />}
-                                  {Object.keys(entry.diff_data).length} field{Object.keys(entry.diff_data).length !== 1 ? 's' : ''} changed
+                                  {diffDataKeys.length} field{diffDataKeys.length !== 1 ? 's' : ''} changed
                                 </button>
                               )}
 
