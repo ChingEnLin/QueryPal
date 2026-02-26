@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, forwardRef, useImperativeHandle } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Button, CircularProgress } from '@mui/material';
 import MonacoEditor from '@monaco-editor/react';
@@ -16,25 +16,31 @@ interface DocumentEditViewProps {
   onSave?: () => void | Promise<void>;
 }
 
-const DocumentEditView: React.FC<DocumentEditViewProps> = ({ accountId, databaseName, document, collection, docId, loading, onCancel, onSave }) => {
+export interface DocumentEditViewRef {
+  getCurrentValue: () => string;
+  setCurrentValue: (val: string) => void;
+}
+
+const DocumentEditView = forwardRef<DocumentEditViewRef, DocumentEditViewProps>(({ accountId, databaseName, document, collection, docId, loading, onCancel, onSave }, ref) => {
   const [jsonValue, setJsonValue] = useState(JSON.stringify(document, null, 2));
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const { theme } = useTheme();
-  const [currentDoc, setCurrentDoc] = useState(document);
   const [isSaving, setIsSaving] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    getCurrentValue: () => jsonValue,
+    setCurrentValue: (val: string) => setJsonValue(val)
+  }));
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
       const parsed = JSON.parse(jsonValue);
-      if (!collection || !docId) throw new Error('Missing collection or document ID');
+      if (!accountId || !databaseName || !collection || !docId) throw new Error('Missing DB info');
       await updateDocument(accountId, databaseName, collection, docId, parsed);
       // Fetch the latest document after update
-      if (accountId && databaseName && collection && docId) {
-        const refreshed = await getSingleDocument(accountId, databaseName, collection, docId);
-        setCurrentDoc(refreshed);
-        setJsonValue(JSON.stringify(refreshed, null, 2));
-      }
+      const refreshed = await getSingleDocument(accountId, databaseName, collection, docId);
+      setJsonValue(JSON.stringify(refreshed, null, 2));
       setFeedback({ type: 'success', message: 'Document saved and refreshed.' });
       if (onSave) await onSave();
       if (onCancel) onCancel();
@@ -92,6 +98,6 @@ const DocumentEditView: React.FC<DocumentEditViewProps> = ({ accountId, database
       )}
     </div>
   );
-};
+});
 
 export default DocumentEditView;

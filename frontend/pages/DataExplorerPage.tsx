@@ -4,6 +4,7 @@ import { SelectedResource, DbInfo, BreadcrumbItem, CosmosDBAccount, CollectionIn
 import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache, getSingleDocument } from '../services/dbService';
 import { extractSchemaTree, SchemaKeyNode } from '../utils/schemaUtils';
 import MongoIcon from '../components/icons/MongoIcon';
+import { isEqual, omit } from 'lodash';
 import {
   SpinnerIcon,
   ChevronDownIcon,
@@ -27,9 +28,10 @@ import {
   HistoryIcon
 } from '../components/icons/material-icons-imports';
 import JsonDisplay from '../components/JsonDisplay';
-import DocumentEditView from '../components/DocumentDetailView';
+import DocumentEditView, { DocumentEditViewRef } from '../components/DocumentDetailView';
 import CreateDocumentDialog from '../components/CreateDocumentDialog';
 import DocumentHistoryDialog from '../components/DocumentHistoryDialog';
+import DiffOverwriteDialog from '../components/DiffOverwriteDialog';
 import { useTheme } from '../contexts/ThemeContext';
 
 
@@ -201,6 +203,14 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
   // --- Document History Dialog State ---
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = React.useState(false);
+
+  // --- Diff Overwrite Dialog State ---
+  const [isDiffOverwriteDialogOpen, setIsDiffOverwriteDialogOpen] = useState(false);
+  const [diffIncomingDocument, setDiffIncomingDocument] = useState<Record<string, any> | null>(null);
+  const [diffCurrentEditedText, setDiffCurrentEditedText] = useState<string>('');
+
+  // --- Editor Ref ---
+  const editorRef = useRef<DocumentEditViewRef>(null);
 
   // Helper to infer schema for new document (mimic CollectionActionPanel logic)
   const getInitialDocFromSchema = useCallback(() => {
@@ -864,6 +874,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         {/* Edit mode: render DocumentEditView */}
         {editMode && (
           <DocumentEditView
+            ref={editorRef}
             accountId={currentResource.accountId}
             databaseName={currentResource.databaseName}
             document={selectedDocument}
@@ -1007,6 +1018,29 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       </div>
     );
   };
+
+  let displayDiffOldValue = diffCurrentEditedText;
+  let displayDiffNewValue = diffIncomingDocument ? JSON.stringify(diffIncomingDocument, null, 2) : '';
+
+  if (diffIncomingDocument && isDiffOverwriteDialogOpen) {
+    try {
+      const parsedOld = JSON.parse(diffCurrentEditedText);
+      const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
+
+      const modifiedOld = { ...parsedOld };
+
+      ignoredKeys.forEach(key => {
+        if (key in diffIncomingDocument) {
+          modifiedOld[key] = diffIncomingDocument[key];
+        } else {
+          delete modifiedOld[key];
+        }
+      });
+      displayDiffOldValue = JSON.stringify(modifiedOld, null, 2);
+    } catch (e) {
+      // If parsing fails, fall back to raw string
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
@@ -1256,12 +1290,44 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                 selectedCollection,
                                 getDocId(selectedDocument)
                               );
+
+                              if (editMode && editorRef.current) {
+                                const editedValue = editorRef.current.getCurrentValue();
+                                let isDifferent = false;
+
+                                try {
+                                  const parsedEdited = JSON.parse(editedValue);
+                                  const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
+
+                                  const editedWithoutIgnored = omit(parsedEdited, ignoredKeys);
+                                  const refreshedWithoutIgnored = omit(refreshed, ignoredKeys);
+
+                                  isDifferent = !isEqual(editedWithoutIgnored, refreshedWithoutIgnored);
+                                } catch (e) {
+                                  // If JSON is invalid, fall back to string comparison
+                                  const freshString = JSON.stringify(refreshed, null, 2);
+                                  isDifferent = editedValue !== freshString;
+                                }
+
+                                if (isDifferent) {
+                                  // Setup dialog state
+                                  setDiffCurrentEditedText(editedValue);
+                                  setDiffIncomingDocument(refreshed);
+                                  setIsDiffOverwriteDialogOpen(true);
+                                  setIsLoading(false);
+                                  return;
+                                }
+                              }
+
                               setSelectedDocument(refreshed);
                               setPinnedDocuments(prev => prev.map(p =>
                                 getDocId(p.doc) === getDocId(selectedDocument)
                                   ? { ...p, doc: refreshed }
                                   : p
                               ));
+                              if (editMode && editorRef.current) {
+                                editorRef.current.setCurrentValue(JSON.stringify(refreshed, null, 2));
+                              }
                             } catch (e) {
                               // Optionally set error
                             } finally {
@@ -1392,6 +1458,27 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         collectionName={selectedCollection || ''}
         resource={currentResource}
         onClose={() => setIsHistoryDialogOpen(false)}
+      />
+      {/* Diff Overwrite Dialog */}
+      <DiffOverwriteDialog
+        open={isDiffOverwriteDialogOpen}
+        oldValue={displayDiffOldValue}
+        newValue={displayDiffNewValue}
+        onClose={() => setIsDiffOverwriteDialogOpen(false)}
+        onOverwrite={() => {
+          if (diffIncomingDocument) {
+            setSelectedDocument(diffIncomingDocument);
+            setPinnedDocuments(prev => prev.map(p =>
+              getDocId(p.doc) === getDocId(diffIncomingDocument)
+                ? { ...p, doc: diffIncomingDocument }
+                : p
+            ));
+            if (editMode && editorRef.current) {
+              editorRef.current.setCurrentValue(JSON.stringify(diffIncomingDocument, null, 2));
+            }
+          }
+          setIsDiffOverwriteDialogOpen(false);
+        }}
       />
       <style>{`
           @keyframes fade-in-fast { 
