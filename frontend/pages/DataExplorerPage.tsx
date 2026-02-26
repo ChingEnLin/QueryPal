@@ -5,6 +5,7 @@ import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccou
 import { extractSchemaTree, SchemaKeyNode } from '../utils/schemaUtils';
 import MongoIcon from '../components/icons/MongoIcon';
 import { isEqual, omit } from 'lodash';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import {
   SpinnerIcon,
   ChevronDownIcon,
@@ -1157,280 +1158,292 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
         {/* Main Content Area */}
         <main className="flex-grow flex overflow-hidden">
-          {/* Column 1: Collections */}
-          <div className="w-1/4 xl:w-1/5 bg-slate-100 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 overflow-y-auto">
-            <div className="p-4">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Collections</h2>
-                <div className="flex items-center gap-1 p-0.5 bg-slate-200 dark:bg-slate-700 rounded-md">
-                  <button
-                    onClick={() => handleSortCollections('name')}
-                    className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors ${collectionSortKey === 'name' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
-                    title={`Sort by name (${collectionSortKey === 'name' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
-                  >
-                    Name {renderSortArrow('name')}
-                  </button>
-                  <button
-                    onClick={() => handleSortCollections('count')}
-                    className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors ${collectionSortKey === 'count' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
-                    title={`Sort by count (${collectionSortKey === 'count' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
-                  >
-                    Count {renderSortArrow('count')}
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {isLoadingDbsForAccount ? (
-                  <div className="text-center p-4 text-slate-500 dark:text-slate-400">Loading collections...</div>
-                ) : sortedCollections.length > 0 ? (
-                  sortedCollections.map(col => (
-                    <button
-                      key={col.name}
-                      onClick={() => handleCollectionClick(col.name)}
-                      className={`w-full text-left p-3 rounded-md text-sm font-medium transition-colors ${selectedCollection === col.name ? 'bg-blue-500 text-white shadow-md' : 'bg-white dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold">{col.name}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${selectedCollection === col.name ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-600'}`}>{col.count.toLocaleString()}</span>
-                      </div>
-                    </button>
-                  ))
-                ) : (
-                  <div className="text-center p-4 text-slate-500 dark:text-slate-400">No collections found.</div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Column 2: Documents */}
-          <div className="w-1/4 xl:w-1/5 bg-white dark:bg-slate-800/50 border-r border-slate-200 dark:border-slate-700 flex flex-col">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-              <div className="flex justify-between items-center mb-2">
-                <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">
-                  Documents {totalDocuments > 0 && `(${totalDocuments.toLocaleString()})`}
-                </h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleOpenCreateDialog}
-                    disabled={!selectedCollection || isLoading || isFetchingSchema}
-                    className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 ${isCreateDialogOpen ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : ''}`}
-                    title="Create new document"
-                    aria-label="Create new document"
-                  >
-                    <NoteAddIcon className={`w-5 h-5 ${isCreateDialogOpen ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                  </button>
-                  <button
-                    onClick={handleRefresh}
-                    disabled={!selectedCollection || isLoading || isFetchingSchema}
-                    className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Refresh documents and schema"
-                  >
-                    <ClearAllIcon className={`w-4 h-4 ${(isLoading || isFetchingSchema) ? 'animate-pulse' : ''}`} />
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="relative">
-                  <select
-                    value={filterKey}
-                    onChange={(e) => setFilterKey(e.target.value)}
-                    disabled={!selectedCollection || isFetchingSchema}
-                    className="w-full text-sm appearance-none cursor-pointer p-2 pr-8 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
-                    title="Select a field to filter by"
-                  >
-                    <option value="all">All Fields</option>
-                    <RenderOptions nodes={schemaTree} level={0} />
-                  </select>
-                  <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
-                </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder={isFetchingSchema ? 'Loading schema...' : 'Filter value...'}
-                    value={filterValue}
-                    onChange={(e) => setFilterValue(e.target.value)}
-                    disabled={!selectedCollection || isFetchingSchema}
-                    className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
-                  />
-                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                </div>
-              </div>
-            </div>
-            <div className="flex-grow overflow-hidden">
-              {renderDocumentList()}
-            </div>
-          </div>
-
-          {/* Column 3: Document Editor */}
-          <div className="w-2/4 xl:w-3/5 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
-            <div className="p-4 space-y-4">
-              <header className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Editor</h2>
-                  {selectedDocument && (
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-slate-400 dark:text-slate-500">ID:</span>
-                      <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{getDocId(selectedDocument)}</span>
+          <PanelGroup orientation="horizontal" id="querypal-panel-layout">
+            {/* Column 1: Collections */}
+            <Panel defaultSize={20} minSize={10}>
+              <div className="h-full bg-slate-100 dark:bg-slate-800 overflow-y-auto">
+                <div className="p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Collections</h2>
+                    <div className="flex items-center gap-1 p-0.5 bg-slate-200 dark:bg-slate-700 rounded-md">
                       <button
-                        onClick={() => handleTogglePin(selectedDocument, selectedCollection!)}
-                        className={`ml-2 p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isDocumentPinned(selectedDocument) ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-                        title={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
-                        aria-label={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
+                        onClick={() => handleSortCollections('name')}
+                        className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors ${collectionSortKey === 'name' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
+                        title={`Sort by name (${collectionSortKey === 'name' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
                       >
-                        <PinIcon className={`w-5 h-5 ${isDocumentPinned(selectedDocument) ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                        Name {renderSortArrow('name')}
                       </button>
                       <button
-                        onClick={async () => {
-                          if (selectedCollection && selectedDocument) {
-                            setIsLoading(true);
-                            try {
-                              const refreshed = await getSingleDocument(
-                                currentResource.accountId,
-                                currentResource.databaseName,
-                                selectedCollection,
-                                getDocId(selectedDocument)
-                              );
-
-                              if (editMode && editorRef.current) {
-                                const editedValue = editorRef.current.getCurrentValue();
-                                let isDifferent = false;
-
-                                try {
-                                  const parsedEdited = JSON.parse(editedValue);
-                                  const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
-
-                                  const editedWithoutIgnored = omit(parsedEdited, ignoredKeys);
-                                  const refreshedWithoutIgnored = omit(refreshed, ignoredKeys);
-
-                                  isDifferent = !isEqual(editedWithoutIgnored, refreshedWithoutIgnored);
-                                } catch (e) {
-                                  // If JSON is invalid, fall back to string comparison
-                                  const freshString = JSON.stringify(refreshed, null, 2);
-                                  isDifferent = editedValue !== freshString;
-                                }
-
-                                if (isDifferent) {
-                                  // Setup dialog state
-                                  setDiffCurrentEditedText(editedValue);
-                                  setDiffIncomingDocument(refreshed);
-                                  setIsDiffOverwriteDialogOpen(true);
-                                  setIsLoading(false);
-                                  return;
-                                }
-                              }
-
-                              setSelectedDocument(refreshed);
-                              setPinnedDocuments(prev => prev.map(p =>
-                                getDocId(p.doc) === getDocId(selectedDocument)
-                                  ? { ...p, doc: refreshed }
-                                  : p
-                              ));
-                              if (editMode && editorRef.current) {
-                                editorRef.current.setCurrentValue(JSON.stringify(refreshed, null, 2));
-                              }
-                            } catch (e) {
-                              // Optionally set error
-                            } finally {
-                              setIsLoading(false);
-                            }
-                          }
-                        }}
-                        className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                        title="Refresh document"
-                        aria-label="Refresh document"
-                        disabled={isLoading}
+                        onClick={() => handleSortCollections('count')}
+                        className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors ${collectionSortKey === 'count' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
+                        title={`Sort by count (${collectionSortKey === 'count' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
                       >
-                        <RefreshIcon className="w-5 h-5" />
+                        Count {renderSortArrow('count')}
                       </button>
-                      {!editMode && (
-                        <>
-                          <button
-                            className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-                            onClick={() => setEditMode(true)}
-                            disabled={isLoading}
-                            title="Edit document"
-                            aria-label="Edit document"
-                          >
-                            <EditIcon className={`w-5 h-5 ${editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                          </button>
-                          <button
-                            className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                            onClick={() => {
-                              if (selectedDocument) {
-                                // Remove _id from copy if present
-                                const { _id, ...rest } = selectedDocument;
-                                setCreateDocInitial(rest);
-                                setIsCreateDialogOpen(true);
-                              }
-                            }}
-                            disabled={isLoading || !selectedDocument}
-                            title="Insert copy as new document"
-                            aria-label="Insert copy as new document"
-                          >
-                            <FileCopyIcon className="w-5 h-5 stroke-current transition-colors" />
-                          </button>
-                          <button
-                            className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40"
-                            onClick={() => {
-                              if (selectedDocument) {
-                                setDeleteTargetDoc(selectedDocument);
-                                setIsDeleteDialogOpen(true);
-                              }
-                            }}
-                            disabled={isLoading || !selectedDocument}
-                            title="Delete document"
-                            aria-label="Delete document"
-                          >
-                            <TrashIcon className="w-5 h-5" />
-                          </button>
-                          <button
-                            className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                            onClick={() => setIsHistoryDialogOpen(true)}
-                            disabled={isLoading || !selectedDocument}
-                            title="View document history"
-                            aria-label="View document history"
-                          >
-                            <HistoryIcon className="w-5 h-5" />
-                          </button>
-                        </>
-                      )}
-                      {editMode && (
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {isLoadingDbsForAccount ? (
+                      <div className="text-center p-4 text-slate-500 dark:text-slate-400">Loading collections...</div>
+                    ) : sortedCollections.length > 0 ? (
+                      sortedCollections.map(col => (
                         <button
-                          className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                          onClick={() => setEditMode(false)}
-                          disabled={isLoading}
-                          title="Cancel edit"
-                          aria-label="Cancel edit"
+                          key={col.name}
+                          onClick={() => handleCollectionClick(col.name)}
+                          className={`w-full text-left p-3 rounded-md text-sm font-medium transition-colors ${selectedCollection === col.name ? 'bg-blue-500 text-white shadow-md' : 'bg-white dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`}
                         >
-                          <XIcon className="w-5 h-5" />
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold">{col.name}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${selectedCollection === col.name ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-600'}`}>{col.count.toLocaleString()}</span>
+                          </div>
                         </button>
+                      ))
+                    ) : (
+                      <div className="text-center p-4 text-slate-500 dark:text-slate-400">No collections found.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Panel>
+
+            <PanelResizeHandle className="w-1 bg-slate-200 dark:bg-slate-700 hover:bg-blue-400 dark:hover:bg-blue-500 transition-colors cursor-col-resize z-10 flex-shrink-0" />
+
+            {/* Column 2: Documents */}
+            <Panel defaultSize={20} minSize={15}>
+              <div className="h-full bg-white dark:bg-slate-800/50 flex flex-col">
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+                  <div className="flex justify-between items-center mb-2">
+                    <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">
+                      Documents {totalDocuments > 0 && `(${totalDocuments.toLocaleString()})`}
+                    </h2>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleOpenCreateDialog}
+                        disabled={!selectedCollection || isLoading || isFetchingSchema}
+                        className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 ${isCreateDialogOpen ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : ''}`}
+                        title="Create new document"
+                        aria-label="Create new document"
+                      >
+                        <NoteAddIcon className={`w-5 h-5 ${isCreateDialogOpen ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                      </button>
+                      <button
+                        onClick={handleRefresh}
+                        disabled={!selectedCollection || isLoading || isFetchingSchema}
+                        className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Refresh documents and schema"
+                      >
+                        <ClearAllIcon className={`w-4 h-4 ${(isLoading || isFetchingSchema) ? 'animate-pulse' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <select
+                        value={filterKey}
+                        onChange={(e) => setFilterKey(e.target.value)}
+                        disabled={!selectedCollection || isFetchingSchema}
+                        className="w-full text-sm appearance-none cursor-pointer p-2 pr-8 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                        title="Select a field to filter by"
+                      >
+                        <option value="all">All Fields</option>
+                        <RenderOptions nodes={schemaTree} level={0} />
+                      </select>
+                      <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder={isFetchingSchema ? 'Loading schema...' : 'Filter value...'}
+                        value={filterValue}
+                        onChange={(e) => setFilterValue(e.target.value)}
+                        disabled={!selectedCollection || isFetchingSchema}
+                        className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                      />
+                      <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-grow overflow-hidden">
+                  {renderDocumentList()}
+                </div>
+              </div>
+            </Panel>
+
+            <PanelResizeHandle className="w-1 bg-slate-200 dark:bg-slate-700 hover:bg-blue-400 dark:hover:bg-blue-500 transition-colors cursor-col-resize z-10 flex-shrink-0" />
+
+            {/* Column 3: Document Editor */}
+            <Panel defaultSize={60} minSize={30}>
+              <div className="h-full bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+                <div className="p-4 space-y-4">
+                  <header className="flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                      <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Editor</h2>
+                      {selectedDocument && (
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-slate-400 dark:text-slate-500">ID:</span>
+                          <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{getDocId(selectedDocument)}</span>
+                          <button
+                            onClick={() => handleTogglePin(selectedDocument, selectedCollection!)}
+                            className={`ml-2 p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isDocumentPinned(selectedDocument) ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                            title={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
+                            aria-label={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
+                          >
+                            <PinIcon className={`w-5 h-5 ${isDocumentPinned(selectedDocument) ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (selectedCollection && selectedDocument) {
+                                setIsLoading(true);
+                                try {
+                                  const refreshed = await getSingleDocument(
+                                    currentResource.accountId,
+                                    currentResource.databaseName,
+                                    selectedCollection,
+                                    getDocId(selectedDocument)
+                                  );
+
+                                  if (editMode && editorRef.current) {
+                                    const editedValue = editorRef.current.getCurrentValue();
+                                    let isDifferent = false;
+
+                                    try {
+                                      const parsedEdited = JSON.parse(editedValue);
+                                      const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
+
+                                      const editedWithoutIgnored = omit(parsedEdited, ignoredKeys);
+                                      const refreshedWithoutIgnored = omit(refreshed, ignoredKeys);
+
+                                      isDifferent = !isEqual(editedWithoutIgnored, refreshedWithoutIgnored);
+                                    } catch (e) {
+                                      // If JSON is invalid, fall back to string comparison
+                                      const freshString = JSON.stringify(refreshed, null, 2);
+                                      isDifferent = editedValue !== freshString;
+                                    }
+
+                                    if (isDifferent) {
+                                      // Setup dialog state
+                                      setDiffCurrentEditedText(editedValue);
+                                      setDiffIncomingDocument(refreshed);
+                                      setIsDiffOverwriteDialogOpen(true);
+                                      setIsLoading(false);
+                                      return;
+                                    }
+                                  }
+
+                                  setSelectedDocument(refreshed);
+                                  setPinnedDocuments(prev => prev.map(p =>
+                                    getDocId(p.doc) === getDocId(selectedDocument)
+                                      ? { ...p, doc: refreshed }
+                                      : p
+                                  ));
+                                  if (editMode && editorRef.current) {
+                                    editorRef.current.setCurrentValue(JSON.stringify(refreshed, null, 2));
+                                  }
+                                } catch (e) {
+                                  // Optionally set error
+                                } finally {
+                                  setIsLoading(false);
+                                }
+                              }
+                            }}
+                            className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                            title="Refresh document"
+                            aria-label="Refresh document"
+                            disabled={isLoading}
+                          >
+                            <RefreshIcon className="w-5 h-5" />
+                          </button>
+                          {!editMode && (
+                            <>
+                              <button
+                                className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                onClick={() => setEditMode(true)}
+                                disabled={isLoading}
+                                title="Edit document"
+                                aria-label="Edit document"
+                              >
+                                <EditIcon className={`w-5 h-5 ${editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                              </button>
+                              <button
+                                className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                onClick={() => {
+                                  if (selectedDocument) {
+                                    // Remove _id from copy if present
+                                    const { _id, ...rest } = selectedDocument;
+                                    setCreateDocInitial(rest);
+                                    setIsCreateDialogOpen(true);
+                                  }
+                                }}
+                                disabled={isLoading || !selectedDocument}
+                                title="Insert copy as new document"
+                                aria-label="Insert copy as new document"
+                              >
+                                <FileCopyIcon className="w-5 h-5 stroke-current transition-colors" />
+                              </button>
+                              <button
+                                className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40"
+                                onClick={() => {
+                                  if (selectedDocument) {
+                                    setDeleteTargetDoc(selectedDocument);
+                                    setIsDeleteDialogOpen(true);
+                                  }
+                                }}
+                                disabled={isLoading || !selectedDocument}
+                                title="Delete document"
+                                aria-label="Delete document"
+                              >
+                                <TrashIcon className="w-5 h-5" />
+                              </button>
+                              <button
+                                className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                onClick={() => setIsHistoryDialogOpen(true)}
+                                disabled={isLoading || !selectedDocument}
+                                title="View document history"
+                                aria-label="View document history"
+                              >
+                                <HistoryIcon className="w-5 h-5" />
+                              </button>
+                            </>
+                          )}
+                          {editMode && (
+                            <button
+                              className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                              onClick={() => setEditMode(false)}
+                              disabled={isLoading}
+                              title="Cancel edit"
+                              aria-label="Cancel edit"
+                            >
+                              <XIcon className="w-5 h-5" />
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-                {selectedDocument && !editMode && <button onClick={() => { setSelectedDocument(null); setBreadcrumbs([]); }} className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Close document view"><XIcon className="w-4 h-4" /></button>}
-              </header>
+                    {selectedDocument && !editMode && <button onClick={() => { setSelectedDocument(null); setBreadcrumbs([]); }} className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Close document view"><XIcon className="w-4 h-4" /></button>}
+                  </header>
 
-              {/* Breadcrumbs */}
-              {breadcrumbs.length > 0 && selectedDocument && (
-                <div className="flex items-center flex-wrap gap-1 text-sm text-slate-500 dark:text-slate-400 p-2 bg-slate-200 dark:bg-slate-800 rounded-md">
-                  {breadcrumbs.map((crumb, i) => (
-                    <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
-                      <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline hover:text-blue-500 dark:hover:text-blue-400 truncate max-w-[20ch]">
-                        <span className="font-semibold">{crumb.collectionName}</span>
-                        <span className="font-mono"> / {getDocId(crumb.document)}</span>
-                      </button>
-                      <ChevronRightIcon className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
-                    </React.Fragment>
-                  ))}
-                  <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[20ch]">
-                    {selectedCollection} / <span className="font-mono">{getDocId(selectedDocument)}</span>
-                  </span>
+                  {/* Breadcrumbs */}
+                  {breadcrumbs.length > 0 && selectedDocument && (
+                    <div className="flex items-center flex-wrap gap-1 text-sm text-slate-500 dark:text-slate-400 p-2 bg-slate-200 dark:bg-slate-800 rounded-md">
+                      {breadcrumbs.map((crumb, i) => (
+                        <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
+                          <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline hover:text-blue-500 dark:hover:text-blue-400 truncate max-w-[20ch]">
+                            <span className="font-semibold">{crumb.collectionName}</span>
+                            <span className="font-mono"> / {getDocId(crumb.document)}</span>
+                          </button>
+                          <ChevronRightIcon className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                        </React.Fragment>
+                      ))}
+                      <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[20ch]">
+                        {selectedCollection} / <span className="font-mono">{getDocId(selectedDocument)}</span>
+                      </span>
+                    </div>
+                  )}
+                  {renderEditorPanel()}
                 </div>
-              )}
-              {renderEditorPanel()}
-            </div>
-          </div>
+              </div>
+            </Panel>
+          </PanelGroup>
         </main>
         {pinnedDocuments.length > 0 && <PinnedDrawer />}
       </div>
