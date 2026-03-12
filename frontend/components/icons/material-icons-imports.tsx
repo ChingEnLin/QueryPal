@@ -66,3 +66,4 @@ export { default as WholeWordIcon } from '@mui/icons-material/ShortText';
 export { default as RegexIcon } from '@mui/icons-material/Code';
 export { default as DeleteIcon } from '@mui/icons-material/Delete';
 export { default as ImageIcon } from '@mui/icons-material/Image';
+export { default as WarningIcon } from '@mui/icons-material/WarningAmber';
