@@ -102,18 +102,18 @@ def fetch_documents(
         key = f.get("key")
         value = f.get("value")
         operator = f.get("operator", "equals")
-        
+
         if not key:
             return {}
-            
+
         if operator == "exists":
             return {key: {"$exists": True}}
         if operator == "not_exists":
             return {key: {"$exists": False}}
-            
+
         if value is None:
             return {}
-            
+
         if key == "all":
             sample_doc = collection.find_one()
             if sample_doc:
@@ -134,7 +134,7 @@ def fetch_documents(
                     query_val = value
             else:
                 query_val = value
-                
+
             if operator == "not_equals":
                 return {key: {"$ne": query_val}}
             if operator == "greater_than":
@@ -143,7 +143,7 @@ def fetch_documents(
                 return {key: {"$lt": query_val}}
             if operator == "contains":
                 return {key: {"$regex": re.escape(str(value)), "$options": "i"}}
-                
+
             # default equals
             if isinstance(query_val, str) and key != "_id":
                 return {key: {"$regex": re.escape(query_val), "$options": "i"}}

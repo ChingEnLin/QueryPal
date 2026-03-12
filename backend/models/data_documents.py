@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any
 class DataDocumentsFilter(BaseModel):
     key: str
     value: Any = ""  # Can be str, int, etc. depending on the field type
-    operator: Optional[str] = "equals" # 'equals', 'exists', 'not_exists'
+    operator: Optional[str] = "equals"  # 'equals', 'exists', 'not_exists'
 
 
 class DataDocumentsRequest(BaseModel):
