@@ -1,3 +1,18 @@
+## [2.8.0](https://github.com/ChingEnLin/QueryPal/compare/v2.7.0...v2.8.0) (2026-03-12)
+
+### Features
+
+* Add loading indicators and state management for database connection and quick exploration actions. ([f6de6aa](https://github.com/ChingEnLin/QueryPal/commit/f6de6aa6a5620476ff4fce5919cd0f19fac5d5a0))
+* add resizable panels to the Data Explorer layout. ([1c83eca](https://github.com/ChingEnLin/QueryPal/commit/1c83ecabbcdd248a6172f771ceb41ba5f1c9faba))
+* Filter out datetime fields from document history diffs and add react-resizable-panels dependency. ([8acb561](https://github.com/ChingEnLin/QueryPal/commit/8acb561b39c637f665b7ca5f938794bebbd23d7a))
+* Implement multiple document filtering with various operators in the Data Explorer. ([a7dd5dd](https://github.com/ChingEnLin/QueryPal/commit/a7dd5dd4217db722fc773ec1f82f38a4ebeea984))
+* Implement robust MSAL token acquisition with silent/popup fallback and expand authentication error handling. ([2bbbfa9](https://github.com/ChingEnLin/QueryPal/commit/2bbbfa98553b1aff9fafc0440d862df3d8db74d3))
+* Introduce a diff-based overwrite dialog to prevent loss of unsaved document edits when refreshing. ([63127e1](https://github.com/ChingEnLin/QueryPal/commit/63127e19d2d863e191f499e2e0a8c60a7064c7aa))
+
+### Styling
+
+* Apply consistent formatting to DataExplorerPage.tsx. ([0e03ad9](https://github.com/ChingEnLin/QueryPal/commit/0e03ad9523a3e01801a0fd678312f0d16a4b9560))
+
 ## [2.7.0](https://github.com/ChingEnLin/QueryPal/compare/v2.6.0...v2.7.0) (2026-02-07)
 
 ### Features
