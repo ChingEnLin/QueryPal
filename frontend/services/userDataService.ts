@@ -10,7 +10,7 @@ const getAccessToken = async (): Promise<string> => {
         if (accounts.length === 0) {
             throw new Error("No signed-in user found.");
         }
-        
+
         // Try silent token acquisition first
         const response = await msalInstance.acquireTokenSilent({
             ...loginRequest,
@@ -25,8 +25,11 @@ const getAccessToken = async (): Promise<string> => {
                 // Try popup for token refresh
                 const response = await msalInstance.acquireTokenPopup(loginRequest);
                 return response.accessToken;
-            } catch (popupError) {
+            } catch (popupError: any) {
                 console.error('Popup token refresh also failed:', popupError);
+                if (popupError?.errorCode === 'interaction_in_progress') {
+                    throw popupError;
+                }
                 // Only after both silent and popup fail, throw the user-friendly error
                 throw new Error(getAuthErrorMessage(error));
             }
@@ -66,8 +69,8 @@ export const saveQuery = async (queryData: Pick<SavedQuery, 'name' | 'prompt' | 
     if (!USE_MSAL_AUTH) {
         console.log("DEV MODE: Mock saving query.", queryData);
         await mockDelay(500);
-        const newQuery: SavedQuery = { 
-            ...queryData, 
+        const newQuery: SavedQuery = {
+            ...queryData,
             id: `mock-id-${Date.now()}`,
             ownerEmail: 'dev.user@example.com', // In real app, backend gets this from token
             sharedWith: [],
@@ -77,7 +80,7 @@ export const saveQuery = async (queryData: Pick<SavedQuery, 'name' | 'prompt' | 
         mockSavedQueries.push(newQuery); // Add to mock array to simulate persistence for the session
         return Promise.resolve(newQuery);
     }
-    
+
     const token = await getAccessToken();
     const response = await fetch(`${API_BASE_URL}/user/queries`, {
         method: 'POST',
@@ -113,7 +116,7 @@ export const updateSavedQuery = async (query: SavedQuery): Promise<SavedQuery> =
         }
         return Promise.resolve(updatedQuery);
     }
-    
+
     const token = await getAccessToken();
     const { id, ...queryData } = query;
     const response = await fetch(`${API_BASE_URL}/user/queries/${id}`, {
@@ -140,11 +143,11 @@ export const deleteSavedQuery = async (queryId: string): Promise<void> => {
         await mockDelay(500);
         const index = mockSavedQueries.findIndex(q => q.id === queryId);
         if (index > -1) {
-          mockSavedQueries.splice(index, 1);
+            mockSavedQueries.splice(index, 1);
         }
         return Promise.resolve();
     }
-    
+
     const token = await getAccessToken();
     const response = await fetch(`${API_BASE_URL}/user/queries/${queryId}`, {
         method: 'DELETE',

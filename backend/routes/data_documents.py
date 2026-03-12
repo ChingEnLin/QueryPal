@@ -46,6 +46,7 @@ def get_documents(
         page=body.page,
         limit=body.limit,
         filter=body.filter.model_dump() if body.filter else None,
+        filters=[f.model_dump() for f in body.filters] if body.filters else None,
     )
 
 

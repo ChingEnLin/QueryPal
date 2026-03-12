@@ -14,10 +14,10 @@ class TokenRenewalService {
         }
 
         console.log('Starting token renewal service...');
-        
+
         // Initial token check
         this.renewTokenIfNeeded();
-        
+
         // Set up periodic renewal
         this.renewalInterval = setInterval(() => {
             this.renewTokenIfNeeded();
@@ -53,7 +53,7 @@ class TokenRenewalService {
 
         try {
             this.isRenewing = true;
-            
+
             const accounts = msalInstance.getAllAccounts();
             if (accounts.length === 0) {
                 console.log('No accounts found, cannot renew token');
@@ -61,7 +61,7 @@ class TokenRenewalService {
             }
 
             const account = accounts[0];
-            
+
             // Check if token is close to expiry
             if (!this.isTokenNearExpiry(account)) {
                 console.log('Token is still valid, no renewal needed');
@@ -69,12 +69,11 @@ class TokenRenewalService {
             }
 
             console.log('Token is near expiry, attempting silent renewal...');
-            
+
             // Attempt silent token renewal
             await msalInstance.acquireTokenSilent({
                 ...loginRequest,
                 account: account,
-                forceRefresh: true, // Force refresh to get new token
             });
 
             console.log('Token renewed successfully via silent request');
@@ -82,13 +81,13 @@ class TokenRenewalService {
 
         } catch (error) {
             console.warn('Silent token renewal failed:', error);
-            
+
             if (error instanceof InteractionRequiredAuthError) {
                 console.log('Interactive authentication required - user will need to sign in again on next request');
                 // Don't trigger popup automatically as it might be disruptive
                 // Let the user-triggered request handle the interactive flow
             }
-            
+
             return false;
         } finally {
             this.isRenewing = false;
