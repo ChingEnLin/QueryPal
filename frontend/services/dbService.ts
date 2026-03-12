@@ -314,7 +314,8 @@ export const getDocuments = async (
   resource: SelectedResource,
   page: number,
   limit: number,
-  filter?: { key: string, value: any }
+  filter?: { key: string, value: any, operator?: string },
+  filters?: { key: string, value: any, operator?: string }[]
 ): Promise<PaginatedDocumentsResponse> => {
   // --- DEVELOPMENT MOCK ---
   if (!USE_MSAL_AUTH) {
@@ -334,27 +335,57 @@ export const getDocuments = async (
           ? [mockOrdersCollectionInfo.sampleDocument]
           : [];
 
-    const filteredDocs = (filter && filter.value !== null && filter.value !== undefined && filter.value !== '')
+    const activeFilters: { key: string, value: any, operator?: string }[] = [];
+    if (filter && ((filter.value !== null && filter.value !== undefined && filter.value !== '') || filter.operator === 'exists' || filter.operator === 'not_exists')) {
+      activeFilters.push(filter);
+    }
+    if (filters) {
+      for (const f of filters) {
+        if (f && ((f.value !== null && f.value !== undefined && f.value !== '') || f.operator === 'exists' || f.operator === 'not_exists')) {
+          activeFilters.push(f);
+        }
+      }
+    }
+
+    const filteredDocs = activeFilters.length > 0
       ? sourceDocs.filter(doc => {
-        const searchVal = filter.value;
-        if (filter.key === 'all') {
-          // Global search: convert search value to string and do a substring search
-          const searchTerm = String(searchVal).toLowerCase();
-          return JSON.stringify(doc).toLowerCase().includes(searchTerm);
-        }
+        return activeFilters.every(f => {
+          const searchVal = f.value;
+          const docValue = getNestedValue(doc, f.key);
 
-        // Targeted field search
-        const docValue = getNestedValue(doc, filter.key);
+          if (f.operator === 'exists') {
+            return docValue !== null && docValue !== undefined;
+          } else if (f.operator === 'not_exists') {
+            return docValue === null || docValue === undefined;
+          }
 
-        if (docValue === null || docValue === undefined) return false;
+          if (f.key === 'all') {
+            const searchTerm = String(searchVal).toLowerCase();
+            return JSON.stringify(doc).toLowerCase().includes(searchTerm);
+          }
 
-        // if search value is a string, do case-insensitive contains.
-        if (typeof searchVal === 'string') {
-          return String(docValue).toLowerCase().includes(searchVal.toLowerCase());
-        }
+          if (docValue === null || docValue === undefined) return false;
 
-        // for other types, do an exact match
-        return docValue === searchVal;
+          if (f.operator === 'not_equals') {
+            return docValue !== searchVal;
+          }
+          if (f.operator === 'greater_than') {
+            return docValue > searchVal;
+          }
+          if (f.operator === 'less_than') {
+            return docValue < searchVal;
+          }
+          if (f.operator === 'contains') {
+            return typeof docValue === 'string' && docValue.toLowerCase().includes(String(searchVal).toLowerCase());
+          }
+
+          if (typeof searchVal === 'string') {
+            // "equals" still defaults to includes string matching when both are strings
+            return String(docValue).toLowerCase().includes(searchVal.toLowerCase());
+          }
+
+          return docValue === searchVal;
+        });
       })
       : sourceDocs;
 
@@ -386,7 +417,8 @@ export const getDocuments = async (
       collection_name: collectionName,
       page,
       limit,
-      filter: filter && (filter.value !== '' && filter.value !== null && filter.value !== undefined) ? filter : undefined,
+      filter: filter && ((filter.value !== '' && filter.value !== null && filter.value !== undefined) || filter.operator === 'exists' || filter.operator === 'not_exists') ? filter : undefined,
+      filters: filters && filters.length > 0 ? filters.filter(f => (f.value !== '' && f.value !== null && f.value !== undefined) || f.operator === 'exists' || f.operator === 'not_exists') : undefined,
     }),
   });
 

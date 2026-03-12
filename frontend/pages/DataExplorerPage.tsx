@@ -148,7 +148,6 @@ const DeleteDocumentDialog: React.FC<{
 const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   resource,
   dbInfo,
-  accountName,
   availableDbs,
   availableAccounts,
   initialDocumentId,
@@ -182,12 +181,30 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   const [pageInput, setPageInput] = useState(String(currentPage));
 
   // --- Filtering State ---
-  const [filterKey, setFilterKey] = useState('all');
-  const [filterValue, setFilterValue] = useState('');
-  const [debouncedFilterValue, setDebouncedFilterValue] = useState(filterValue);
+  interface FilterState {
+    id: string;
+    key: string;
+    value: string;
+    isCustom: boolean;
+    operator?: string;
+  }
+  const [filters, setFilters] = useState<FilterState[]>([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals' }]);
+  const [debouncedFilters, setDebouncedFilters] = useState<FilterState[]>(filters);
   const [schemaTree, setSchemaTree] = useState<SchemaKeyNode[]>([]);
   const [isFetchingSchema, setIsFetchingSchema] = useState(false);
   const [currentCollectionInfo, setCurrentCollectionInfo] = useState<CollectionInfo | null>(null);
+
+  const addFilter = () => {
+    setFilters(prev => [...prev, { id: Math.random().toString(36).substring(7), key: 'all', value: '', isCustom: false, operator: 'equals' }]);
+  };
+
+  const removeFilter = (id: string) => {
+    setFilters(prev => prev.filter(f => f.id !== id));
+  };
+
+  const updateFilter = (id: string, updates: Partial<FilterState>) => {
+    setFilters(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
+  };
 
   // --- Editor State ---
   const [selectedDocument, setSelectedDocument] = useState<Record<string, any> | null>(null);
@@ -354,9 +371,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setTotalPages(1);
     setTotalDocuments(0);
     setPageInput('1');
-    setFilterKey('all');
-    setFilterValue('');
-    setDebouncedFilterValue('');
+    setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals' }]);
+    setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals' }]);
     setSchemaTree([]);
     setIsFetchingSchema(false);
     setSelectedDocument(null);
@@ -364,15 +380,15 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     // Do not reset pinned documents here, as they should persist across DB/collection changes.
   }, []);
 
-  // Debounce search input
+  // Debounce filters
   useEffect(() => {
     const handler = setTimeout(() => {
-      setDebouncedFilterValue(filterValue);
+      setDebouncedFilters(filters);
       setCurrentPage(1); // Reset to page 1 on new search
       setSelectedDocument(null); // Clear selection on new search
     }, 300);
     return () => clearTimeout(handler);
-  }, [filterValue]);
+  }, [filters]);
 
   // Sync page input with current page
   useEffect(() => setPageInput(String(currentPage)), [currentPage]);
@@ -432,8 +448,12 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      const processedValue = getCoercedFilterValue(debouncedFilterValue);
-      const response = await getDocuments(selectedCollection, currentResource, currentPage, 20, { key: filterKey, value: processedValue });
+      const activeFilters = debouncedFilters.map(f => ({
+        key: f.key,
+        value: getCoercedFilterValue(f.value),
+        operator: f.operator || 'equals'
+      }));
+      const response = await getDocuments(selectedCollection, currentResource, currentPage, 20, undefined, activeFilters);
       setDocuments(response.documents);
       setTotalPages(response.totalPages);
       setTotalDocuments(response.totalDocuments);
@@ -446,7 +466,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCollection, currentResource, currentPage, filterKey, debouncedFilterValue]);
+  }, [selectedCollection, currentResource, currentPage, debouncedFilters]);
 
   useEffect(() => {
     if (breadcrumbs.length > 0 && selectedDocument) return;
@@ -569,8 +589,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     if (selectedCollection === collectionName) return;
     setSelectedCollection(collectionName);
     setCurrentPage(1);
-    setFilterValue('');
-    setFilterKey('all');
+    setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals' }]);
+    setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals' }]);
     setSelectedDocument(null);
     setBreadcrumbs([]);
     await fetchSchemaForCollection(collectionName);
@@ -715,7 +735,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       return (
         <div className="text-center text-slate-500 dark:text-slate-400 py-10">
           <p>No documents found.</p>
-          {debouncedFilterValue && <p className="text-xs">Try a different filter or value.</p>}
+          {debouncedFilters.some(f => f.value || f.operator === 'exists' || f.operator === 'not_exists') && <p className="text-xs">Try a different filter or value.</p>}
         </div>
       );
     }
@@ -1237,30 +1257,100 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <div className="relative">
-                      <select
-                        value={filterKey}
-                        onChange={(e) => setFilterKey(e.target.value)}
-                        disabled={!selectedCollection || isFetchingSchema}
-                        className="w-full text-sm appearance-none cursor-pointer p-2 pr-8 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
-                        title="Select a field to filter by"
-                      >
-                        <option value="all">All Fields</option>
-                        <RenderOptions nodes={schemaTree} level={0} />
-                      </select>
-                      <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder={isFetchingSchema ? 'Loading schema...' : 'Filter value...'}
-                        value={filterValue}
-                        onChange={(e) => setFilterValue(e.target.value)}
-                        disabled={!selectedCollection || isFetchingSchema}
-                        className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
-                      />
-                      <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                    </div>
+                    {filters.map((f, i) => (
+                      <div key={f.id} className="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg relative">
+                        {filters.length > 1 && (
+                          <button onClick={() => removeFilter(f.id)} className="absolute -top-2 -right-2 p-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-full text-slate-400 hover:text-red-500 hover:border-red-500 shadow-sm z-10 transition-colors">
+                            <XIcon className="w-3 h-3" />
+                          </button>
+                        )}
+                        <div className="flex gap-2">
+                          <div className="flex-[2_2_0%] relative">
+                            {!f.isCustom ? (
+                              <>
+                                <select
+                                  value={f.key}
+                                  onChange={(e) => {
+                                    if (e.target.value === '__custom__') {
+                                      updateFilter(f.id, { isCustom: true, key: '' });
+                                    } else {
+                                      updateFilter(f.id, { key: e.target.value });
+                                    }
+                                  }}
+                                  disabled={!selectedCollection || isFetchingSchema}
+                                  className="w-full text-sm appearance-none cursor-pointer p-2 pr-8 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                                  title="Select a field to filter by"
+                                >
+                                  <option value="all">All Fields</option>
+                                  <RenderOptions nodes={schemaTree} level={0} />
+                                  <option disabled>──────────</option>
+                                  <option value="__custom__">Type custom field...</option>
+                                </select>
+                                <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+                              </>
+                            ) : (
+                              <div className="flex items-center relative">
+                                <input
+                                  type="text"
+                                  value={f.key}
+                                  onChange={(e) => updateFilter(f.id, { key: e.target.value })}
+                                  disabled={!selectedCollection || isFetchingSchema}
+                                  placeholder="e.g. internal_info.internal_id"
+                                  className="w-full text-sm p-2 pr-8 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => updateFilter(f.id, { isCustom: false, key: 'all' })}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors bg-slate-200 dark:bg-slate-600"
+                                  title="Back to dropdown"
+                                >
+                                  <XIcon className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          {f.key !== 'all' && (
+                            <div className="flex-1 relative">
+                              <select
+                                value={f.operator || 'equals'}
+                                onChange={(e) => updateFilter(f.id, { operator: e.target.value })}
+                                disabled={!selectedCollection || isFetchingSchema}
+                                className="w-full text-sm appearance-none cursor-pointer p-2 pr-8 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                              >
+                                <option value="equals">Equals</option>
+                                <option value="not_equals">Does Not Equal</option>
+                                <option value="contains">Contains</option>
+                                <option value="greater_than">Greater Than (&gt;)</option>
+                                <option value="less_than">Less Than (&lt;)</option>
+                                <option value="exists">Exists</option>
+                                <option value="not_exists">Does Not Exist</option>
+                              </select>
+                              <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+                            </div>
+                          )}
+                        </div>
+                        {(!f.operator || (f.operator !== 'exists' && f.operator !== 'not_exists')) && (
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder={isFetchingSchema ? 'Loading schema...' : 'Filter value...'}
+                              value={f.value}
+                              onChange={(e) => updateFilter(f.id, { value: e.target.value })}
+                              disabled={!selectedCollection || isFetchingSchema}
+                              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                            />
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      onClick={addFilter}
+                      disabled={!selectedCollection || isFetchingSchema}
+                      className="w-full flex justify-center items-center gap-1 p-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span>+ Add Filter</span>
+                    </button>
                   </div>
                 </div>
                 <div className="flex-grow overflow-hidden">

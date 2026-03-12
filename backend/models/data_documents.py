@@ -4,7 +4,8 @@ from typing import Optional, List, Dict, Any
 
 class DataDocumentsFilter(BaseModel):
     key: str
-    value: Any  # Can be str, int, etc. depending on the field type
+    value: Any = ""  # Can be str, int, etc. depending on the field type
+    operator: Optional[str] = "equals" # 'equals', 'exists', 'not_exists'
 
 
 class DataDocumentsRequest(BaseModel):
@@ -14,6 +15,7 @@ class DataDocumentsRequest(BaseModel):
     page: int = 1
     limit: int = 20
     filter: Optional[DataDocumentsFilter] = None
+    filters: Optional[List[DataDocumentsFilter]] = None
 
 
 class DataDocumentsResponse(BaseModel):

@@ -89,15 +89,31 @@ def fetch_documents(
     page: int,
     limit: int,
     filter: dict = None,
+    filters: list = None,
 ) -> DataDocumentsResponse:
     client = MongoClient(connection_string)
     db = client[database_name]
     collection = db[collection_name]
 
     query = {}
-    if filter and ("key" in filter) and ("value" in filter):
-        key = filter["key"]
-        value = filter["value"]
+    and_clauses = []
+
+    def get_query_for_filter(f: dict):
+        key = f.get("key")
+        value = f.get("value")
+        operator = f.get("operator", "equals")
+        
+        if not key:
+            return {}
+            
+        if operator == "exists":
+            return {key: {"$exists": True}}
+        if operator == "not_exists":
+            return {key: {"$exists": False}}
+            
+        if value is None:
+            return {}
+            
         if key == "all":
             sample_doc = collection.find_one()
             if sample_doc:
@@ -105,24 +121,53 @@ def fetch_documents(
                 for k, v in sample_doc.items():
                     if isinstance(v, str):
                         or_clauses.append(
-                            {k: {"$regex": re.escape(value), "$options": "i"}}
+                            {k: {"$regex": re.escape(str(value)), "$options": "i"}}
                         )
                 if or_clauses:
-                    query = {"$or": or_clauses}
+                    return {"$or": or_clauses}
+            return {}
         else:
-            # If key is '_id', treat value as ObjectId
             if key == "_id":
                 try:
-                    query = {"_id": ObjectId(value)}
+                    query_val = ObjectId(value)
                 except Exception:
-                    # fallback to string match if not a valid ObjectId
-                    query = {key: value}
+                    query_val = value
             else:
-                # Support dot notation for nested fields
-                if isinstance(value, str):
-                    query = {key: {"$regex": re.escape(value), "$options": "i"}}
-                else:
-                    query = {key: value}
+                query_val = value
+                
+            if operator == "not_equals":
+                return {key: {"$ne": query_val}}
+            if operator == "greater_than":
+                return {key: {"$gt": query_val}}
+            if operator == "less_than":
+                return {key: {"$lt": query_val}}
+            if operator == "contains":
+                return {key: {"$regex": re.escape(str(value)), "$options": "i"}}
+                
+            # default equals
+            if isinstance(query_val, str) and key != "_id":
+                return {key: {"$regex": re.escape(query_val), "$options": "i"}}
+            else:
+                return {key: query_val}
+
+    if filter and ("key" in filter) and ("value" in filter):
+        q = get_query_for_filter(filter)
+        if q:
+            and_clauses.append(q)
+
+    if filters:
+        for f in filters:
+            if ("key" in f) and ("value" in f):
+                q = get_query_for_filter(f)
+                if q:
+                    and_clauses.append(q)
+
+    if and_clauses:
+        if len(and_clauses) == 1:
+            query = and_clauses[0]
+        else:
+            query = {"$and": and_clauses}
+
     total_documents = collection.count_documents(query)
     total_pages = max(1, (total_documents + limit - 1) // limit)
     skip = (page - 1) * limit
