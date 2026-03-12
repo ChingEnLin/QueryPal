@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SelectedResource, DbInfo, BreadcrumbItem, CosmosDBAccount, CollectionInfo } from '../types';
-import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache, getSingleDocument } from '../services/dbService';
+import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache, getSingleDocument, getDocumentsQueryCode } from '../services/dbService';
 import { extractSchemaTree, SchemaKeyNode } from '../utils/schemaUtils';
 import MongoIcon from '../components/icons/MongoIcon';
 import { isEqual, omit } from 'lodash';
@@ -350,6 +350,9 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   const minCardWidth = 180;
   const maxCardWidth = 600;
   const prevPinnedCount = useRef(pinnedDocuments.length);
+
+  // --- Export Query State ---
+  const [copiedQuery, setCopiedQuery] = useState(false);
 
   // --- Theme State ---
   const { theme, toggleTheme } = useTheme();
@@ -1352,13 +1355,45 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                         )}
                       </div>
                     ))}
-                    <button
-                      onClick={addFilter}
-                      disabled={!selectedCollection || isFetchingSchema}
-                      className="w-full flex justify-center items-center gap-1 p-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <span>+ Add Filter</span>
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={addFilter}
+                        disabled={!selectedCollection || isFetchingSchema}
+                        className="flex-1 flex justify-center items-center gap-1 p-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span>+ Add Filter</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!selectedCollection) return;
+
+                          const validFilters = debouncedFilters.map(f => ({
+                            key: f.key,
+                            value: getCoercedFilterValue(f.value),
+                            operator: f.operator || 'equals',
+                            type: f.type || 'string'
+                          }));
+
+                          getDocumentsQueryCode(selectedCollection, currentResource, undefined, validFilters)
+                            .then((queryCodeStr) => {
+                              navigator.clipboard.writeText(queryCodeStr).then(() => {
+                                setCopiedQuery(true);
+                                setTimeout(() => setCopiedQuery(false), 2000);
+                              });
+                            })
+                            .catch(err => {
+                              console.error("Failed to generate query code:", err);
+                              alert("Failed to generate query code: " + err.message);
+                            });
+                        }}
+                        disabled={!selectedCollection || isFetchingSchema}
+                        className="flex justify-center items-center gap-2 p-2 px-3 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Export current filter criteria as Python script (MongoDB PyMongo)"
+                      >
+                        {copiedQuery ? <CheckIcon className="w-4 h-4 text-green-500" /> : <FileCopyIcon className="w-4 h-4" />}
+                        <span>Export</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="flex-grow overflow-hidden">

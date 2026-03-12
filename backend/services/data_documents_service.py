@@ -14,6 +14,41 @@ _find_by_id_cache = TTLCache(maxsize=100, ttl=600)
 
 ALL_DOCUMENTS_CACHES = [_find_by_id_cache]
 
+def _format_value_for_pymongo(v: any) -> str:
+    if isinstance(v, dict):
+        items = []
+        for key, val in v.items():
+            items.append(f"'{key}': {_format_value_for_pymongo(val)}")
+        return "{" + ", ".join(items) + "}"
+    elif isinstance(v, list):
+        items = [_format_value_for_pymongo(x) for x in v]
+        return "[" + ", ".join(items) + "]"
+    elif isinstance(v, datetime):
+        # E.g. datetime(2026, 3, 12, 10, 0, tzinfo=timezone.utc)
+        return repr(v)
+    elif isinstance(v, ObjectId):
+        return f"ObjectId('{str(v)}')"
+    elif isinstance(v, str):
+        # simple escape
+        if v.startswith("ObjectId(") or v.startswith("datetime("):
+            return v # fallback if it was already stringified somehow
+        
+        escaped = v.replace("'", "\\'")
+        return f"'{escaped}'"
+    elif isinstance(v, bool):
+        return "True" if v else "False"
+    elif v is None:
+        return "None"
+    elif hasattr(v, "pattern"): # Regex object
+        return f"re.compile(r'{v.pattern}', {v.flags})"
+    else:
+        return repr(v)
+
+def generate_mongo_query_string(collection_name: str, query: dict) -> str:
+    query_str = _format_value_for_pymongo(query)
+    # The user specifically requested exactly the db['project'].find({......}) format
+    return f"db['{collection_name}'].find({query_str})"
+
 
 def dict_diff(before, after):
     """
@@ -82,19 +117,7 @@ def json_dumps_safe(obj):
         return None
 
 
-def fetch_documents(
-    connection_string: str,
-    database_name: str,
-    collection_name: str,
-    page: int,
-    limit: int,
-    filter: dict = None,
-    filters: list = None,
-) -> DataDocumentsResponse:
-    client = MongoClient(connection_string)
-    db = client[database_name]
-    collection = db[collection_name]
-
+def build_mongo_query(collection, filter: dict = None, filters: list = None) -> dict:
     query = {}
     and_clauses = []
 
@@ -182,6 +205,24 @@ def fetch_documents(
             query = and_clauses[0]
         else:
             query = {"$and": and_clauses}
+            
+    return query
+
+
+def fetch_documents(
+    connection_string: str,
+    database_name: str,
+    collection_name: str,
+    page: int,
+    limit: int,
+    filter: dict = None,
+    filters: list = None,
+) -> DataDocumentsResponse:
+    client = MongoClient(connection_string)
+    db = client[database_name]
+    collection = db[collection_name]
+
+    query = build_mongo_query(collection, filter, filters)
 
     total_documents = collection.count_documents(query)
     total_pages = max(1, (total_documents + limit - 1) // limit)

@@ -18,6 +18,9 @@ class DataDocumentsRequest(BaseModel):
     filter: Optional[DataDocumentsFilter] = None
     filters: Optional[List[DataDocumentsFilter]] = None
 
+class DataDocumentsQueryResponse(BaseModel):
+    query_code: str
+
 
 class DataDocumentsResponse(BaseModel):
     documents: List[Dict[str, Any]]
