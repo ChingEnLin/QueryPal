@@ -102,6 +102,7 @@ def fetch_documents(
         key = f.get("key")
         value = f.get("value")
         operator = f.get("operator", "equals")
+        val_type = f.get("type", "string")
 
         if not key:
             return {}
@@ -127,7 +128,21 @@ def fetch_documents(
                     return {"$or": or_clauses}
             return {}
         else:
-            if key == "_id":
+            if val_type == "date" and isinstance(value, str):
+                try:
+                    dt_str = value
+                    if len(dt_str) == 10:
+                        dt_str += "T00:00:00"
+                    if (
+                        "Z" not in dt_str
+                        and "+" not in dt_str[-6:]
+                        and "-" not in dt_str[-6:]
+                    ):
+                        dt_str += "Z"
+                    query_val = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+                except Exception:
+                    query_val = value
+            elif key == "_id":
                 try:
                     query_val = ObjectId(value)
                 except Exception:

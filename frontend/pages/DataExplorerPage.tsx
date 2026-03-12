@@ -187,15 +187,16 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     value: string;
     isCustom: boolean;
     operator?: string;
+    type?: 'string' | 'number' | 'boolean' | 'date';
   }
-  const [filters, setFilters] = useState<FilterState[]>([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals' }]);
+  const [filters, setFilters] = useState<FilterState[]>([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
   const [debouncedFilters, setDebouncedFilters] = useState<FilterState[]>(filters);
   const [schemaTree, setSchemaTree] = useState<SchemaKeyNode[]>([]);
   const [isFetchingSchema, setIsFetchingSchema] = useState(false);
   const [currentCollectionInfo, setCurrentCollectionInfo] = useState<CollectionInfo | null>(null);
 
   const addFilter = () => {
-    setFilters(prev => [...prev, { id: Math.random().toString(36).substring(7), key: 'all', value: '', isCustom: false, operator: 'equals' }]);
+    setFilters(prev => [...prev, { id: Math.random().toString(36).substring(7), key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
   };
 
   const removeFilter = (id: string) => {
@@ -371,8 +372,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setTotalPages(1);
     setTotalDocuments(0);
     setPageInput('1');
-    setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals' }]);
-    setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals' }]);
+    setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
+    setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
     setSchemaTree([]);
     setIsFetchingSchema(false);
     setSelectedDocument(null);
@@ -451,7 +452,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       const activeFilters = debouncedFilters.map(f => ({
         key: f.key,
         value: getCoercedFilterValue(f.value),
-        operator: f.operator || 'equals'
+        operator: f.operator || 'equals',
+        type: f.type || 'string'
       }));
       const response = await getDocuments(selectedCollection, currentResource, currentPage, 20, undefined, activeFilters);
       setDocuments(response.documents);
@@ -589,8 +591,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     if (selectedCollection === collectionName) return;
     setSelectedCollection(collectionName);
     setCurrentPage(1);
-    setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals' }]);
-    setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals' }]);
+    setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
+    setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
     setSelectedDocument(null);
     setBreadcrumbs([]);
     await fetchSchemaForCollection(collectionName);
@@ -1257,7 +1259,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    {filters.map((f, i) => (
+                    {filters.map((f) => (
                       <div key={f.id} className="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg relative">
                         {filters.length > 1 && (
                           <button onClick={() => removeFilter(f.id)} className="absolute -top-2 -right-2 p-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-full text-slate-400 hover:text-red-500 hover:border-red-500 shadow-sm z-10 transition-colors">
@@ -1272,9 +1274,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                   value={f.key}
                                   onChange={(e) => {
                                     if (e.target.value === '__custom__') {
-                                      updateFilter(f.id, { isCustom: true, key: '' });
+                                      updateFilter(f.id, { isCustom: true, key: '', type: 'string' });
                                     } else {
-                                      updateFilter(f.id, { key: e.target.value });
+                                      const newKey = e.target.value;
+                                      const isDate = newKey.toLowerCase().includes('date') || newKey.toLowerCase().includes('time');
+                                      updateFilter(f.id, { key: newKey, type: isDate ? 'date' : 'string' });
                                     }
                                   }}
                                   disabled={!selectedCollection || isFetchingSchema}
@@ -1293,7 +1297,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                 <input
                                   type="text"
                                   value={f.key}
-                                  onChange={(e) => updateFilter(f.id, { key: e.target.value })}
+                                  onChange={(e) => {
+                                    const newKey = e.target.value;
+                                    const isDate = newKey.toLowerCase().includes('date') || newKey.toLowerCase().includes('time');
+                                    updateFilter(f.id, { key: newKey, type: isDate ? 'date' : 'string' });
+                                  }}
                                   disabled={!selectedCollection || isFetchingSchema}
                                   placeholder="e.g. internal_info.internal_id"
                                   className="w-full text-sm p-2 pr-8 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
@@ -1332,7 +1340,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                         {(!f.operator || (f.operator !== 'exists' && f.operator !== 'not_exists')) && (
                           <div className="relative">
                             <input
-                              type="text"
+                              type={f.type === 'date' ? 'datetime-local' : 'text'}
                               placeholder={isFetchingSchema ? 'Loading schema...' : 'Filter value...'}
                               value={f.value}
                               onChange={(e) => updateFilter(f.id, { value: e.target.value })}

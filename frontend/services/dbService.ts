@@ -314,8 +314,8 @@ export const getDocuments = async (
   resource: SelectedResource,
   page: number,
   limit: number,
-  filter?: { key: string, value: any, operator?: string },
-  filters?: { key: string, value: any, operator?: string }[]
+  filter?: { key: string, value: any, operator?: string, type?: string },
+  filters?: { key: string, value: any, operator?: string, type?: string }[]
 ): Promise<PaginatedDocumentsResponse> => {
   // --- DEVELOPMENT MOCK ---
   if (!USE_MSAL_AUTH) {
