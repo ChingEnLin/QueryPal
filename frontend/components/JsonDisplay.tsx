@@ -201,10 +201,10 @@ const ObjectIdDisplay: React.FC<{
   );
 };
 
-const Base64ImagePreview: React.FC<{
-  base64String: string;
+const ImagePreview: React.FC<{
+  imageUrl: string;
   searchRegex: RegExp | null;
-}> = ({ base64String, searchRegex }) => {
+}> = ({ imageUrl, searchRegex }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [previewPos, setPreviewPos] = useState<{ x: number; y: number } | null>(null);
   const iconRef = useRef<HTMLSpanElement>(null);
@@ -248,7 +248,7 @@ const Base64ImagePreview: React.FC<{
         title="Click to collapse back to icon"
       >
         <span className="text-emerald-700 dark:text-emerald-300">"
-          {searchRegex ? highlightText(base64String, searchRegex) : base64String}"
+          {searchRegex ? highlightText(imageUrl, searchRegex) : imageUrl}"
         </span>
       </span>
     );
@@ -281,7 +281,7 @@ const Base64ImagePreview: React.FC<{
           }}
         >
           <img
-            src={base64String}
+            src={imageUrl}
             alt="Preview"
             className="max-w-[200px] max-h-[200px] object-contain rounded bg-slate-100 dark:bg-slate-900"
           />
@@ -475,8 +475,11 @@ const JsonNode: React.FC<{
           );
         }
 
-        if (nodeValue.startsWith("data:image/png;base64,")) {
-          return <Base64ImagePreview base64String={nodeValue} searchRegex={searchRegex} />;
+        const isBase64Image = nodeValue.startsWith("data:image/");
+        const isUrlImage = /^https?:\/\/.+\.(png|jpe?g|gif|svg|webp)(\?.*)?$/i.test(nodeValue);
+
+        if (isBase64Image || isUrlImage) {
+          return <ImagePreview imageUrl={nodeValue} searchRegex={searchRegex} />;
         }
 
         return <span className="text-emerald-700 dark:text-emerald-300">"
