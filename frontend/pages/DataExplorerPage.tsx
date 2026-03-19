@@ -145,6 +145,14 @@ const DeleteDocumentDialog: React.FC<{
   );
 };
 
+export interface OpenDocument {
+  id: string;
+  doc: Record<string, any>;
+  collectionName: string;
+  editMode: boolean;
+  breadcrumbs: BreadcrumbItem[];
+}
+
 const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   resource,
   dbInfo,
@@ -208,8 +216,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   };
 
   // --- Editor State ---
-  const [selectedDocument, setSelectedDocument] = useState<Record<string, any> | null>(null);
-  const [editMode, setEditMode] = useState(false);
+  const [openDocuments, setOpenDocuments] = useState<OpenDocument[]>([]);
 
   // --- Create Document Dialog State ---
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -221,15 +228,16 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   const [isDeleting, setIsDeleting] = React.useState(false);
 
   // --- Document History Dialog State ---
-  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = React.useState(false);
+  const [historyTargetDoc, setHistoryTargetDoc] = React.useState<{ docId: string, collectionName: string } | null>(null);
 
   // --- Diff Overwrite Dialog State ---
   const [isDiffOverwriteDialogOpen, setIsDiffOverwriteDialogOpen] = useState(false);
   const [diffIncomingDocument, setDiffIncomingDocument] = useState<Record<string, any> | null>(null);
   const [diffCurrentEditedText, setDiffCurrentEditedText] = useState<string>('');
+  const [diffTargetDocId, setDiffTargetDocId] = useState<string | null>(null);
 
   // --- Editor Ref ---
-  const editorRef = useRef<DocumentEditViewRef>(null);
+  const editorRefs = useRef<Record<string, DocumentEditViewRef | null>>({});
 
   // Helper to infer schema for new document (mimic CollectionActionPanel logic)
   const getInitialDocFromSchema = useCallback(() => {
@@ -304,7 +312,13 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       const { addDocument } = await import('../services/dbService');
       const newDoc = await addDocument(selectedCollection, currentResource, doc);
       setDocuments(prev => [newDoc, ...prev]);
-      setSelectedDocument(newDoc);
+      setOpenDocuments(prev => [{
+        id: Math.random().toString(36).substring(7),
+        doc: newDoc,
+        collectionName: selectedCollection,
+        editMode: false,
+        breadcrumbs: []
+      }, ...prev]);
       setIsCreateDialogOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create document.');
@@ -323,9 +337,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       const docId = getDocId(deleteTargetDoc);
       await deleteDocument(selectedCollection, currentResource, docId);
       setDocuments(prev => prev.filter(doc => getDocId(doc) !== docId));
-      if (selectedDocument && getDocId(selectedDocument) === docId) {
-        setSelectedDocument(null);
-      }
+      setOpenDocuments(prev => prev.filter(od => getDocId(od.doc) !== docId));
       setIsDeleteDialogOpen(false);
       setDeleteTargetDoc(null);
     } catch (e) {
@@ -333,14 +345,14 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     } finally {
       setIsDeleting(false);
     }
-  }, [selectedCollection, deleteTargetDoc, currentResource, setDocuments, selectedDocument]);
+  }, [selectedCollection, deleteTargetDoc, currentResource, setDocuments]);
 
   // --- Sorting State ---
   const [collectionSortKey, setCollectionSortKey] = useState<'name' | 'count'>('name');
   const [collectionSortOrder, setCollectionSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // --- Navigation State ---
-  const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
+  // global breadcrumbs removed
 
   // --- Pinned Documents State ---
   const [pinnedDocuments, setPinnedDocuments] = useState<PinnedDocument[]>([]);
@@ -379,8 +391,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
     setSchemaTree([]);
     setIsFetchingSchema(false);
-    setSelectedDocument(null);
-    setBreadcrumbs([]);
+    setOpenDocuments([]);
     // Do not reset pinned documents here, as they should persist across DB/collection changes.
   }, []);
 
@@ -389,7 +400,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     const handler = setTimeout(() => {
       setDebouncedFilters(filters);
       setCurrentPage(1); // Reset to page 1 on new search
-      setSelectedDocument(null); // Clear selection on new search
+      setOpenDocuments([]); // Clear selection on new search
     }, 300);
     return () => clearTimeout(handler);
   }, [filters]);
@@ -474,9 +485,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   }, [selectedCollection, currentResource, currentPage, debouncedFilters]);
 
   useEffect(() => {
-    if (breadcrumbs.length > 0 && selectedDocument) return;
     fetchDocuments();
-  }, [fetchDocuments, breadcrumbs.length, selectedDocument]);
+  }, [fetchDocuments]);
 
   const fetchSchemaForCollection = useCallback(async (collectionName: string) => {
     if (!collectionName || !currentResource) return;
@@ -520,8 +530,14 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         await fetchSchemaForCollection(result.collectionName);
 
         // Set the found document
-        console.log('Setting selected document:', result.document);
-        setSelectedDocument(result.document);
+        console.log('Setting open document:', result.document);
+        setOpenDocuments([{
+          id: Math.random().toString(36).substring(7),
+          doc: result.document,
+          collectionName: result.collectionName,
+          editMode: false,
+          breadcrumbs: []
+        }]);
 
       } catch (error) {
         console.error('Failed to load initial document:', error);
@@ -596,16 +612,13 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setCurrentPage(1);
     setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
     setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
-    setSelectedDocument(null);
-    setBreadcrumbs([]);
+    setOpenDocuments([]);
     await fetchSchemaForCollection(collectionName);
   }, [fetchSchemaForCollection, selectedCollection]);
 
   const handleRefresh = useCallback(() => {
     if (!selectedCollection) return;
-    setSelectedDocument(null);
     setError(null);
-    setBreadcrumbs([]);
     fetchSchemaForCollection(selectedCollection);
     fetchDocuments();
   }, [selectedCollection, fetchSchemaForCollection, fetchDocuments]);
@@ -613,7 +626,6 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
     setCurrentPage(newPage);
-    setSelectedDocument(null);
   }
 
   const handlePageInputSubmit = (e: React.KeyboardEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement>) => {
@@ -646,8 +658,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     });
   }, [currentDb, collectionSortKey, collectionSortOrder]);
 
-  const handleObjectIdClick = useCallback(async (objectId: string, keyContext?: string, openInNewTab?: boolean) => {
-    if (!selectedDocument || !selectedCollection || !currentDb) return;
+  const handleObjectIdClick = useCallback(async (openDocId: string | null, objectId: string, keyContext?: string, openInNewTab?: boolean) => {
+    if (!currentDb) return;
 
     if (openInNewTab) {
       // Generate URL for new tab - let backend find which collection contains the document
@@ -662,15 +674,31 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setIsLoading(true);
     setError(null);
 
-    const currentBreadcrumb: BreadcrumbItem = { collectionName: selectedCollection, document: selectedDocument };
+    const openDoc = openDocId ? openDocuments.find(d => d.id === openDocId) : null;
+    const currentBreadcrumb: BreadcrumbItem | null = openDoc ? { collectionName: openDoc.collectionName, document: openDoc.doc } : null;
 
     try {
       const collectionNames = currentDb.collections.map(c => c.name);
       const result = await findDocumentById(objectId, currentResource, collectionNames, keyContext);
 
-      setBreadcrumbs(prev => [...prev, currentBreadcrumb]);
-      setSelectedCollection(result.collectionName);
-      setSelectedDocument(result.document);
+      if (openDocId && openDoc) {
+        setOpenDocuments(prev => prev.map(od =>
+          od.id === openDocId
+            ? { ...od, collectionName: result.collectionName, doc: result.document, breadcrumbs: [...od.breadcrumbs, currentBreadcrumb!] }
+            : od
+        ));
+      } else {
+        setOpenDocuments(prev => {
+          if (prev.some(od => getDocId(od.doc) === getDocId(result.document))) return prev;
+          return [...prev, {
+            id: Math.random().toString(36).substring(7),
+            doc: result.document,
+            collectionName: result.collectionName,
+            editMode: false,
+            breadcrumbs: []
+          }];
+        });
+      }
       await fetchSchemaForCollection(result.collectionName);
     } catch (e) {
       if (e instanceof Error) setError(e.message);
@@ -678,17 +706,22 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDocument, selectedCollection, currentResource, currentDb, currentAccount.id, fetchSchemaForCollection]);
+  }, [openDocuments, currentResource, currentDb, currentAccount.id, fetchSchemaForCollection]);
 
-  const handleBreadcrumbClick = useCallback(async (index: number) => {
-    const targetState = breadcrumbs[index];
-    const newBreadcrumbs = breadcrumbs.slice(0, index);
+  const handleBreadcrumbClick = useCallback(async (openDocId: string, index: number) => {
+    const openDoc = openDocuments.find(d => d.id === openDocId);
+    if (!openDoc) return;
 
-    setBreadcrumbs(newBreadcrumbs);
-    setSelectedCollection(targetState.collectionName);
-    setSelectedDocument(targetState.document);
+    const targetState = openDoc.breadcrumbs[index];
+    const newBreadcrumbs = openDoc.breadcrumbs.slice(0, index);
+
+    setOpenDocuments(prev => prev.map(od =>
+      od.id === openDocId
+        ? { ...od, collectionName: targetState.collectionName, doc: targetState.document, breadcrumbs: newBreadcrumbs }
+        : od
+    ));
     await fetchSchemaForCollection(targetState.collectionName);
-  }, [breadcrumbs, fetchSchemaForCollection]);
+  }, [openDocuments, fetchSchemaForCollection]);
 
   const handleClearDocCache = useCallback(async () => {
     setCacheClearStatus('loading');
@@ -751,7 +784,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
           <ul className="divide-y divide-slate-200 dark:divide-slate-700">
             {documents.map((doc) => {
               const docId = getDocId(doc);
-              const isSelected = selectedDocument && getDocId(selectedDocument) === docId;
+              const isSelected = openDocuments.some(od => getDocId(od.doc) === docId);
               const isPinned = isDocumentPinned(doc);
 
               return (
@@ -760,7 +793,33 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                   className={`flex items-center justify-between transition-colors group ${isSelected ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
                 >
                   <button
-                    onClick={() => setSelectedDocument(doc)}
+                    onClick={(e) => {
+                      const newDocObj = {
+                        id: Math.random().toString(36).substring(7),
+                        doc,
+                        collectionName: selectedCollection!,
+                        editMode: false,
+                        breadcrumbs: []
+                      };
+                      const isAlreadyOpen = openDocuments.some(od => getDocId(od.doc) === docId);
+
+                      if (e.metaKey || e.ctrlKey) {
+                        // Append to open documents
+                        if (!isAlreadyOpen) {
+                          setOpenDocuments(prev => [...prev, newDocObj]);
+                        } else {
+                          // Deselect
+                          setOpenDocuments(prev => prev.filter(od => getDocId(od.doc) !== docId));
+                        }
+                      } else {
+                        // Close all others
+                        if (isAlreadyOpen) {
+                          setOpenDocuments(prev => prev.filter(od => getDocId(od.doc) === docId));
+                        } else {
+                          setOpenDocuments([newDocObj]);
+                        }
+                      }
+                    }}
                     className="flex-grow text-left p-3 text-sm"
                   >
                     <p className="font-mono text-slate-800 dark:text-slate-200 truncate" title={String(doc._id?.$oid || doc._id)}>{String(doc._id?.$oid || doc._id)}</p>
@@ -833,20 +892,23 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     );
   };
 
-  const handleEditSave = async () => {
-    if (selectedCollection && selectedDocument) {
+  const handleEditSave = async (openDocId: string) => {
+    const openDoc = openDocuments.find(d => d.id === openDocId);
+    if (openDoc) {
       setIsLoading(true);
       try {
         const refreshed = await getSingleDocument(
           currentResource.accountId,
           currentResource.databaseName,
-          selectedCollection,
-          getDocId(selectedDocument)
+          openDoc.collectionName,
+          getDocId(openDoc.doc)
         );
-        setSelectedDocument(refreshed);
+
+        setOpenDocuments(prev => prev.map(od => od.id === openDocId ? { ...od, doc: refreshed, editMode: false } : od));
+
         // Sync pinned document if present
         setPinnedDocuments(prev => prev.map(p =>
-          getDocId(p.doc) === getDocId(selectedDocument)
+          getDocId(p.doc) === getDocId(openDoc.doc)
             ? { ...p, doc: refreshed }
             : p
         ));
@@ -854,66 +916,13 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         // Optionally set error
       } finally {
         setIsLoading(false);
-        setEditMode(false);
       }
-    } else {
-      setEditMode(false);
     }
   };
 
-  const handleEditCancel = () => {
-    setEditMode(false);
+  const handleEditCancel = (openDocId: string) => {
+    setOpenDocuments(prev => prev.map(od => od.id === openDocId ? { ...od, editMode: false } : od));
   };
-
-  const renderEditorPanel = () => {
-    if (isLoading && !selectedDocument) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
-          <SpinnerIcon className="w-8 h-8" />
-        </div>
-      );
-    }
-    if (error && selectedCollection) {
-      return (
-        <div className="p-4 text-red-600 bg-red-50 border border-red-200 text-sm rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
-          {error}
-        </div>
-      );
-    }
-    if (!selectedDocument) {
-      return (
-        <div className="text-center text-slate-500 dark:text-slate-400 py-10">
-          <p>Select a document to view it here.</p>
-        </div>
-      );
-    }
-    return (
-      <div className={`space-y-4 ${isLoading ? 'opacity-50' : 'animate-fade-in-fast'}`}>
-        {/* Toolbar for edit/view mode */}
-        {/* Toolbar removed: Pin/Edit/Cancel now handled in header ID row */}
-        {/* Read-only view */}
-        {!editMode && (
-          <div className="bg-slate-100 dark:bg-slate-800 rounded p-3 text-xs overflow-x-auto text-slate-800 dark:text-slate-100">
-            <JsonDisplay data={selectedDocument} onObjectIdClick={handleObjectIdClick} />
-          </div>
-        )}
-        {/* Edit mode: render DocumentEditView */}
-        {editMode && (
-          <DocumentEditView
-            ref={editorRef}
-            accountId={currentResource.accountId}
-            databaseName={currentResource.databaseName}
-            document={selectedDocument}
-            collection={selectedCollection}
-            docId={getDocId(selectedDocument)}
-            loading={isLoading}
-            onCancel={handleEditCancel}
-            onSave={handleEditSave}
-          />
-        )}
-      </div>
-    );
-  }
 
   // Only cover the editor area (right 60% for 2/4 xl:3/5), open/collapse vertically
   const PinnedDrawer = () => {
@@ -1029,7 +1038,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                       </button>
                     </header>
                     <div className="p-3 flex-grow overflow-y-auto">
-                      <JsonDisplay data={doc} onObjectIdClick={handleObjectIdClick} />
+                      <JsonDisplay data={doc} onObjectIdClick={(objId, keyCtx, openNewTab) => handleObjectIdClick(null, objId, keyCtx, openNewTab)} />
                     </div>
                   </div>
                 ))}
@@ -1182,8 +1191,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         </header>
 
         {/* Main Content Area */}
-        <main className="flex-grow flex overflow-hidden">
-          <PanelGroup orientation="horizontal" id="querypal-panel-layout">
+        <main className="flex-grow overflow-hidden block w-full h-full relative">
+          <PanelGroup orientation="horizontal" id="querypal-panel-layout" className="w-full h-full relative">
             {/* Column 1: Collections */}
             <Panel defaultSize={20} minSize={10}>
               <div className="h-full bg-slate-100 dark:bg-slate-800 overflow-y-auto">
@@ -1406,174 +1415,185 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
             {/* Column 3: Document Editor */}
             <Panel defaultSize={60} minSize={30}>
-              <div className="h-full bg-slate-50 dark:bg-slate-900 overflow-y-auto">
-                <div className="p-4 space-y-4">
-                  <header className="flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                      <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Editor</h2>
-                      {selectedDocument && (
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-slate-400 dark:text-slate-500">ID:</span>
-                          <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{getDocId(selectedDocument)}</span>
-                          <button
-                            onClick={() => handleTogglePin(selectedDocument, selectedCollection!)}
-                            className={`ml-2 p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isDocumentPinned(selectedDocument) ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-                            title={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
-                            aria-label={isDocumentPinned(selectedDocument) ? 'Unpin document' : 'Pin document'}
-                          >
-                            <PinIcon className={`w-5 h-5 ${isDocumentPinned(selectedDocument) ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (selectedCollection && selectedDocument) {
-                                setIsLoading(true);
-                                try {
-                                  const refreshed = await getSingleDocument(
-                                    currentResource.accountId,
-                                    currentResource.databaseName,
-                                    selectedCollection,
-                                    getDocId(selectedDocument)
-                                  );
-
-                                  if (editMode && editorRef.current) {
-                                    const editedValue = editorRef.current.getCurrentValue();
-                                    let isDifferent = false;
-
-                                    try {
-                                      const parsedEdited = JSON.parse(editedValue);
-                                      const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
-
-                                      const editedWithoutIgnored = omit(parsedEdited, ignoredKeys);
-                                      const refreshedWithoutIgnored = omit(refreshed, ignoredKeys);
-
-                                      isDifferent = !isEqual(editedWithoutIgnored, refreshedWithoutIgnored);
-                                    } catch (e) {
-                                      // If JSON is invalid, fall back to string comparison
-                                      const freshString = JSON.stringify(refreshed, null, 2);
-                                      isDifferent = editedValue !== freshString;
-                                    }
-
-                                    if (isDifferent) {
-                                      // Setup dialog state
-                                      setDiffCurrentEditedText(editedValue);
-                                      setDiffIncomingDocument(refreshed);
-                                      setIsDiffOverwriteDialogOpen(true);
-                                      setIsLoading(false);
-                                      return;
-                                    }
-                                  }
-
-                                  setSelectedDocument(refreshed);
-                                  setPinnedDocuments(prev => prev.map(p =>
-                                    getDocId(p.doc) === getDocId(selectedDocument)
-                                      ? { ...p, doc: refreshed }
-                                      : p
-                                  ));
-                                  if (editMode && editorRef.current) {
-                                    editorRef.current.setCurrentValue(JSON.stringify(refreshed, null, 2));
-                                  }
-                                } catch (e) {
-                                  // Optionally set error
-                                } finally {
-                                  setIsLoading(false);
-                                }
-                              }
-                            }}
-                            className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                            title="Refresh document"
-                            aria-label="Refresh document"
-                            disabled={isLoading}
-                          >
-                            <RefreshIcon className="w-5 h-5" />
-                          </button>
-                          {!editMode && (
-                            <>
+              <div className="h-full bg-slate-100 dark:bg-slate-900/40 overflow-x-auto overflow-y-hidden flex flex-row relative">
+                {openDocuments.length === 0 ? (
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-slate-400">
+                    <p>Select a document to open it here.</p>
+                  </div>
+                ) : (
+                  openDocuments.map((openDoc) => (
+                    <div key={openDoc.id} className={`h-full ${openDocuments.length === 1 ? 'w-full' : 'w-[600px] min-w-[400px]'} flex-shrink-0 flex flex-col border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 shadow-sm first:border-l-0`}>
+                      <div className="p-4 space-y-4 flex-1 overflow-y-auto">
+                        <header className="flex justify-between items-center gap-2">
+                          <div className="flex-1 flex items-center gap-3 overflow-hidden">
+                            <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 truncate" title={openDoc.collectionName}>{openDoc.collectionName}</h2>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="font-mono text-xs text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded truncate max-w-[200px]" title={getDocId(openDoc.doc)}>{getDocId(openDoc.doc)}</span>
                               <button
-                                className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-                                onClick={() => setEditMode(true)}
+                                onClick={() => handleTogglePin(openDoc.doc, openDoc.collectionName)}
+                                className={`p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isDocumentPinned(openDoc.doc) ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                title={isDocumentPinned(openDoc.doc) ? 'Unpin document' : 'Pin document'}
+                              >
+                                <PinIcon className={`w-4 h-4 ${isDocumentPinned(openDoc.doc) ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  setIsLoading(true);
+                                  try {
+                                    const refreshed = await getSingleDocument(
+                                      currentResource.accountId,
+                                      currentResource.databaseName,
+                                      openDoc.collectionName,
+                                      getDocId(openDoc.doc)
+                                    );
+
+                                    if (openDoc.editMode && editorRefs.current[openDoc.id]) {
+                                      const editedValue = editorRefs.current[openDoc.id]!.getCurrentValue();
+                                      let isDifferent = false;
+
+                                      try {
+                                        const parsedEdited = JSON.parse(editedValue);
+                                        const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
+                                        const editedWithoutIgnored = omit(parsedEdited, ignoredKeys);
+                                        const refreshedWithoutIgnored = omit(refreshed, ignoredKeys);
+                                        isDifferent = !isEqual(editedWithoutIgnored, refreshedWithoutIgnored);
+                                      } catch (e) {
+                                        const freshString = JSON.stringify(refreshed, null, 2);
+                                        isDifferent = editedValue !== freshString;
+                                      }
+
+                                      if (isDifferent) {
+                                        setDiffCurrentEditedText(editedValue);
+                                        setDiffIncomingDocument(refreshed);
+                                        setDiffTargetDocId(openDoc.id);
+                                        setIsDiffOverwriteDialogOpen(true);
+                                        setIsLoading(false);
+                                        return;
+                                      }
+                                    }
+
+                                    setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, doc: refreshed } : od));
+                                    setPinnedDocuments(prev => prev.map(p =>
+                                      getDocId(p.doc) === getDocId(openDoc.doc) ? { ...p, doc: refreshed } : p
+                                    ));
+                                    if (openDoc.editMode && editorRefs.current[openDoc.id]) {
+                                      editorRefs.current[openDoc.id]!.setCurrentValue(JSON.stringify(refreshed, null, 2));
+                                    }
+                                  } catch (e) {
+                                  } finally {
+                                    setIsLoading(false);
+                                  }
+                                }}
+                                className="p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                title="Refresh document"
                                 disabled={isLoading}
-                                title="Edit document"
-                                aria-label="Edit document"
                               >
-                                <EditIcon className={`w-5 h-5 ${editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                                <RefreshIcon className="w-4 h-4" />
                               </button>
-                              <button
-                                className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                                onClick={() => {
-                                  if (selectedDocument) {
-                                    // Remove _id from copy if present
-                                    const { _id, ...rest } = selectedDocument;
-                                    setCreateDocInitial(rest);
-                                    setIsCreateDialogOpen(true);
-                                  }
-                                }}
-                                disabled={isLoading || !selectedDocument}
-                                title="Insert copy as new document"
-                                aria-label="Insert copy as new document"
-                              >
-                                <FileCopyIcon className="w-5 h-5 stroke-current transition-colors" />
-                              </button>
-                              <button
-                                className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40"
-                                onClick={() => {
-                                  if (selectedDocument) {
-                                    setDeleteTargetDoc(selectedDocument);
-                                    setIsDeleteDialogOpen(true);
-                                  }
-                                }}
-                                disabled={isLoading || !selectedDocument}
-                                title="Delete document"
-                                aria-label="Delete document"
-                              >
-                                <TrashIcon className="w-5 h-5" />
-                              </button>
-                              <button
-                                className="p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                                onClick={() => setIsHistoryDialogOpen(true)}
-                                disabled={isLoading || !selectedDocument}
-                                title="View document history"
-                                aria-label="View document history"
-                              >
-                                <HistoryIcon className="w-5 h-5" />
-                              </button>
-                            </>
+                              {!openDoc.editMode && (
+                                <>
+                                  <button
+                                    className={`p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${openDoc.editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                    onClick={() => setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, editMode: true } : od))}
+                                    disabled={isLoading}
+                                    title="Edit document"
+                                  >
+                                    <EditIcon className={`w-4 h-4 ${openDoc.editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                                  </button>
+                                  <button
+                                    className="p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                    onClick={() => {
+                                      const { _id, ...rest } = openDoc.doc;
+                                      setCreateDocInitial(rest);
+                                      setIsCreateDialogOpen(true);
+                                    }}
+                                    disabled={isLoading}
+                                    title="Insert copy as new document"
+                                  >
+                                    <FileCopyIcon className="w-4 h-4 stroke-current transition-colors" />
+                                  </button>
+                                  <button
+                                    className="p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40"
+                                    onClick={() => {
+                                      setDeleteTargetDoc(openDoc.doc);
+                                      setIsDeleteDialogOpen(true);
+                                    }}
+                                    disabled={isLoading}
+                                    title="Delete document"
+                                  >
+                                    <TrashIcon className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    className="p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                    onClick={() => setHistoryTargetDoc({ docId: getDocId(openDoc.doc), collectionName: openDoc.collectionName })}
+                                    disabled={isLoading}
+                                    title="View document history"
+                                  >
+                                    <HistoryIcon className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
+                              {openDoc.editMode && (
+                                <button
+                                  className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                                  onClick={() => handleEditCancel(openDoc.id)}
+                                  disabled={isLoading}
+                                  title="Cancel edit"
+                                >
+                                  <XIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <button onClick={() => setOpenDocuments(prev => prev.filter(od => od.id !== openDoc.id))} className="flex-shrink-0 p-1 bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/40 rounded-full transition-colors border border-transparent hover:border-red-200" title="Close tab"><XIcon className="w-4 h-4" /></button>
+                        </header>
+
+                        {/* Breadcrumbs */}
+                        {openDoc.breadcrumbs.length > 0 && (
+                          <div className="flex items-center flex-wrap gap-1 text-xs text-slate-500 dark:text-slate-400 p-2 bg-slate-100 dark:bg-slate-800/50 rounded-md">
+                            {openDoc.breadcrumbs.map((crumb, i) => (
+                              <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
+                                <button onClick={() => handleBreadcrumbClick(openDoc.id, i)} className="hover:underline hover:text-blue-500 dark:hover:text-blue-400 truncate max-w-[15ch]">
+                                  <span className="font-semibold">{crumb.collectionName}</span>
+                                  <span className="font-mono"> / {getDocId(crumb.document)}</span>
+                                </button>
+                                <ChevronRightIcon className="w-3 h-3 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                              </React.Fragment>
+                            ))}
+                            <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[15ch]">
+                              {openDoc.collectionName} / <span className="font-mono">{getDocId(openDoc.doc)}</span>
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Content */}
+                        <div className={`space-y-4 flex-1 flex flex-col ${isLoading ? 'opacity-50' : 'animate-fade-in-fast'}`}>
+                          {!openDoc.editMode && (
+                            <div className="bg-slate-50 flex-1 dark:bg-slate-900 rounded p-3 text-xs overflow-x-auto text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-inner">
+                              <JsonDisplay data={openDoc.doc} onObjectIdClick={(objId, keyCtx, openNewTab) => handleObjectIdClick(openDoc.id, objId, keyCtx, openNewTab)} />
+                            </div>
                           )}
-                          {editMode && (
-                            <button
-                              className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                              onClick={() => setEditMode(false)}
-                              disabled={isLoading}
-                              title="Cancel edit"
-                              aria-label="Cancel edit"
-                            >
-                              <XIcon className="w-5 h-5" />
-                            </button>
+                          {openDoc.editMode && (
+                            <DocumentEditView
+                              ref={(el) => {
+                                if (el) editorRefs.current[openDoc.id] = el;
+                                else delete editorRefs.current[openDoc.id];
+                              }}
+                              accountId={currentResource.accountId}
+                              databaseName={currentResource.databaseName}
+                              document={openDoc.doc}
+                              collection={openDoc.collectionName}
+                              docId={getDocId(openDoc.doc)}
+                              loading={isLoading}
+                              onCancel={() => handleEditCancel(openDoc.id)}
+                              onSave={() => handleEditSave(openDoc.id)}
+                            />
                           )}
                         </div>
-                      )}
+                      </div>
                     </div>
-                    {selectedDocument && !editMode && <button onClick={() => { setSelectedDocument(null); setBreadcrumbs([]); }} className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Close document view"><XIcon className="w-4 h-4" /></button>}
-                  </header>
-
-                  {/* Breadcrumbs */}
-                  {breadcrumbs.length > 0 && selectedDocument && (
-                    <div className="flex items-center flex-wrap gap-1 text-sm text-slate-500 dark:text-slate-400 p-2 bg-slate-200 dark:bg-slate-800 rounded-md">
-                      {breadcrumbs.map((crumb, i) => (
-                        <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
-                          <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline hover:text-blue-500 dark:hover:text-blue-400 truncate max-w-[20ch]">
-                            <span className="font-semibold">{crumb.collectionName}</span>
-                            <span className="font-mono"> / {getDocId(crumb.document)}</span>
-                          </button>
-                          <ChevronRightIcon className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
-                        </React.Fragment>
-                      ))}
-                      <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[20ch]">
-                        {selectedCollection} / <span className="font-mono">{getDocId(selectedDocument)}</span>
-                      </span>
-                    </div>
-                  )}
-                  {renderEditorPanel()}
-                </div>
+                  ))
+                )}
               </div>
             </Panel>
           </PanelGroup>
@@ -1599,11 +1619,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       />
       {/* Document History Dialog */}
       <DocumentHistoryDialog
-        open={isHistoryDialogOpen}
-        documentId={selectedDocument ? getDocId(selectedDocument) : ''}
-        collectionName={selectedCollection || ''}
+        open={!!historyTargetDoc}
+        documentId={historyTargetDoc?.docId || ''}
+        collectionName={historyTargetDoc?.collectionName || ''}
         resource={currentResource}
-        onClose={() => setIsHistoryDialogOpen(false)}
+        onClose={() => setHistoryTargetDoc(null)}
       />
       {/* Diff Overwrite Dialog */}
       <DiffOverwriteDialog
@@ -1612,18 +1632,20 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         newValue={displayDiffNewValue}
         onClose={() => setIsDiffOverwriteDialogOpen(false)}
         onOverwrite={() => {
-          if (diffIncomingDocument) {
-            setSelectedDocument(diffIncomingDocument);
+          if (diffIncomingDocument && diffTargetDocId) {
+            setOpenDocuments(prev => prev.map(od => od.id === diffTargetDocId ? { ...od, doc: diffIncomingDocument } : od));
             setPinnedDocuments(prev => prev.map(p =>
               getDocId(p.doc) === getDocId(diffIncomingDocument)
                 ? { ...p, doc: diffIncomingDocument }
                 : p
             ));
-            if (editMode && editorRef.current) {
-              editorRef.current.setCurrentValue(JSON.stringify(diffIncomingDocument, null, 2));
+            const od = openDocuments.find(d => d.id === diffTargetDocId);
+            if (od?.editMode && editorRefs.current[diffTargetDocId]) {
+              editorRefs.current[diffTargetDocId]!.setCurrentValue(JSON.stringify(diffIncomingDocument, null, 2));
             }
           }
           setIsDiffOverwriteDialogOpen(false);
+          setDiffTargetDocId(null);
         }}
       />
       <style>{`
