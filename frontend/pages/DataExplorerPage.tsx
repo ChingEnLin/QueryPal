@@ -21,6 +21,7 @@ import {
   PinIcon,
   TrashIcon,
   ArrowLeftIcon,
+  ArrowRightIcon,
   SearchIcon,
   XIcon,
   EditIcon,
@@ -217,6 +218,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
   // --- Editor State ---
   const [openDocuments, setOpenDocuments] = useState<OpenDocument[]>([]);
+  const [docWidths, setDocWidths] = useState<Record<string, number>>({});
 
   // --- Create Document Dialog State ---
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -400,7 +402,6 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     const handler = setTimeout(() => {
       setDebouncedFilters(filters);
       setCurrentPage(1); // Reset to page 1 on new search
-      setOpenDocuments([]); // Clear selection on new search
     }, 300);
     return () => clearTimeout(handler);
   }, [filters]);
@@ -612,7 +613,6 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setCurrentPage(1);
     setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
     setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
-    setOpenDocuments([]);
     await fetchSchemaForCollection(collectionName);
   }, [fetchSchemaForCollection, selectedCollection]);
 
@@ -658,7 +658,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     });
   }, [currentDb, collectionSortKey, collectionSortOrder]);
 
-  const handleObjectIdClick = useCallback(async (openDocId: string | null, objectId: string, keyContext?: string, openInNewTab?: boolean) => {
+  const handleObjectIdClick = useCallback(async (openDocId: string | null, objectId: string, keyContext?: string, openInNewTab?: boolean, openToSide?: boolean) => {
     if (!currentDb) return;
 
     if (openInNewTab) {
@@ -681,7 +681,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       const collectionNames = currentDb.collections.map(c => c.name);
       const result = await findDocumentById(objectId, currentResource, collectionNames, keyContext);
 
-      if (openDocId && openDoc) {
+      if (openDocId && openDoc && !openToSide) {
         setOpenDocuments(prev => prev.map(od =>
           od.id === openDocId
             ? { ...od, collectionName: result.collectionName, doc: result.document, breadcrumbs: [...od.breadcrumbs, currentBreadcrumb!] }
@@ -689,7 +689,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         ));
       } else {
         setOpenDocuments(prev => {
-          if (prev.some(od => getDocId(od.doc) === getDocId(result.document))) return prev;
+          if (prev.some(od => getDocId(od.doc) === getDocId(result.document) && od.collectionName === result.collectionName)) return prev;
           return [...prev, {
             id: Math.random().toString(36).substring(7),
             doc: result.document,
@@ -801,7 +801,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                         editMode: false,
                         breadcrumbs: []
                       };
-                      const isAlreadyOpen = openDocuments.some(od => getDocId(od.doc) === docId);
+                      const isAlreadyOpen = openDocuments.some(od => getDocId(od.doc) === docId && od.collectionName === selectedCollection);
 
                       if (e.metaKey || e.ctrlKey) {
                         // Append to open documents
@@ -809,12 +809,12 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                           setOpenDocuments(prev => [...prev, newDocObj]);
                         } else {
                           // Deselect
-                          setOpenDocuments(prev => prev.filter(od => getDocId(od.doc) !== docId));
+                          setOpenDocuments(prev => prev.filter(od => !(getDocId(od.doc) === docId && od.collectionName === selectedCollection)));
                         }
                       } else {
                         // Close all others
                         if (isAlreadyOpen) {
-                          setOpenDocuments(prev => prev.filter(od => getDocId(od.doc) === docId));
+                          setOpenDocuments(prev => prev.filter(od => getDocId(od.doc) === docId && od.collectionName === selectedCollection));
                         } else {
                           setOpenDocuments([newDocObj]);
                         }
@@ -1038,7 +1038,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                       </button>
                     </header>
                     <div className="p-3 flex-grow overflow-y-auto">
-                      <JsonDisplay data={doc} onObjectIdClick={(objId, keyCtx, openNewTab) => handleObjectIdClick(null, objId, keyCtx, openNewTab)} />
+                      <JsonDisplay data={doc} onObjectIdClick={(objId, keyCtx, openNewTab, openToSide) => handleObjectIdClick(null, objId, keyCtx, openNewTab, openToSide)} />
                     </div>
                   </div>
                 ))}
@@ -1052,6 +1052,20 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         </div>
       </div>
     );
+  };
+  const handleMoveDocument = (id: string, direction: 'left' | 'right') => {
+    setOpenDocuments(prev => {
+      const index = prev.findIndex(d => d.id === id);
+      if (index === -1) return prev;
+      
+      const newDocs = [...prev];
+      if (direction === 'left' && index > 0) {
+        [newDocs[index - 1], newDocs[index]] = [newDocs[index], newDocs[index - 1]];
+      } else if (direction === 'right' && index < prev.length - 1) {
+        [newDocs[index], newDocs[index + 1]] = [newDocs[index + 1], newDocs[index]];
+      }
+      return newDocs;
+    });
   };
 
   let displayDiffOldValue = diffCurrentEditedText;
@@ -1421,17 +1435,49 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                     <p>Select a document to open it here.</p>
                   </div>
                 ) : (
-                  openDocuments.map((openDoc) => (
-                    <div key={openDoc.id} className={`h-full ${openDocuments.length === 1 ? 'w-full' : 'w-[600px] min-w-[400px]'} flex-shrink-0 flex flex-col border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 shadow-sm first:border-l-0`}>
+                  openDocuments.map((openDoc, index) => (
+                    <div
+                      key={openDoc.id}
+                      className={`h-full ${openDocuments.length === 1 ? 'w-full' : 'flex-shrink-0'} flex flex-col border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 shadow-sm first:border-l-0 relative group/panel`}
+                      style={{
+                        width: openDocuments.length === 1 ? undefined : (docWidths[openDoc.id] || 600),
+                        minWidth: openDocuments.length === 1 ? undefined : 400
+                      }}
+                    >
+                      {openDocuments.length > 1 && (
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 dark:hover:bg-blue-500 z-20 transition-colors opacity-0 group-hover/panel:opacity-100"
+                          style={{ right: -1 }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const startX = e.clientX;
+                            const startWidth = docWidths[openDoc.id] || 600;
+                            const onMouseMove = (moveEvent: MouseEvent) => {
+                              const newWidth = Math.max(400, startWidth + (moveEvent.clientX - startX));
+                              setDocWidths(prev => ({ ...prev, [openDoc.id]: newWidth }));
+                            };
+                            const onMouseUp = () => {
+                              window.removeEventListener('mousemove', onMouseMove);
+                              window.removeEventListener('mouseup', onMouseUp);
+                            };
+                            window.addEventListener('mousemove', onMouseMove);
+                            window.addEventListener('mouseup', onMouseUp);
+                          }}
+                        />
+                      )}
                       <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-                        <header className="flex justify-between items-center gap-2">
-                          <div className="flex-1 flex items-center gap-3 overflow-hidden">
-                            <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 truncate" title={openDoc.collectionName}>{openDoc.collectionName}</h2>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className="font-mono text-xs text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded truncate max-w-[200px]" title={getDocId(openDoc.doc)}>{getDocId(openDoc.doc)}</span>
+                        <header className="flex flex-wrap justify-between items-center gap-3 pb-2 border-b border-transparent">
+                          <div className="flex items-center gap-3 min-w-[200px] flex-1">
+                            <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 truncate" title={openDoc.collectionName}>{openDoc.collectionName}</h2>
+                            <span className="font-mono text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 truncate flex-shrink-0 shadow-sm" style={{maxWidth: '160px'}} title={getDocId(openDoc.doc)}>
+                              {getDocId(openDoc.doc)}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1 flex-shrink-0 ml-auto bg-slate-50/50 dark:bg-slate-800/30 p-1 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
                               <button
                                 onClick={() => handleTogglePin(openDoc.doc, openDoc.collectionName)}
-                                className={`p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isDocumentPinned(openDoc.doc) ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                className={`p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isDocumentPinned(openDoc.doc) ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300'}`}
                                 title={isDocumentPinned(openDoc.doc) ? 'Unpin document' : 'Pin document'}
                               >
                                 <PinIcon className={`w-4 h-4 ${isDocumentPinned(openDoc.doc) ? 'fill-current' : 'stroke-current'} transition-colors`} />
@@ -1484,7 +1530,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                     setIsLoading(false);
                                   }
                                 }}
-                                className="p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                className="p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
                                 title="Refresh document"
                                 disabled={isLoading}
                               >
@@ -1493,7 +1539,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                               {!openDoc.editMode && (
                                 <>
                                   <button
-                                    className={`p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${openDoc.editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                    className={`p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${openDoc.editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300'}`}
                                     onClick={() => setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, editMode: true } : od))}
                                     disabled={isLoading}
                                     title="Edit document"
@@ -1501,7 +1547,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                     <EditIcon className={`w-4 h-4 ${openDoc.editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
                                   </button>
                                   <button
-                                    className="p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                    className="p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
                                     onClick={() => {
                                       const { _id, ...rest } = openDoc.doc;
                                       setCreateDocInitial(rest);
@@ -1513,7 +1559,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                     <FileCopyIcon className="w-4 h-4 stroke-current transition-colors" />
                                   </button>
                                   <button
-                                    className="p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40"
+                                    className="p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40"
                                     onClick={() => {
                                       setDeleteTargetDoc(openDoc.doc);
                                       setIsDeleteDialogOpen(true);
@@ -1524,7 +1570,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                     <TrashIcon className="w-4 h-4" />
                                   </button>
                                   <button
-                                    className="p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                    className="p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
                                     onClick={() => setHistoryTargetDoc({ docId: getDocId(openDoc.doc), collectionName: openDoc.collectionName })}
                                     disabled={isLoading}
                                     title="View document history"
@@ -1535,7 +1581,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                               )}
                               {openDoc.editMode && (
                                 <button
-                                  className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                                  className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
                                   onClick={() => handleEditCancel(openDoc.id)}
                                   disabled={isLoading}
                                   title="Cancel edit"
@@ -1543,9 +1589,31 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                   <XIcon className="w-4 h-4" />
                                 </button>
                               )}
-                            </div>
+
+                            <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1"></div>
+
+                            {openDocuments.length > 1 && (
+                              <div className="flex items-center bg-slate-200/50 dark:bg-slate-700/50 rounded-lg p-0.5 mx-1">
+                                <button
+                                  onClick={() => handleMoveDocument(openDoc.id, 'left')}
+                                  disabled={index === 0}
+                                  className="p-1 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 disabled:hover:text-slate-500 transition-colors bg-transparent rounded-md hover:bg-white dark:hover:bg-slate-800"
+                                  title="Move Left"
+                                >
+                                  <ArrowLeftIcon className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleMoveDocument(openDoc.id, 'right')}
+                                  disabled={index === openDocuments.length - 1}
+                                  className="p-1 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 disabled:hover:text-slate-500 transition-colors bg-transparent rounded-md hover:bg-white dark:hover:bg-slate-800"
+                                  title="Move Right"
+                                >
+                                  <ArrowRightIcon className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                            <button onClick={() => setOpenDocuments(prev => prev.filter(od => od.id !== openDoc.id))} className="flex-shrink-0 p-1.5 bg-slate-200/50 dark:bg-slate-700/50 text-slate-500 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors border border-transparent hover:border-red-200" title="Close tab"><XIcon className="w-4 h-4" /></button>
                           </div>
-                          <button onClick={() => setOpenDocuments(prev => prev.filter(od => od.id !== openDoc.id))} className="flex-shrink-0 p-1 bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/40 rounded-full transition-colors border border-transparent hover:border-red-200" title="Close tab"><XIcon className="w-4 h-4" /></button>
                         </header>
 
                         {/* Breadcrumbs */}
@@ -1570,7 +1638,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                         <div className={`space-y-4 flex-1 flex flex-col ${isLoading ? 'opacity-50' : 'animate-fade-in-fast'}`}>
                           {!openDoc.editMode && (
                             <div className="bg-slate-50 flex-1 dark:bg-slate-900 rounded p-3 text-xs overflow-x-auto text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-inner">
-                              <JsonDisplay data={openDoc.doc} onObjectIdClick={(objId, keyCtx, openNewTab) => handleObjectIdClick(openDoc.id, objId, keyCtx, openNewTab)} />
+                              <JsonDisplay data={openDoc.doc} onObjectIdClick={(objId, keyCtx, openNewTab, openToSide) => handleObjectIdClick(openDoc.id, objId, keyCtx, openNewTab, openToSide)} />
                             </div>
                           )}
                           {openDoc.editMode && (

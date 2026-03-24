@@ -2,13 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { CheckIcon, ChevronDownIcon, ClipboardIcon, SearchIcon, XIcon, ArrowUpwardIcon, ArrowDownwardIcon, CaseSensitiveIcon, WholeWordIcon, RegexIcon, ImageIcon } from './icons/material-icons-imports';
 
-// Search context for highlighting and navigation
-interface SearchState {
-  query: string;
-  currentMatchIndex: number;
-  totalMatches: number;
-  isActive: boolean;
-}
+// Removed unused SearchState interface
 
 // Helper function to highlight search matches in text
 // Helper function to highlight search matches in text
@@ -65,7 +59,7 @@ const highlightText = (text: string, searchRegex: RegExp | null): React.ReactNod
 // Component to render ObjectId with both click navigation and copy functionality
 const ObjectIdDisplay: React.FC<{
   objectId: string;
-  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean) => void;
+  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean, openToSide?: boolean) => void;
   keyContext?: string;
   showAsLink?: boolean;
 }> = ({ objectId, onObjectIdClick, keyContext, showAsLink = true }) => {
@@ -174,6 +168,15 @@ const ObjectIdDisplay: React.FC<{
             className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
           >
             <span>Open in New Tab</span>
+          </button>
+          <button
+            onClick={() => {
+              setShowContextMenu(false);
+              onObjectIdClick?.(objectId, keyContext, false, true);
+            }}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+          >
+            <span>Open to Side</span>
           </button>
           <div className="border-t border-slate-200 dark:border-slate-600 my-1"></div>
           <button
@@ -296,7 +299,7 @@ const JsonNode: React.FC<{
   nodeValue: any;
   nodeKey?: string; // The key of this node, if it's in an object
   isRoot?: boolean; // The top-level object is not collapsible
-  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean) => void;
+  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean, openToSide?: boolean) => void;
   parentKeyContext?: string; // The key of the parent, used for context in clicks
   searchRegex?: RegExp | null; // Regex for highlighting
   currentMatchIndex?: number; // Current match index for highlighting
@@ -516,7 +519,7 @@ const JsonNode: React.FC<{
 
 interface JsonDisplayProps {
   data: any;
-  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean) => void;
+  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean, openToSide?: boolean) => void;
 }
 
 const JsonDisplay: React.FC<JsonDisplayProps> = ({ data, onObjectIdClick }) => {
