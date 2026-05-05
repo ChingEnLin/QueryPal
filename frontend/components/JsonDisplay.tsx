@@ -2,13 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { CheckIcon, ChevronDownIcon, ClipboardIcon, SearchIcon, XIcon, ArrowUpwardIcon, ArrowDownwardIcon, CaseSensitiveIcon, WholeWordIcon, RegexIcon, ImageIcon } from './icons/material-icons-imports';
 
-// Search context for highlighting and navigation
-interface SearchState {
-  query: string;
-  currentMatchIndex: number;
-  totalMatches: number;
-  isActive: boolean;
-}
+// Removed unused SearchState interface
 
 // Helper function to highlight search matches in text
 // Helper function to highlight search matches in text
@@ -65,7 +59,7 @@ const highlightText = (text: string, searchRegex: RegExp | null): React.ReactNod
 // Component to render ObjectId with both click navigation and copy functionality
 const ObjectIdDisplay: React.FC<{
   objectId: string;
-  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean) => void;
+  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean, openToSide?: boolean) => void;
   keyContext?: string;
   showAsLink?: boolean;
 }> = ({ objectId, onObjectIdClick, keyContext, showAsLink = true }) => {
@@ -175,6 +169,15 @@ const ObjectIdDisplay: React.FC<{
           >
             <span>Open in New Tab</span>
           </button>
+          <button
+            onClick={() => {
+              setShowContextMenu(false);
+              onObjectIdClick?.(objectId, keyContext, false, true);
+            }}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+          >
+            <span>Open to Side</span>
+          </button>
           <div className="border-t border-slate-200 dark:border-slate-600 my-1"></div>
           <button
             onClick={handleCopyFromMenu}
@@ -201,10 +204,10 @@ const ObjectIdDisplay: React.FC<{
   );
 };
 
-const Base64ImagePreview: React.FC<{
-  base64String: string;
+const ImagePreview: React.FC<{
+  imageUrl: string;
   searchRegex: RegExp | null;
-}> = ({ base64String, searchRegex }) => {
+}> = ({ imageUrl, searchRegex }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [previewPos, setPreviewPos] = useState<{ x: number; y: number } | null>(null);
   const iconRef = useRef<HTMLSpanElement>(null);
@@ -248,7 +251,7 @@ const Base64ImagePreview: React.FC<{
         title="Click to collapse back to icon"
       >
         <span className="text-emerald-700 dark:text-emerald-300">"
-          {searchRegex ? highlightText(base64String, searchRegex) : base64String}"
+          {searchRegex ? highlightText(imageUrl, searchRegex) : imageUrl}"
         </span>
       </span>
     );
@@ -281,7 +284,7 @@ const Base64ImagePreview: React.FC<{
           }}
         >
           <img
-            src={base64String}
+            src={imageUrl}
             alt="Preview"
             className="max-w-[200px] max-h-[200px] object-contain rounded bg-slate-100 dark:bg-slate-900"
           />
@@ -296,7 +299,7 @@ const JsonNode: React.FC<{
   nodeValue: any;
   nodeKey?: string; // The key of this node, if it's in an object
   isRoot?: boolean; // The top-level object is not collapsible
-  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean) => void;
+  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean, openToSide?: boolean) => void;
   parentKeyContext?: string; // The key of the parent, used for context in clicks
   searchRegex?: RegExp | null; // Regex for highlighting
   currentMatchIndex?: number; // Current match index for highlighting
@@ -475,8 +478,11 @@ const JsonNode: React.FC<{
           );
         }
 
-        if (nodeValue.startsWith("data:image/png;base64,")) {
-          return <Base64ImagePreview base64String={nodeValue} searchRegex={searchRegex} />;
+        const isBase64Image = nodeValue.startsWith("data:image/");
+        const isUrlImage = /^https?:\/\/.+\.(png|jpe?g|gif|svg|webp)(\?.*)?$/i.test(nodeValue);
+
+        if (isBase64Image || isUrlImage) {
+          return <ImagePreview imageUrl={nodeValue} searchRegex={searchRegex} />;
         }
 
         return <span className="text-emerald-700 dark:text-emerald-300">"
@@ -513,7 +519,7 @@ const JsonNode: React.FC<{
 
 interface JsonDisplayProps {
   data: any;
-  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean) => void;
+  onObjectIdClick?: (id: string, keyContext?: string, openInNewTab?: boolean, openToSide?: boolean) => void;
 }
 
 const JsonDisplay: React.FC<JsonDisplayProps> = ({ data, onObjectIdClick }) => {

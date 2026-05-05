@@ -6,6 +6,7 @@ class DataDocumentsFilter(BaseModel):
     key: str
     value: Any = ""  # Can be str, int, etc. depending on the field type
     operator: Optional[str] = "equals"  # 'equals', 'exists', 'not_exists'
+    type: Optional[str] = "string"
 
 
 class DataDocumentsRequest(BaseModel):
@@ -16,6 +17,9 @@ class DataDocumentsRequest(BaseModel):
     limit: int = 20
     filter: Optional[DataDocumentsFilter] = None
     filters: Optional[List[DataDocumentsFilter]] = None
+
+class DataDocumentsQueryResponse(BaseModel):
+    query_code: str
 
 
 class DataDocumentsResponse(BaseModel):
