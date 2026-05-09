@@ -10,9 +10,11 @@ from models.schemas import (
     DebugSuggestionResponse,
     SchemaRelationshipsRequest,
     SchemaRelationshipsResponse,
+    EvaluateWriteRequest,
+    EvaluateWriteResponse,
 )
+from services.react_agent_service import run_query_generator
 from services.gemini_service import (
-    generate_query_from_prompt,
     generate_suggestion_from_query_error,
     generate_schema_relationships,
 )
@@ -23,6 +25,7 @@ from services.mongo_service import (
 )
 from models.analyze import AnalyzeRequest, AnalyzeResponse
 from services.analyze_service import analyze_query_result
+from services.evaluate_write_service import evaluate_write_result
 
 router = APIRouter()
 
@@ -51,18 +54,21 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
             schema_summary = get_database_schema_summary(
                 prompt.account_id, prompt.db_context.name, access_token
             )
+        connection_string = get_connection_string(prompt.account_id, access_token)
     except Exception as e:
-        print(f"Error fetching schema context: {e}")
+        print(f"Error fetching schema context or connection string: {e}")
         schema_summary = "Could not fetch schema summary."
+        connection_string = ""
 
     collections = [col.name for col in prompt.db_context.collections]
-    return generate_query_from_prompt(
-        prompt.user_input,
-        collections,
-        prompt.db_context.name,
-        collection_context=None,
+    
+    return run_query_generator(
+        user_input=prompt.user_input,
+        database=prompt.db_context.name,
+        collections=collections,
+        schema_context=schema_summary,
         intermediate_context=prompt.intermediate_context,
-        all_collections_schema=schema_summary,
+        connection_string=connection_string
     )
 
 
@@ -106,6 +112,58 @@ def execute(query: ExecuteInput = Body(...), authorization: str = Header(...)):
             status_code=500,
             detail=f"MongoDB query error: {result['error']} ({result['exception_type']})",
         )
+
+    # LOG WRITE OPERATIONS
+    from pymongo.results import UpdateResult, InsertOneResult, InsertManyResult, DeleteResult
+    if isinstance(result, (UpdateResult, InsertOneResult, InsertManyResult, DeleteResult)):
+        from services.data_documents_service import log_write_operation
+        from services.user_queries_service import get_user_id_from_token
+        import re
+
+        try:
+            user_email = get_user_id_from_token(user_token)
+            
+            operation = "query_generator"
+            if isinstance(result, UpdateResult):
+                operation = "update"
+            elif isinstance(result, (InsertOneResult, InsertManyResult)):
+                operation = "insert"
+            elif isinstance(result, DeleteResult):
+                operation = "delete"
+                
+            col_match = re.search(r"db\[['\"]([^'\"]+)['\"]\]\.", query.query)
+            if col_match:
+                collection = col_match.group(1)
+            else:
+                col_match = re.search(r"db\.([a-zA-Z0-9_]+)\.", query.query)
+                collection = col_match.group(1) if col_match else "unknown"
+                
+            match = re.search(r"//([^:@]+)", connection_string)
+            account_name = match.group(1) if match else "unknown"
+            account_database = f"{account_name}.{query.database_name}"
+            
+            transformed_res = transform_mongo_result(result)
+            query_info = {
+                "query": query.query,
+                "source": "query_generator",
+                "result": transformed_res
+            }
+            
+            before_data = query_info if operation == "delete" else None
+            after_data = query_info if operation in ["update", "insert"] else None
+            
+            log_write_operation(
+                user_email=user_email,
+                operation=operation,
+                database_name=account_database,
+                collection_name=collection,
+                document_id="query_generator",
+                before_data=before_data,
+                after_data=after_data
+            )
+        except Exception as e:
+            print(f"Error logging query generator write: {e}")
+
     return transform_mongo_result(result)
 
 
@@ -123,3 +181,22 @@ def analyze(body: AnalyzeRequest = Body(...)):
     Sends a query result to the AI for analysis and visualization suggestions.
     """
     return analyze_query_result(body.query_result)
+
+
+@router.post("/evaluate-write", response_model=EvaluateWriteResponse)
+def evaluate_write(body: EvaluateWriteRequest = Body(...)):
+    """
+    Evaluates the result of a write operation against the user's original intent.
+    """
+    try:
+        connection_string = get_connection_string(body.account_id)
+    except Exception as e:
+        connection_string = ""
+
+    return evaluate_write_result(
+        user_intent=body.user_intent, 
+        query_code=body.query_code, 
+        write_result=body.write_result,
+        connection_string=connection_string,
+        database_name=body.database_name
+    )

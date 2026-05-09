@@ -8,6 +8,9 @@ psycopg2-binary
 requests
 pymongo
 msal
+langgraph
+langchain-google-genai
+langchain-core
 
 # Testing dependencies
 pytest

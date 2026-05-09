@@ -20,7 +20,7 @@ export const generateMongoQuery = async (
     dbInfo?: DbInfo,
     collectionContext?: CollectionInfo, // Kept for backward compatibility/single select
     intermediateContext?: any,
-    selectedCollections: CollectionInfo[] = [],
+    selectedCollections: CollectionInfo[] = []
 ): Promise<QueryResultData> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
@@ -234,4 +234,57 @@ export const inferSchemaRelationships = async (
 
     const result: SchemaRelationshipsResponse = await response.json();
     return result;
+};
+
+
+/**
+ * Evaluates the result of a write operation against the user's intent.
+ */
+export const evaluateWriteResult = async (userIntent: string, queryCode: string, writeResult: any, accountId: string, databaseName: string): Promise<{ evaluation: string }> => {
+    // --- DEVELOPMENT MOCK ---
+    if (!USE_MSAL_AUTH) {
+        console.log("DEV MODE: Returning mock AI write evaluation.");
+        await mockDelay(1000);
+        return { evaluation: "Based on the result, it looks like your update was successful. 1 document matched and 1 document was modified." };
+    }
+
+    let accessToken = "";
+    try {
+        const account = msalInstance.getAllAccounts()[0];
+        if (account) {
+            const response = await msalInstance.acquireTokenSilent({
+                ...loginRequest,
+                account: account
+            });
+            accessToken = response.accessToken;
+        }
+    } catch (error) {
+        console.error("Token acquisition failed, proceeding without token:", error);
+    }
+
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+    };
+    if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/query/evaluate-write`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+            user_intent: userIntent,
+            query_code: queryCode,
+            write_result: writeResult,
+            account_id: accountId,
+            database_name: databaseName
+        }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.message || 'The AI model failed to evaluate the write result.');
+    }
+
+    return await response.json();
 };

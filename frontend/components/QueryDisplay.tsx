@@ -56,6 +56,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
       e.preventDefault();
       if (!isRunButtonDisabled) {
         onRunQuery();
+        setAllowWrite(false);
       }
     }
   };
@@ -82,7 +83,10 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({ code, onCodeChange, onRunQu
                     <span>Save</span>
                 </button>
                 <button
-                    onClick={onRunQuery}
+                    onClick={() => {
+                      onRunQuery();
+                      setAllowWrite(false);
+                    }}
                     disabled={isRunButtonDisabled}
                     className="flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
                     title="Run the code against the connected database (⌘ + Enter)"

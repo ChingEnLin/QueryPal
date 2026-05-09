@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships } from '../services/geminiService';
+import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships, evaluateWriteResult } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
@@ -378,6 +378,11 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
+  // State for write evaluation
+  const [isEvaluatingWrite, setIsEvaluatingWrite] = useState<boolean>(false);
+  const [writeEvaluationResult, setWriteEvaluationResult] = useState<{evaluation: string} | null>(null);
+  const [writeEvaluationError, setWriteEvaluationError] = useState<string | null>(null);
+
   // State for collection details
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
 
@@ -639,7 +644,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         connectedDbInfo ?? undefined,
         collectionCtx,
         intermediateContext?.data,
-        selectedCollectionInfos // Pass full info objects
+        selectedCollectionInfos
       );
       setQueryResult(result);
       setIntermediateContext(null); // Clear context after use
@@ -651,6 +656,23 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       setHistoryIndex(newIndex);
       setEditableCode(newHistory[newIndex]);
 
+      // Automatically display results for read queries, gate write queries
+      if (result.is_write_action) {
+        setExecutionResult(null);
+        setExecutionError("⚠️ This is a write action. Please review the code carefully and click 'Run Query' to execute it.");
+      } else if (result.query_result !== undefined) {
+        if (result.query_result && typeof result.query_result === 'object' && result.query_result.error) {
+            setExecutionError(result.query_result.error);
+            setExecutionResult(null);
+        } else if (typeof result.query_result === 'string' && (result.query_result.startsWith("Error:") || result.query_result.startsWith("Execution Exception:"))) {
+            setExecutionError(result.query_result);
+            setExecutionResult(null);
+        } else {
+            setExecutionResult(result.query_result);
+            setExecutionError(null);
+        }
+      }
+
     } catch (e) {
       setQueryResult(null); // Clear old results on error
       if (e instanceof Error) setError(e.message);
@@ -658,7 +680,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } finally {
       setIsLoading(false);
     }
-  }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext, connectedResource, selectedAccountId]);
+  }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext, connectedResource, selectedAccountId, selectedCollections, collectionDetailsMap]);
 
   const handleGenerateQueryClick = useCallback(() => {
     if (intermediateContext) {
@@ -687,6 +709,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setDebugError(null);
     setAnalysisResult(null);
     setAnalysisError(null);
+    setWriteEvaluationResult(null);
+    setWriteEvaluationError(null);
 
     try {
       const result = await runMongoQuery(connectedResource.accountId, editableCode, connectedResource);
@@ -755,6 +779,25 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       setIsAnalyzing(false);
     }
   }, []);
+
+  const handleEvaluateWrite = useCallback(async () => {
+    if (!editableCode || !executionResult || !lastSuccessfulPrompt || !selectedAccountId || !connectedDbInfo) return;
+    
+    setIsEvaluatingWrite(true);
+    setWriteEvaluationError(null);
+    setWriteEvaluationResult(null);
+
+    try {
+      const result = await evaluateWriteResult(lastSuccessfulPrompt, editableCode, executionResult, selectedAccountId, connectedDbInfo.name);
+      setWriteEvaluationResult(result);
+    } catch (e) {
+      if (e instanceof Error) setWriteEvaluationError(e.message);
+      else setWriteEvaluationError("An unexpected error occurred during write evaluation.");
+    } finally {
+      setIsEvaluatingWrite(false);
+    }
+  }, [lastSuccessfulPrompt, editableCode, executionResult, selectedAccountId, connectedDbInfo]);
+
 
   const handleCollectionClick = useCallback(async (collectionName: string, event?: React.MouseEvent) => {
     if (!connectedResource) return;
@@ -1598,6 +1641,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     isAnalyzing={false}
                     analysisResult={null}
                     analysisError={null}
+                    onEvaluateWrite={() => { }}
+                    isEvaluatingWrite={false}
+                    writeEvaluationResult={null}
+                    writeEvaluationError={null}
                     isTutorialActive={isTutorialActive}
                     tutorialStepIndex={tutorialStepIndex}
                   />
@@ -1632,6 +1679,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     isAnalyzing={false}
                     analysisResult={null}
                     analysisError={null}
+                    onEvaluateWrite={() => { }}
+                    isEvaluatingWrite={false}
+                    writeEvaluationResult={null}
+                    writeEvaluationError={null}
                     isTutorialActive={isTutorialActive}
                     tutorialStepIndex={tutorialStepIndex}
                   />
@@ -1668,6 +1719,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                         isAnalyzing={isAnalyzing}
                         analysisResult={analysisResult}
                         analysisError={analysisError}
+                        onEvaluateWrite={handleEvaluateWrite}
+                        isEvaluatingWrite={isEvaluatingWrite}
+                        writeEvaluationResult={writeEvaluationResult}
+                        writeEvaluationError={writeEvaluationError}
                       />
                     </>
                   ) : (

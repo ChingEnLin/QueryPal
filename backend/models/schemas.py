@@ -37,7 +37,6 @@ class QueryPrompt(BaseModel):
         None  # Optional intermediate context for complex queries
     )
 
-
 class GeneratedCode(BaseModel):
     generated_code: str
 
@@ -74,3 +73,15 @@ class Relationship(BaseModel):
 
 class SchemaRelationshipsResponse(BaseModel):
     relationships: list[Relationship]
+
+
+class EvaluateWriteRequest(BaseModel):
+    user_intent: str
+    query_code: str
+    write_result: dict
+    account_id: str
+    database_name: str
+
+
+class EvaluateWriteResponse(BaseModel):
+    evaluation: str
