@@ -37,6 +37,7 @@ class QueryPrompt(BaseModel):
         None  # Optional intermediate context for complex queries
     )
 
+
 class GeneratedCode(BaseModel):
     generated_code: str
 

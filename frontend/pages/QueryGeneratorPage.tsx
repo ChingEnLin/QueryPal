@@ -380,7 +380,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
   // State for write evaluation
   const [isEvaluatingWrite, setIsEvaluatingWrite] = useState<boolean>(false);
-  const [writeEvaluationResult, setWriteEvaluationResult] = useState<{evaluation: string} | null>(null);
+  const [writeEvaluationResult, setWriteEvaluationResult] = useState<{ evaluation: string } | null>(null);
   const [writeEvaluationError, setWriteEvaluationError] = useState<string | null>(null);
 
   // State for collection details
@@ -662,14 +662,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         setExecutionError("⚠️ This is a write action. Please review the code carefully and click 'Run Query' to execute it.");
       } else if (result.query_result !== undefined) {
         if (result.query_result && typeof result.query_result === 'object' && result.query_result.error) {
-            setExecutionError(result.query_result.error);
-            setExecutionResult(null);
+          setExecutionError(result.query_result.error);
+          setExecutionResult(null);
         } else if (typeof result.query_result === 'string' && (result.query_result.startsWith("Error:") || result.query_result.startsWith("Execution Exception:"))) {
-            setExecutionError(result.query_result);
-            setExecutionResult(null);
+          setExecutionError(result.query_result);
+          setExecutionResult(null);
         } else {
-            setExecutionResult(result.query_result);
-            setExecutionError(null);
+          setExecutionResult(result.query_result);
+          setExecutionError(null);
         }
       }
 
@@ -782,7 +782,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
   const handleEvaluateWrite = useCallback(async () => {
     if (!editableCode || !executionResult || !lastSuccessfulPrompt || !selectedAccountId || !connectedDbInfo) return;
-    
+
     setIsEvaluatingWrite(true);
     setWriteEvaluationError(null);
     setWriteEvaluationResult(null);

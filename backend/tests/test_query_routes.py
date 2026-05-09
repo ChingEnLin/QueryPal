@@ -16,7 +16,7 @@ def test_nl2query(client):
     """Test natural language to query conversion."""
     # Mock dependencies
     with (
-        patch("routes.query.generate_query_from_prompt") as mock_generate,
+        patch("routes.query.run_query_generator") as mock_generate,
         patch("routes.query.exchange_token_obo") as mock_exchange,
     ):
         mock_generate.return_value = {"generated_code": "db.users.find({})"}
@@ -44,10 +44,10 @@ def test_nl2query(client):
 
         # Verify the mock was called with correct parameters
         mock_generate.assert_called_once()
-        call_args = mock_generate.call_args
-        assert call_args[0][0] == "Find all users"  # user_input
-        assert call_args[0][1] == ["users"]  # collections
-        assert call_args[0][2] == "test-db"  # db name
+        call_kwargs = mock_generate.call_args[1]
+        assert call_kwargs["user_input"] == "Find all users"
+        assert call_kwargs["collections"] == ["users"]
+        assert call_kwargs["database"] == "test-db"
 
 
 def test_execute_query_missing_authorization(client):
@@ -190,3 +190,95 @@ def test_analyze_query(client):
         assert "chartOptions" in data
 
         mock_analyze.assert_called_once()
+
+
+from models.schemas import EvaluateWriteRequest
+from unittest.mock import patch, MagicMock
+
+
+def test_evaluate_write(client):
+    """Test evaluating write query results."""
+    with (
+        patch("routes.query.evaluate_write_result") as mock_evaluate,
+        patch("routes.query.get_connection_string") as mock_conn,
+    ):
+        mock_conn.return_value = "conn-string"
+        mock_evaluate.return_value = {
+            "evaluation": "Looks good",
+        }
+
+        req = EvaluateWriteRequest(
+            account_id="test-account",
+            database_name="test-db",
+            user_intent="Update user age to 30",
+            query_code="db.users.update_one({'_id': '123'}, {'$set': {'age': 30}})",
+            write_result={"matched_count": 1, "modified_count": 1},
+        )
+
+        response = client.post("/query/evaluate-write", json=req.model_dump())
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["evaluation"] == "Looks good"
+
+        mock_evaluate.assert_called_once()
+
+
+def test_execute_query_write_logging(client):
+    """Test successful query execution and write operation logging."""
+    from pymongo.results import UpdateResult
+
+    with (
+        patch("routes.query.exchange_token_obo") as mock_exchange,
+        patch("routes.query.get_connection_string") as mock_get_conn,
+        patch("routes.query.execute_mongo_query") as mock_execute,
+        patch("services.user_queries_service.get_user_id_from_token") as mock_get_user,
+        patch("services.data_documents_service.log_write_operation") as mock_log,
+        patch("routes.query.transform_mongo_result") as mock_transform,
+    ):
+        # Setup mocks
+        mock_exchange.return_value = "access-token"
+        mock_get_conn.return_value = "mongodb://mock-account:pass@host/db"
+
+        # Mock UpdateResult
+        update_result = UpdateResult(
+            {"n": 1, "nModified": 1, "ok": 1.0, "updatedExisting": True}, True
+        )
+        mock_execute.return_value = update_result
+        mock_transform.return_value = {"matched_count": 1, "modified_count": 1}
+        mock_get_user.return_value = "test@example.com"
+
+        execute_input = ExecuteInput(
+            account_id="test-account",
+            database_name="test-db",
+            query="db.users.update_one({'_id': '123'}, {'$set': {'age': 30}})",
+        )
+
+        headers = {"authorization": "Bearer valid-token"}
+        response = client.post(
+            "/query/execute", json=execute_input.model_dump(), headers=headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "matched_count" in data
+
+        # Verify all mocks were called
+        mock_exchange.assert_called_once_with("valid-token")
+        mock_get_conn.assert_called_once_with("test-account", "access-token")
+        mock_execute.assert_called_once_with(
+            "mongodb://mock-account:pass@host/db",
+            "test-db",
+            "db.users.update_one({'_id': '123'}, {'$set': {'age': 30}})",
+        )
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args[1]
+        assert call_kwargs["user_email"] == "test@example.com"
+        assert call_kwargs["operation"] == "update"
+        assert call_kwargs["database_name"] == "mock-account.test-db"
+        assert call_kwargs["collection_name"] == "users"
+        assert call_kwargs["document_id"] == "query_generator"
+        assert (
+            call_kwargs["after_data"]["query"]
+            == "db.users.update_one({'_id': '123'}, {'$set': {'age': 30}})"
+        )

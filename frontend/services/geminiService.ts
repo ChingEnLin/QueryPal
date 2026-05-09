@@ -2,7 +2,7 @@ import { QueryResultData, DbInfo, CollectionInfo, DebuggingResult, AnalysisResul
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery, mockDebuggingResult, mockAnalysisResult } from './mockData';
 import { msalInstance, loginRequest } from '../authConfig';
-import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
+import { getAuthErrorMessage } from '../utils/authErrorHandler';
 
 /**
  * Sends the user's natural language prompt to the backend for processing by the Gemini API.

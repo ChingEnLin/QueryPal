@@ -1,4 +1,5 @@
 import re
+
 query = "db['my_col'].update_many({'a': 1}, {'$set': {'a': 2}})"
 col_match = re.search(r"db\[['\"]([^'\"]+)['\"]\]\.", query)
 if col_match:

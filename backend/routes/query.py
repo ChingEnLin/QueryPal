@@ -61,14 +61,14 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
         connection_string = ""
 
     collections = [col.name for col in prompt.db_context.collections]
-    
+
     return run_query_generator(
         user_input=prompt.user_input,
         database=prompt.db_context.name,
         collections=collections,
         schema_context=schema_summary,
         intermediate_context=prompt.intermediate_context,
-        connection_string=connection_string
+        connection_string=connection_string,
     )
 
 
@@ -114,15 +114,23 @@ def execute(query: ExecuteInput = Body(...), authorization: str = Header(...)):
         )
 
     # LOG WRITE OPERATIONS
-    from pymongo.results import UpdateResult, InsertOneResult, InsertManyResult, DeleteResult
-    if isinstance(result, (UpdateResult, InsertOneResult, InsertManyResult, DeleteResult)):
+    from pymongo.results import (
+        UpdateResult,
+        InsertOneResult,
+        InsertManyResult,
+        DeleteResult,
+    )
+
+    if isinstance(
+        result, (UpdateResult, InsertOneResult, InsertManyResult, DeleteResult)
+    ):
         from services.data_documents_service import log_write_operation
         from services.user_queries_service import get_user_id_from_token
         import re
 
         try:
             user_email = get_user_id_from_token(user_token)
-            
+
             operation = "query_generator"
             if isinstance(result, UpdateResult):
                 operation = "update"
@@ -130,28 +138,28 @@ def execute(query: ExecuteInput = Body(...), authorization: str = Header(...)):
                 operation = "insert"
             elif isinstance(result, DeleteResult):
                 operation = "delete"
-                
+
             col_match = re.search(r"db\[['\"]([^'\"]+)['\"]\]\.", query.query)
             if col_match:
                 collection = col_match.group(1)
             else:
                 col_match = re.search(r"db\.([a-zA-Z0-9_]+)\.", query.query)
                 collection = col_match.group(1) if col_match else "unknown"
-                
+
             match = re.search(r"//([^:@]+)", connection_string)
             account_name = match.group(1) if match else "unknown"
             account_database = f"{account_name}.{query.database_name}"
-            
+
             transformed_res = transform_mongo_result(result)
             query_info = {
                 "query": query.query,
                 "source": "query_generator",
-                "result": transformed_res
+                "result": transformed_res,
             }
-            
+
             before_data = query_info if operation == "delete" else None
             after_data = query_info if operation in ["update", "insert"] else None
-            
+
             log_write_operation(
                 user_email=user_email,
                 operation=operation,
@@ -159,7 +167,7 @@ def execute(query: ExecuteInput = Body(...), authorization: str = Header(...)):
                 collection_name=collection,
                 document_id="query_generator",
                 before_data=before_data,
-                after_data=after_data
+                after_data=after_data,
             )
         except Exception as e:
             print(f"Error logging query generator write: {e}")
@@ -194,9 +202,9 @@ def evaluate_write(body: EvaluateWriteRequest = Body(...)):
         connection_string = ""
 
     return evaluate_write_result(
-        user_intent=body.user_intent, 
-        query_code=body.query_code, 
+        user_intent=body.user_intent,
+        query_code=body.query_code,
         write_result=body.write_result,
         connection_string=connection_string,
-        database_name=body.database_name
+        database_name=body.database_name,
     )
