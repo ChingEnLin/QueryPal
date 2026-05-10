@@ -26,8 +26,43 @@ from services.mongo_service import (
 from models.analyze import AnalyzeRequest, AnalyzeResponse
 from services.analyze_service import analyze_query_result
 from services.evaluate_write_service import evaluate_write_result
+from services.data_documents_service import log_write_operation
+from services.user_queries_service import get_user_id_from_token
+from pymongo.results import (
+    UpdateResult,
+    InsertOneResult,
+    InsertManyResult,
+    DeleteResult,
+)
+import ast
+import re
 
 router = APIRouter()
+
+
+def extract_collection_name(query_str: str) -> str:
+    """Extract collection name from a PyMongo query string using AST."""
+    try:
+        tree = ast.parse(query_str)
+        for node in ast.walk(tree):
+            # Match: db["collection"] or db['collection']
+            if (
+                isinstance(node, ast.Subscript)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "db"
+            ):
+                if isinstance(node.slice, ast.Constant):
+                    return str(node.slice.value)
+            # Match: db.collection
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "db"
+            ):
+                return node.attr
+    except SyntaxError:
+        pass
+    return "unknown"
 
 
 @router.post("/nl2query")
@@ -56,7 +91,9 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
             )
         connection_string = get_connection_string(prompt.account_id, access_token)
     except Exception as e:
-        print(f"Error fetching schema context or connection string: {e}")
+        print(
+            f"[ERROR] Failed to fetch schema/connection for account {prompt.account_id}: {e}"
+        )
         schema_summary = "Could not fetch schema summary."
         connection_string = ""
 
@@ -115,20 +152,9 @@ def execute(query: ExecuteInput = Body(...), authorization: str = Header(...)):
         )
 
     # LOG WRITE OPERATIONS
-    from pymongo.results import (
-        UpdateResult,
-        InsertOneResult,
-        InsertManyResult,
-        DeleteResult,
-    )
-
     if isinstance(
         result, (UpdateResult, InsertOneResult, InsertManyResult, DeleteResult)
     ):
-        from services.data_documents_service import log_write_operation
-        from services.user_queries_service import get_user_id_from_token
-        import re
-
         try:
             user_email = get_user_id_from_token(user_token)
 
@@ -140,12 +166,7 @@ def execute(query: ExecuteInput = Body(...), authorization: str = Header(...)):
             elif isinstance(result, DeleteResult):
                 operation = "delete"
 
-            col_match = re.search(r"db\[['\"]([^'\"]+)['\"]\]\.", query.query)
-            if col_match:
-                collection = col_match.group(1)
-            else:
-                col_match = re.search(r"db\.([a-zA-Z0-9_]+)\.", query.query)
-                collection = col_match.group(1) if col_match else "unknown"
+            collection = extract_collection_name(query.query)
 
             match = re.search(r"//([^:@]+)", connection_string)
             account_name = match.group(1) if match else "unknown"
@@ -193,13 +214,24 @@ def analyze(body: AnalyzeRequest = Body(...)):
 
 
 @router.post("/evaluate-write", response_model=EvaluateWriteResponse)
-def evaluate_write(body: EvaluateWriteRequest = Body(...)):
+def evaluate_write(
+    body: EvaluateWriteRequest = Body(...), authorization: str = Header(...)
+):
     """
     Evaluates the result of a write operation against the user's original intent.
+    Requires authentication via Bearer token.
     """
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+
+    user_token = authorization.replace("Bearer ", "")
+    access_token = exchange_token_obo(user_token)
     try:
-        connection_string = get_connection_string(body.account_id)
+        connection_string = get_connection_string(body.account_id, access_token)
     except Exception as e:
+        print(
+            f"[ERROR] Failed to fetch connection string for account {body.account_id}: {e}"
+        )
         connection_string = ""
 
     return evaluate_write_result(

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AccountDetailsRequest(BaseModel):
@@ -36,7 +36,9 @@ class QueryPrompt(BaseModel):
     intermediate_context: object | None = (
         None  # Optional intermediate context for complex queries
     )
-    max_iterations: int = 3  # Maximum iterations for the ReAct agent
+    max_iterations: int = Field(
+        default=3, ge=1, le=10
+    )  # Server-enforced agent iteration cap
 
 
 class GeneratedCode(BaseModel):

@@ -1,10 +1,10 @@
 from typing import TypedDict, Annotated, Sequence, Any
+import ast
 import operator
 from langgraph.graph import StateGraph, END
 from google import genai
 from google.genai import types
 import json
-import re
 import logging
 
 # Configure logger
@@ -20,6 +20,34 @@ if not logger.handlers:
 
 from services.gemini_service import extract_python_code
 from services.mongo_service import execute_mongo_query, transform_mongo_result
+
+
+WRITE_METHODS = {
+    "insert_one",
+    "insert_many",
+    "update_one",
+    "update_many",
+    "replace_one",
+    "delete_one",
+    "delete_many",
+    "drop",
+    "create_index",
+}
+
+
+def is_write_operation(code: str) -> bool:
+    """Return True if code contains a write method call, using AST parsing."""
+    try:
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Attribute) and func.attr in WRITE_METHODS:
+                    return True
+    except SyntaxError:
+        # If we can't parse the code, treat it as a write to be safe
+        return True
+    return False
 
 
 class AgentState(TypedDict):
@@ -110,24 +138,10 @@ def generate_query_node(state: AgentState):
     except Exception as e:
         code = f"# Error generating query: {str(e)}"
 
-    # Check if write action heuristically
-    write_methods = [
-        "insert_one(",
-        "insert_many(",
-        "insert(",
-        "update_one(",
-        "update_many(",
-        "update(",
-        "delete_one(",
-        "delete_many(",
-        "delete(",
-        "replace_one(",
-        "drop(",
-        "create_index(",
-    ]
-    is_write = any(method in code.lower() for method in write_methods)
+    # Detect write operations via AST — more reliable than substring matching
+    is_write = is_write_operation(code)
     logger.info(f"Generated query: {code}")
-    logger.info(f"Is write action heuristic: {is_write}")
+    logger.info(f"Is write action (AST): {is_write}")
 
     return {
         "generated_query": code,

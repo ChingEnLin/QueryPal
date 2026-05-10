@@ -199,9 +199,11 @@ from unittest.mock import patch, MagicMock
 def test_evaluate_write(client):
     """Test evaluating write query results."""
     with (
+        patch("routes.query.exchange_token_obo") as mock_exchange,
         patch("routes.query.evaluate_write_result") as mock_evaluate,
         patch("routes.query.get_connection_string") as mock_conn,
     ):
+        mock_exchange.return_value = "access-token"
         mock_conn.return_value = "conn-string"
         mock_evaluate.return_value = {
             "evaluation": "Looks good",
@@ -215,12 +217,17 @@ def test_evaluate_write(client):
             write_result={"matched_count": 1, "modified_count": 1},
         )
 
-        response = client.post("/query/evaluate-write", json=req.model_dump())
+        headers = {"authorization": "Bearer valid-token"}
+        response = client.post(
+            "/query/evaluate-write", json=req.model_dump(), headers=headers
+        )
 
         assert response.status_code == 200
         data = response.json()
         assert data["evaluation"] == "Looks good"
 
+        mock_exchange.assert_called_once_with("valid-token")
+        mock_conn.assert_called_once_with("test-account", "access-token")
         mock_evaluate.assert_called_once()
 
 
@@ -232,8 +239,8 @@ def test_execute_query_write_logging(client):
         patch("routes.query.exchange_token_obo") as mock_exchange,
         patch("routes.query.get_connection_string") as mock_get_conn,
         patch("routes.query.execute_mongo_query") as mock_execute,
-        patch("services.user_queries_service.get_user_id_from_token") as mock_get_user,
-        patch("services.data_documents_service.log_write_operation") as mock_log,
+        patch("routes.query.get_user_id_from_token") as mock_get_user,
+        patch("routes.query.log_write_operation") as mock_log,
         patch("routes.query.transform_mongo_result") as mock_transform,
     ):
         # Setup mocks

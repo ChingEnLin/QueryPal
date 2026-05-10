@@ -2,6 +2,7 @@ from google import genai
 from google.genai import types
 from models.schemas import EvaluateWriteResponse
 from services.mongo_service import execute_mongo_query, transform_mongo_result
+from services.react_agent_service import is_write_operation
 
 
 def evaluate_write_result(
@@ -48,7 +49,7 @@ Respond with plain text only in your final answer.
         if not connection_string or not database_name:
             return "Error: Database connection not available for verification."
 
-        if any(w in query for w in ["insert", "update", "delete", "replace", "drop"]):
+        if is_write_operation(query):
             return "Error: Only read queries are allowed."
 
         try:
@@ -69,8 +70,11 @@ Respond with plain text only in your final answer.
         ),
     )
 
-    # Process function calls if any
-    while response.function_calls:
+    # Process function calls, capped to prevent unbounded loops
+    MAX_TOOL_ROUNDS = 5
+    tool_rounds = 0
+    while response.function_calls and tool_rounds < MAX_TOOL_ROUNDS:
+        tool_rounds += 1
         for function_call in response.function_calls:
             if function_call.name == "query_database":
                 # Execute the tool
