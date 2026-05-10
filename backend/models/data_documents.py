@@ -18,6 +18,7 @@ class DataDocumentsRequest(BaseModel):
     filter: Optional[DataDocumentsFilter] = None
     filters: Optional[List[DataDocumentsFilter]] = None
 
+
 class DataDocumentsQueryResponse(BaseModel):
     query_code: str
 

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships } from '../services/geminiService';
+import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships, evaluateWriteResult } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
@@ -378,6 +378,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
+  // State for write evaluation
+  const [isEvaluatingWrite, setIsEvaluatingWrite] = useState<boolean>(false);
+  const [writeEvaluationResult, setWriteEvaluationResult] = useState<{ evaluation: string } | null>(null);
+  const [writeEvaluationError, setWriteEvaluationError] = useState<string | null>(null);
+
+  // Agent configuration
+  const [maxIterations, setMaxIterations] = useState<number>(3);
+
   // State for collection details
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
 
@@ -639,7 +647,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         connectedDbInfo ?? undefined,
         collectionCtx,
         intermediateContext?.data,
-        selectedCollectionInfos // Pass full info objects
+        selectedCollectionInfos,
+        maxIterations
       );
       setQueryResult(result);
       setIntermediateContext(null); // Clear context after use
@@ -651,6 +660,23 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       setHistoryIndex(newIndex);
       setEditableCode(newHistory[newIndex]);
 
+      // Automatically display results for read queries, gate write queries
+      if (result.is_write_action) {
+        setExecutionResult(null);
+        setExecutionError("⚠️ This is a write action. Please review the code carefully and click 'Run Query' to execute it.");
+      } else if (result.query_result !== undefined) {
+        if (result.query_result && typeof result.query_result === 'object' && result.query_result.error) {
+          setExecutionError(result.query_result.error);
+          setExecutionResult(null);
+        } else if (typeof result.query_result === 'string' && (result.query_result.startsWith("Error:") || result.query_result.startsWith("Execution Exception:"))) {
+          setExecutionError(result.query_result);
+          setExecutionResult(null);
+        } else {
+          setExecutionResult(result.query_result);
+          setExecutionError(null);
+        }
+      }
+
     } catch (e) {
       setQueryResult(null); // Clear old results on error
       if (e instanceof Error) setError(e.message);
@@ -658,7 +684,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } finally {
       setIsLoading(false);
     }
-  }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext, connectedResource, selectedAccountId]);
+  }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext, connectedResource, selectedAccountId, selectedCollections, collectionDetailsMap]);
 
   const handleGenerateQueryClick = useCallback(() => {
     if (intermediateContext) {
@@ -687,6 +713,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setDebugError(null);
     setAnalysisResult(null);
     setAnalysisError(null);
+    setWriteEvaluationResult(null);
+    setWriteEvaluationError(null);
 
     try {
       const result = await runMongoQuery(connectedResource.accountId, editableCode, connectedResource);
@@ -755,6 +783,25 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       setIsAnalyzing(false);
     }
   }, []);
+
+  const handleEvaluateWrite = useCallback(async () => {
+    if (!editableCode || !executionResult || !lastSuccessfulPrompt || !selectedAccountId || !connectedDbInfo) return;
+
+    setIsEvaluatingWrite(true);
+    setWriteEvaluationError(null);
+    setWriteEvaluationResult(null);
+
+    try {
+      const result = await evaluateWriteResult(lastSuccessfulPrompt, editableCode, executionResult, selectedAccountId, connectedDbInfo.name);
+      setWriteEvaluationResult(result);
+    } catch (e) {
+      if (e instanceof Error) setWriteEvaluationError(e.message);
+      else setWriteEvaluationError("An unexpected error occurred during write evaluation.");
+    } finally {
+      setIsEvaluatingWrite(false);
+    }
+  }, [lastSuccessfulPrompt, editableCode, executionResult, selectedAccountId, connectedDbInfo]);
+
 
   const handleCollectionClick = useCallback(async (collectionName: string, event?: React.MouseEvent) => {
     if (!connectedResource) return;
@@ -1519,6 +1566,42 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                 className="w-full h-28 p-4 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none"
                 disabled={isLoading || isQuerySectionDisabled}
               />
+              {/* Agent iterations control */}
+              <div className="flex items-center justify-between gap-3 py-2">
+                <div className="flex items-center gap-1.5">
+                  <label
+                    htmlFor="max-iterations-slider"
+                    className="text-sm font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap"
+                  >
+                    Agent Iterations: <span className="text-blue-600 dark:text-blue-400 font-semibold">{maxIterations}</span>
+                  </label>
+                  <div className="relative group">
+                    <button
+                      type="button"
+                      className="w-4 h-4 rounded-full bg-slate-300 dark:bg-slate-600 text-slate-600 dark:text-slate-300 text-xs flex items-center justify-center cursor-help hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                      aria-label="Info: Agent iterations"
+                    >
+                      ?
+                    </button>
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 px-3 py-2 bg-slate-800 text-slate-100 text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                      More iterations allow the agent to self-correct by re-generating and re-testing the query when it detects an error. Higher values can improve accuracy for complex queries but take longer. Max: 10.
+                      <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-slate-800"></div>
+                    </div>
+                  </div>
+                </div>
+                <input
+                  id="max-iterations-slider"
+                  type="range"
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={maxIterations}
+                  onChange={(e) => setMaxIterations(Number(e.target.value))}
+                  disabled={isLoading || isQuerySectionDisabled}
+                  className="w-32 accent-blue-600 disabled:opacity-40 cursor-pointer"
+                  aria-label={`Agent iterations: ${maxIterations}`}
+                />
+              </div>
               <button
                 onClick={handleGenerateQueryClick}
                 disabled={isLoading || !userInput.trim() || isQuerySectionDisabled || isPromptUnchanged}
@@ -1598,6 +1681,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     isAnalyzing={false}
                     analysisResult={null}
                     analysisError={null}
+                    onEvaluateWrite={() => { }}
+                    isEvaluatingWrite={false}
+                    writeEvaluationResult={null}
+                    writeEvaluationError={null}
                     isTutorialActive={isTutorialActive}
                     tutorialStepIndex={tutorialStepIndex}
                   />
@@ -1632,6 +1719,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     isAnalyzing={false}
                     analysisResult={null}
                     analysisError={null}
+                    onEvaluateWrite={() => { }}
+                    isEvaluatingWrite={false}
+                    writeEvaluationResult={null}
+                    writeEvaluationError={null}
                     isTutorialActive={isTutorialActive}
                     tutorialStepIndex={tutorialStepIndex}
                   />
@@ -1668,6 +1759,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                         isAnalyzing={isAnalyzing}
                         analysisResult={analysisResult}
                         analysisError={analysisError}
+                        onEvaluateWrite={handleEvaluateWrite}
+                        isEvaluatingWrite={isEvaluatingWrite}
+                        writeEvaluationResult={writeEvaluationResult}
+                        writeEvaluationError={writeEvaluationError}
                       />
                     </>
                   ) : (

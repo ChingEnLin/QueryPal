@@ -44,6 +44,11 @@ interface QueryResultProps {
   isAnalyzing: boolean;
   analysisResult: AnalysisResult | null;
   analysisError: string | null;
+  // Props for write evaluation
+  onEvaluateWrite?: () => void;
+  isEvaluatingWrite?: boolean;
+  writeEvaluationResult?: { evaluation: string } | null;
+  writeEvaluationError?: string | null;
   // Props for tutorial
   isTutorialActive?: boolean;
   tutorialStepIndex?: number;
@@ -87,6 +92,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
     onDebug, isDebugging, debuggingResult, debugError,
     sourceCollection, onSetIntermediateContext, intermediateContext,
     onAnalyze, isAnalyzing, analysisResult, analysisError,
+    onEvaluateWrite, isEvaluatingWrite, writeEvaluationResult, writeEvaluationError,
     isTutorialActive, tutorialStepIndex
 }) => {
   const [viewMode, setViewMode] = useState<'json' | 'table' | 'summary'>('json');
@@ -417,7 +423,15 @@ const QueryResult: React.FC<QueryResultProps> = ({
             <div id="tutorial-view-switcher" className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-1 flex-wrap">
                     {isWriteOpSummary && (
-                       <button onClick={() => setViewMode('summary')} disabled={viewMode === 'summary' || isTableEditMode} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:cursor-not-allowed ${viewMode === 'summary' ? 'bg-blue-500 text-white shadow' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50'}`} title="View a summary of the write operation"><InfoIcon className="w-4 h-4" />Summary</button>
+                       <>
+                         <button onClick={() => setViewMode('summary')} disabled={viewMode === 'summary' || isTableEditMode} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:cursor-not-allowed ${viewMode === 'summary' ? 'bg-blue-500 text-white shadow' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50'}`} title="View a summary of the write operation"><InfoIcon className="w-4 h-4" />Summary</button>
+                         {onEvaluateWrite && (
+                           <button onClick={onEvaluateWrite} disabled={isEvaluatingWrite || !!writeEvaluationResult || isTableEditMode} className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed" title="Evaluate write result with AI">
+                             <AiSparkleIcon className="w-4 h-4" />
+                             <span>{isEvaluatingWrite ? 'Evaluating...' : (writeEvaluationResult ? 'Evaluated' : 'Evaluate with AI')}</span>
+                           </button>
+                         )}
+                       </>
                     )}
                     <button onClick={() => setViewMode('json')} disabled={viewMode === 'json' || isTableEditMode} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:cursor-not-allowed ${viewMode === 'json' ? 'bg-blue-500 text-white shadow' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50'}`} title="View the raw JSON output"><JsonIcon className="w-4 h-4" />JSON</button>
                     <button onClick={() => setViewMode('table')} disabled={!canBeTable || viewMode === 'table' || isTableEditMode} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:cursor-not-allowed ${viewMode === 'table' ? 'bg-blue-500 text-white shadow' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50'}`} title="View the results in a sortable table"><TableIcon className="w-4 h-4" />Table</button>
@@ -436,7 +450,19 @@ const QueryResult: React.FC<QueryResultProps> = ({
                 {renderTableActionsToolbar()}
 
                 <div>
-                    {viewMode === 'summary' && <WriteSummaryDisplay data={executionResult} />}
+                    {viewMode === 'summary' && (
+                      <div className="space-y-4">
+                        <WriteSummaryDisplay data={executionResult} />
+                        {isEvaluatingWrite && <div className="flex justify-center items-center p-4"><SpinnerIcon className="h-6 w-6 text-blue-500" /><span className="text-slate-600 dark:text-slate-400 text-sm ml-3">AI is evaluating the result...</span></div>}
+                        {writeEvaluationError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg"><strong className="font-bold">Evaluation Error: </strong><span>{writeEvaluationError}</span></div>}
+                        {writeEvaluationResult && (
+                          <div className="bg-blue-50/50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+                            <h4 className="flex items-center gap-2 text-blue-800 dark:text-blue-300 font-semibold mb-2"><AiSparkleIcon className="w-5 h-5"/> AI Evaluation</h4>
+                            <p className="text-slate-700 dark:text-slate-300">{writeEvaluationResult.evaluation}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {viewMode === 'json' && !isJsonCollapsed && <JsonDisplay data={executionResult} />}
                     {viewMode === 'table' && canBeTable && (
                       <Table 

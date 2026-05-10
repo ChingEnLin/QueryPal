@@ -14,6 +14,7 @@ _find_by_id_cache = TTLCache(maxsize=100, ttl=600)
 
 ALL_DOCUMENTS_CACHES = [_find_by_id_cache]
 
+
 def _format_value_for_pymongo(v: any) -> str:
     if isinstance(v, dict):
         items = []
@@ -31,18 +32,19 @@ def _format_value_for_pymongo(v: any) -> str:
     elif isinstance(v, str):
         # simple escape
         if v.startswith("ObjectId(") or v.startswith("datetime("):
-            return v # fallback if it was already stringified somehow
-        
+            return v  # fallback if it was already stringified somehow
+
         escaped = v.replace("'", "\\'")
         return f"'{escaped}'"
     elif isinstance(v, bool):
         return "True" if v else "False"
     elif v is None:
         return "None"
-    elif hasattr(v, "pattern"): # Regex object
+    elif hasattr(v, "pattern"):  # Regex object
         return f"re.compile(r'{v.pattern}', {v.flags})"
     else:
         return repr(v)
+
 
 def generate_mongo_query_string(collection_name: str, query: dict) -> str:
     query_str = _format_value_for_pymongo(query)
@@ -205,7 +207,7 @@ def build_mongo_query(collection, filter: dict = None, filters: list = None) -> 
             query = and_clauses[0]
         else:
             query = {"$and": and_clauses}
-            
+
     return query
 
 

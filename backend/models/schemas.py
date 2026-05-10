@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AccountDetailsRequest(BaseModel):
@@ -36,6 +36,9 @@ class QueryPrompt(BaseModel):
     intermediate_context: object | None = (
         None  # Optional intermediate context for complex queries
     )
+    max_iterations: int = Field(
+        default=3, ge=1, le=10
+    )  # Server-enforced agent iteration cap
 
 
 class GeneratedCode(BaseModel):
@@ -74,3 +77,15 @@ class Relationship(BaseModel):
 
 class SchemaRelationshipsResponse(BaseModel):
     relationships: list[Relationship]
+
+
+class EvaluateWriteRequest(BaseModel):
+    user_intent: str
+    query_code: str
+    write_result: dict
+    account_id: str
+    database_name: str
+
+
+class EvaluateWriteResponse(BaseModel):
+    evaluation: str

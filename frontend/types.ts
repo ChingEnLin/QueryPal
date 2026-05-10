@@ -18,6 +18,10 @@ export interface DbConfig {
 
 export interface QueryResultData {
     generated_code: string;
+    is_write_action?: boolean;
+    query_result?: any;
+    explanation?: string;
+    is_valid?: boolean;
 }
 
 /**

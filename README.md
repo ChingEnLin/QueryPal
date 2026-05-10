@@ -128,6 +128,33 @@ QueryPal follows a secure **Backend-for-Frontend (BFF)** pattern with enterprise
 └─────────────────────┘
 ```
 
+### Autonomous Query Generation with ReAct Agent
+
+QueryPal employs a powerful LangGraph-based ReAct (Reasoning and Acting) agent to autonomously generate, sandbox-test, and evaluate MongoDB queries. This ensures unparalleled accuracy while maintaining strict safety boundaries for write operations.
+
+```mermaid
+graph TD
+    A[User Intent] -->|Natural Language| B(Generate Query)
+    B --> C{Write Operation?}
+    C -- Yes --> D[Return Query to User]
+    D --> E((Manual Review & Run))
+    E --> F[Execute Write]
+    F --> G[Log to Audit Database]
+    F --> H[Evaluate with AI]
+    
+    C -- No (Read Only) --> I(Sandbox Execution)
+    I --> J{Evaluate Result}
+    J -- Success --> K[Return Final Query & Data]
+    J -- Failure/Error --> B
+    
+    subgraph LangGraph Agent Loop
+        B
+        C
+        I
+        J
+    end
+```
+
 **Security Features:**
 - ✅ **Zero-Trust Architecture**: No secrets stored in frontend
 - 🔐 **Token-Based Authentication**: MSAL with automatic token refresh
