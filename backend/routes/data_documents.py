@@ -4,6 +4,7 @@ import re
 from models.data_documents import (
     DataDocumentsRequest,
     DataDocumentsResponse,
+    DataDocumentsQueryResponse,
     FindByIdRequest,
     FindByIdResponse,
     UpdateDocumentRequest,
@@ -17,6 +18,8 @@ from models.data_documents import (
 from services.data_documents_service import (
     find_document_by_id,
     fetch_documents,
+    build_mongo_query,
+    generate_mongo_query_string,
     update_document,
     get_single_document,
     insert_document,
@@ -48,6 +51,33 @@ def get_documents(
         filter=body.filter.model_dump() if body.filter else None,
         filters=[f.model_dump() for f in body.filters] if body.filters else None,
     )
+
+
+@router.post("/documents/query_code", response_model=DataDocumentsQueryResponse)
+def get_documents_query_code(
+    body: DataDocumentsRequest = Body(...), authorization: str = Header(...)
+):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    user_token = authorization.replace("Bearer ", "")
+    access_token = exchange_token_obo(user_token)
+    connection_string = get_connection_string(body.account_id, access_token)
+
+    # Needs to initialize MongoClient briefly to access find_one if 'all' keys are used in the algorithm
+    from pymongo import MongoClient
+
+    client = MongoClient(connection_string)
+    db = client[body.database_name]
+    collection = db[body.collection_name]
+
+    query = build_mongo_query(
+        collection=collection,
+        filter=body.filter.model_dump() if body.filter else None,
+        filters=[f.model_dump() for f in body.filters] if body.filters else None,
+    )
+
+    query_str = generate_mongo_query_string(body.collection_name, query)
+    return DataDocumentsQueryResponse(query_code=query_str)
 
 
 @router.put("/documents", response_model=dict)

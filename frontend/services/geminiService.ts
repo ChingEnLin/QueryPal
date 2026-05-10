@@ -2,7 +2,7 @@ import { QueryResultData, DbInfo, CollectionInfo, DebuggingResult, AnalysisResul
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery, mockDebuggingResult, mockAnalysisResult } from './mockData';
 import { msalInstance, loginRequest } from '../authConfig';
-import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
+import { getAuthErrorMessage } from '../utils/authErrorHandler';
 
 /**
  * Sends the user's natural language prompt to the backend for processing by the Gemini API.
@@ -21,6 +21,7 @@ export const generateMongoQuery = async (
     collectionContext?: CollectionInfo, // Kept for backward compatibility/single select
     intermediateContext?: any,
     selectedCollections: CollectionInfo[] = [],
+    maxIterations: number = 3
 ): Promise<QueryResultData> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
@@ -73,6 +74,7 @@ export const generateMongoQuery = async (
                 sampleDocument: col.sampleDocument
             })) : (collectionContext ? [collectionContext] : []), // Fallback to single context as array
             intermediate_context: intermediateContext, // Optional: send data from a previous query
+            max_iterations: maxIterations,
         }),
     });
 
@@ -234,4 +236,57 @@ export const inferSchemaRelationships = async (
 
     const result: SchemaRelationshipsResponse = await response.json();
     return result;
+};
+
+
+/**
+ * Evaluates the result of a write operation against the user's intent.
+ */
+export const evaluateWriteResult = async (userIntent: string, queryCode: string, writeResult: any, accountId: string, databaseName: string): Promise<{ evaluation: string }> => {
+    // --- DEVELOPMENT MOCK ---
+    if (!USE_MSAL_AUTH) {
+        console.log("DEV MODE: Returning mock AI write evaluation.");
+        await mockDelay(1000);
+        return { evaluation: "Based on the result, it looks like your update was successful. 1 document matched and 1 document was modified." };
+    }
+
+    let accessToken = "";
+    try {
+        const account = msalInstance.getAllAccounts()[0];
+        if (account) {
+            const response = await msalInstance.acquireTokenSilent({
+                ...loginRequest,
+                account: account
+            });
+            accessToken = response.accessToken;
+        }
+    } catch (error) {
+        console.error("Token acquisition failed, proceeding without token:", error);
+    }
+
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+    };
+    if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/query/evaluate-write`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+            user_intent: userIntent,
+            query_code: queryCode,
+            write_result: writeResult,
+            account_id: accountId,
+            database_name: databaseName
+        }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.message || 'The AI model failed to evaluate the write result.');
+    }
+
+    return await response.json();
 };

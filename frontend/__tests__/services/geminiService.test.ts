@@ -15,7 +15,7 @@ describe('geminiService', () => {
 
   describe('generateMongoQuery', () => {
     it('should return mock data when not using MSAL auth', async () => {
-      const result = await generateMongoQuery('find users')
+      const result = await generateMongoQuery('find users', 'test-account')
       
       expect(result).toBeDefined()
       expect(result).toHaveProperty('generated_code')
@@ -24,19 +24,19 @@ describe('geminiService', () => {
     })
 
     it('should return user query for user-related input', async () => {
-      const result = await generateMongoQuery('find all users from Canada')
+      const result = await generateMongoQuery('find all users from Canada', 'test-account')
       
       expect(result.generated_code).toContain('users')
     })
 
     it('should return product query for product-related input', async () => {
-      const result = await generateMongoQuery('update product prices by 10%')
+      const result = await generateMongoQuery('update product prices by 10%', 'test-account')
       
       expect(result.generated_code).toContain('products')
     })
 
     it('should return default query for other inputs', async () => {
-      const result = await generateMongoQuery('show me something')
+      const result = await generateMongoQuery('show me something', 'test-account')
       
       expect(result).toBeDefined()
       expect(result.generated_code).toBeDefined()
@@ -50,7 +50,7 @@ describe('geminiService', () => {
         size: '10 MB'
       }
       
-      const result = await generateMongoQuery('find data', dbInfo)
+      const result = await generateMongoQuery('find data', 'test-account', dbInfo as any)
       expect(result).toBeDefined()
     })
 
@@ -60,7 +60,7 @@ describe('geminiService', () => {
         count: 1000
       }
       
-      const result = await generateMongoQuery('find data', undefined, collectionContext)
+      const result = await generateMongoQuery('find data', 'test-account', undefined, collectionContext as any)
       expect(result).toBeDefined()
     })
   })
@@ -123,6 +123,6 @@ describe('geminiService with MSAL auth', () => {
 
     // Since we can't easily test the actual API integration without auth,
     // we'll verify that it throws when no auth is available
-    await expect(generateMongoQuery('test')).rejects.toThrow()
+    await expect(generateMongoQuery('test', 'test-account')).rejects.toThrow()
   })
 })

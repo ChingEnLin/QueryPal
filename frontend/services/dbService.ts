@@ -314,8 +314,8 @@ export const getDocuments = async (
   resource: SelectedResource,
   page: number,
   limit: number,
-  filter?: { key: string, value: any, operator?: string },
-  filters?: { key: string, value: any, operator?: string }[]
+  filter?: { key: string, value: any, operator?: string, type?: string },
+  filters?: { key: string, value: any, operator?: string, type?: string }[]
 ): Promise<PaginatedDocumentsResponse> => {
   // --- DEVELOPMENT MOCK ---
   if (!USE_MSAL_AUTH) {
@@ -429,6 +429,53 @@ export const getDocuments = async (
   }
 
   return response.json();
+};
+
+export const getDocumentsQueryCode = async (
+  collectionName: string,
+  resource: SelectedResource,
+  filter?: { key: string, value: any, operator?: string, type?: string },
+  filters?: { key: string, value: any, operator?: string, type?: string }[]
+): Promise<string> => {
+  if (!USE_MSAL_AUTH) {
+    return Promise.resolve("db['" + collectionName + "'].find({\n  // Exporting is only fully supported dynamically in remote mode.\n})");
+  }
+
+  const accessToken = await getAuthenticatedToken();
+
+  const bodyQuery: any = {
+    account_id: resource.accountId,
+    database_name: resource.databaseName,
+    collection_name: collectionName,
+    page: 1,
+    limit: 1,
+  };
+
+  if (filter && ((filter.value !== '' && filter.value !== null && filter.value !== undefined) || filter.operator === 'exists' || filter.operator === 'not_exists')) {
+    bodyQuery.filter = filter;
+  }
+
+  if (filters && filters.length > 0) {
+    bodyQuery.filters = filters.filter(f => (f.value !== '' && f.value !== null && f.value !== undefined) || f.operator === 'exists' || f.operator === 'not_exists');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/data/documents/query_code`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(bodyQuery),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.detail || errorData.message || `Failed to generate query code. Status: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  const result = await response.json();
+  return result.query_code;
 };
 
 /**

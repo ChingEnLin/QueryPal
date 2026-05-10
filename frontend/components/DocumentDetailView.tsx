@@ -3,6 +3,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Button, CircularProgress } from '@mui/material';
 import MonacoEditor from '@monaco-editor/react';
 import { updateDocument, getSingleDocument } from '../services/dbService';
+import { isEqual, omit } from 'lodash';
+import SaveConflictDialog from './SaveConflictDialog';
 
 
 interface DocumentEditViewProps {
@@ -26,17 +28,47 @@ const DocumentEditView = forwardRef<DocumentEditViewRef, DocumentEditViewProps>(
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const { theme } = useTheme();
   const [isSaving, setIsSaving] = useState(false);
+  const [isConflictDialogOpen, setIsConflictDialogOpen] = useState(false);
+  const [conflictServerDocStr, setConflictServerDocStr] = useState<string>('');
 
   useImperativeHandle(ref, () => ({
     getCurrentValue: () => jsonValue,
     setCurrentValue: (val: string) => setJsonValue(val)
   }));
 
-  const handleSave = async () => {
+  const handleSave = async (forceSave = false) => {
     setIsSaving(true);
     try {
       const parsed = JSON.parse(jsonValue);
       if (!accountId || !databaseName || !collection || !docId) throw new Error('Missing DB info');
+
+      if (!forceSave) {
+        // Fetch the latest document from DB
+        const refreshed = await getSingleDocument(accountId, databaseName, collection, docId);
+        
+        // Compare with the original document prop
+        const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
+        const oldWithoutIgnored = omit(document, ignoredKeys);
+        const newWithoutIgnored = omit(refreshed, ignoredKeys);
+        
+        if (!isEqual(oldWithoutIgnored, newWithoutIgnored)) {
+          // Sync ignored fields to match user's expected view without highlighting them
+          const displayServerDoc = { ...refreshed };
+          ignoredKeys.forEach(key => {
+            if (key in parsed) {
+              displayServerDoc[key] = parsed[key];
+            } else {
+              delete displayServerDoc[key];
+            }
+          });
+          
+          setConflictServerDocStr(JSON.stringify(displayServerDoc, null, 2));
+          setIsConflictDialogOpen(true);
+          setIsSaving(false);
+          return;
+        }
+      }
+
       await updateDocument(accountId, databaseName, collection, docId, parsed);
       // Fetch the latest document after update
       const refreshed = await getSingleDocument(accountId, databaseName, collection, docId);
@@ -56,7 +88,7 @@ const DocumentEditView = forwardRef<DocumentEditViewRef, DocumentEditViewProps>(
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Edit Document</h3>
         <div className="flex gap-2">
-          <Button variant="contained" color="success" size="small" onClick={handleSave} disabled={loading || isSaving} startIcon={isSaving ? <CircularProgress size={18} color="inherit" /> : undefined}>
+          <Button variant="contained" color="success" size="small" onClick={() => handleSave(false)} disabled={loading || isSaving} startIcon={isSaving ? <CircularProgress size={18} color="inherit" /> : undefined}>
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
         </div>
@@ -96,6 +128,16 @@ const DocumentEditView = forwardRef<DocumentEditViewRef, DocumentEditViewProps>(
           {feedback.message}
         </div>
       )}
+      <SaveConflictDialog
+        open={isConflictDialogOpen}
+        serverValue={conflictServerDocStr}
+        localValue={jsonValue}
+        onClose={() => setIsConflictDialogOpen(false)}
+        onOverwrite={() => {
+          setIsConflictDialogOpen(false);
+          handleSave(true);
+        }}
+      />
     </div>
   );
 });
