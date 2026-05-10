@@ -37,6 +37,7 @@ class AgentState(TypedDict):
     evaluation: str
     is_valid: bool
     iterations: int
+    max_iterations: int
 
 
 # Define LLM clients and prompts
@@ -57,9 +58,10 @@ Previous Evaluation Feedback (if this is a retry):
 
 Instructions:
 1. Write ONLY the PyMongo query code. 
-2. Use variables appropriately (e.g., db['collection_name'].find(...)).
+2. Use variables appropriately (e.g., db['collection_name'].find(...) or db['collection_name'].aggregate(...)).
 3. Do not include markdown formatting or explanations, just return the code, but you can use ```python if you must.
 4. If the user is asking for a visualization, ensure the query retrieves the necessary data format.
+5. You are allowed to use both find() and aggregate() pipelines. If using aggregate(), be mindful of the resulting data size and include $limit stages if applicable.
 """
 
 EVALUATE_PROMPT = """
@@ -224,7 +226,10 @@ def evaluate_node(state: AgentState):
 def should_continue(state: AgentState):
     if state.get("is_valid"):
         return END
-    if state.get("iterations", 0) >= 3:
+
+    # Enforce a hard limit of 10 maximum iterations
+    max_iter = min(state.get("max_iterations", 3), 10)
+    if state.get("iterations", 0) >= max_iter:
         return END
     return "generate_query_node"
 
@@ -252,6 +257,7 @@ def run_query_generator(
     schema_context: str,
     intermediate_context: dict,
     connection_string: str,
+    max_iterations: int = 3,
 ):
     logger.info(f"Starting ReAct Agent workflow for input: '{user_input}'")
     initial_state = {
@@ -262,6 +268,7 @@ def run_query_generator(
         "intermediate_context": intermediate_context,
         "connection_string": connection_string,
         "iterations": 0,
+        "max_iterations": max_iterations,
     }
 
     # Run the graph

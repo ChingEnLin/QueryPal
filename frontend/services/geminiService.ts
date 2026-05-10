@@ -20,7 +20,8 @@ export const generateMongoQuery = async (
     dbInfo?: DbInfo,
     collectionContext?: CollectionInfo, // Kept for backward compatibility/single select
     intermediateContext?: any,
-    selectedCollections: CollectionInfo[] = []
+    selectedCollections: CollectionInfo[] = [],
+    maxIterations: number = 3
 ): Promise<QueryResultData> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
@@ -73,6 +74,7 @@ export const generateMongoQuery = async (
                 sampleDocument: col.sampleDocument
             })) : (collectionContext ? [collectionContext] : []), // Fallback to single context as array
             intermediate_context: intermediateContext, // Optional: send data from a previous query
+            max_iterations: maxIterations,
         }),
     });
 

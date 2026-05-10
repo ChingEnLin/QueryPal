@@ -36,6 +36,7 @@ class QueryPrompt(BaseModel):
     intermediate_context: object | None = (
         None  # Optional intermediate context for complex queries
     )
+    max_iterations: int = 3  # Maximum iterations for the ReAct agent
 
 
 class GeneratedCode(BaseModel):

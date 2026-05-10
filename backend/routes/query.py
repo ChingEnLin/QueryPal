@@ -69,6 +69,7 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
         schema_context=schema_summary,
         intermediate_context=prompt.intermediate_context,
         connection_string=connection_string,
+        max_iterations=prompt.max_iterations,
     )
 
 
