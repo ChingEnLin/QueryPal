@@ -1,3 +1,28 @@
+## [2.9.0](https://github.com/ChingEnLin/QueryPal/compare/v2.8.0...v2.9.0) (2026-05-10)
+
+### Features
+
+* Add filter type to support date filtering in the data explorer. ([2c00ecb](https://github.com/ChingEnLin/QueryPal/commit/2c00ecbf396c6768d088a6f0cb2c61a0084cc41d))
+* add functionality to export Data Explorer filters as PyMongo query string ([c21717c](https://github.com/ChingEnLin/QueryPal/commit/c21717c9a374269248afc6ff8c7debbd2990ad82))
+* configurable agent iterations with UI slider and aggregation support ([1e61b7f](https://github.com/ChingEnLin/QueryPal/commit/1e61b7f5889b2c3c544779b515680e3030e1e363))
+* generalize image preview component to support both base64 and URL images. ([2ef9493](https://github.com/ChingEnLin/QueryPal/commit/2ef949379fdbfb7c634d3e96214bf5984346df43))
+* implement AI-driven ReAct agent for query generation ([2c581f2](https://github.com/ChingEnLin/QueryPal/commit/2c581f293a9dd89c0a607cca15207ad04bf46041))
+* implement automated logging for database write operations in query execution routes ([fcc04b1](https://github.com/ChingEnLin/QueryPal/commit/fcc04b13ed8448b7c5cbe6e963afcdbf949666bb))
+* Implement multiple resizable document panels, "open to side" functionality, and document persistence in the Data Explorer. ([fc84a35](https://github.com/ChingEnLin/QueryPal/commit/fc84a355b015b741d31ab668875bfb18ec205cf0))
+* Implement save conflict detection and resolution with a diff viewer for document edits. ([cc164e6](https://github.com/ChingEnLin/QueryPal/commit/cc164e6f408ca7c3925a37aad93c059caf2fb62e))
+
+### Bug Fixes
+
+* security and reliability hardening ([4660c09](https://github.com/ChingEnLin/QueryPal/commit/4660c09b7d13d065171dcd93ef000f47726145f6))
+
+### Maintenance
+
+* mock GEMINI_API_KEY for CI tests ([b0dd3dc](https://github.com/ChingEnLin/QueryPal/commit/b0dd3dcef25d5c7b0677a2894cbc111a63785767))
+
+### Documentation
+
+* add ReAct agent documentation and architecture diagram to README ([bc75e8e](https://github.com/ChingEnLin/QueryPal/commit/bc75e8e565290640922110f9c7e64ca396da6897))
+
 ## [2.8.0](https://github.com/ChingEnLin/QueryPal/compare/v2.7.0...v2.8.0) (2026-03-12)
 
 ### Features
