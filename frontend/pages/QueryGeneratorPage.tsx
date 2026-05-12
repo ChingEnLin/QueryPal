@@ -329,10 +329,11 @@ export interface QueryGeneratorPageProps {
   email?: string;
   onLogout: () => void;
   onNavigateToExplorer: (connection: { resource: SelectedResource; dbInfo: DbInfo; accountName: string; availableDbs: DbInfo[], availableAccounts: CosmosDBAccount[] }) => void;
+  embedded?: boolean;
 }
 
 // --- Main Page Component ---
-const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer }) => {
+const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, embedded = false }) => {
   const [userInput, setUserInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -1261,21 +1262,23 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   );
 
 
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
+  const innerContent = (
+    <>
       <div className="max-w-4xl mx-auto">
 
-        <HeaderUI
-          name={name}
-          onLogout={onLogout}
-          onClearCache={handleClearCache}
-          isClearingCache={isClearingCache}
-          cacheClearStatus={cacheClearStatus}
-          onStartTutorial={() => setIsTutorialActive(true)}
-          onShowSavedQueries={() => setIsSavedQueriesPanelOpen(true)}
-          onShowShortcuts={() => setIsShortcutCheatsheetOpen(true)}
-          isUserMenuForcedOpen={isUserMenuOpenForTutorial}
-        />
+        {!embedded && (
+          <HeaderUI
+            name={name}
+            onLogout={onLogout}
+            onClearCache={handleClearCache}
+            isClearingCache={isClearingCache}
+            cacheClearStatus={cacheClearStatus}
+            onStartTutorial={() => setIsTutorialActive(true)}
+            onShowSavedQueries={() => setIsSavedQueriesPanelOpen(true)}
+            onShowShortcuts={() => setIsShortcutCheatsheetOpen(true)}
+            isUserMenuForcedOpen={isUserMenuOpenForTutorial}
+          />
+        )}
 
         <main className="space-y-8">
           {/* Connection Manager */}
@@ -1823,6 +1826,16 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
             animation: slide-in-drawer 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
           }
        `}</style>
+    </>
+  );
+
+  return embedded ? (
+    <div style={{ fontFamily: 'var(--font-body)', color: 'var(--fg)', padding: '16px 24px', minHeight: '100%' }}>
+      {innerContent}
+    </div>
+  ) : (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
+      {innerContent}
     </div>
   );
 };

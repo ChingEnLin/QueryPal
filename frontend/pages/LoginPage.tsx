@@ -65,11 +65,11 @@ const MsalLoginPage: React.FC = () => {
         console.log('MSAL Login Page - isAuthenticated:', isAuthenticated, 'accounts:', accounts);
         if (isAuthenticated && accounts.length > 0) {
             // Check if there's a saved location to redirect to
-            const from = location.state?.from?.pathname || '/query-generator';
+            const from = location.state?.from?.pathname || '/hub';
             const search = location.state?.from?.search || '';
             const hash = location.state?.from?.hash || '';
             const redirectPath = from + search + hash;
-            
+
             console.log('User is authenticated, navigating to:', redirectPath);
             navigate(redirectPath, { replace: true });
         }
@@ -86,7 +86,7 @@ const MsalLoginPage: React.FC = () => {
     if (isAuthenticated && accounts.length > 0) {
         return (
             <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col justify-center items-center p-4 text-slate-800 dark:text-slate-200">
-                <div>Redirecting to Query Generator...</div>
+                <div>Redirecting…</div>
             </div>
         );
     }
@@ -104,11 +104,11 @@ const BypassLoginPage: React.FC = () => {
         // Navigate using React Router instead of window.location
         setTimeout(() => {
             // Check if there's a saved location to redirect to
-            const from = location.state?.from?.pathname || '/query-generator';
+            const from = location.state?.from?.pathname || '/hub';
             const search = location.state?.from?.search || '';
             const hash = location.state?.from?.hash || '';
             const redirectPath = from + search + hash;
-            
+
             navigate(redirectPath, { replace: true });
         }, 100);
     };

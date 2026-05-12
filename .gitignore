@@ -50,3 +50,8 @@ deployment_note.txt
 
 # Temporary files
 development_plans.txt
+
+# claude files
+CLAUDE.md
+.claude/settings.local.json
+HANDOFF.md

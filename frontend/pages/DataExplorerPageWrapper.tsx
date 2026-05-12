@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import DataExplorerPage from './DataExplorerPage';
+import AppLayout from '../components/AppLayout';
 import { SelectedResource, DbInfo, CosmosDBAccount } from '../types';
 import { getAzureCosmosAccounts, getDatabasesForAccount } from '../services/dbService';
-import Loader from '../components/Loader';
 
 interface LocationState {
   dbInfo?: DbInfo;
@@ -230,15 +230,22 @@ const DataExplorerPageWrapper: React.FC = () => {
   }
 
   return (
-    <DataExplorerPage
-      resource={pageData.resource}
-      dbInfo={pageData.dbInfo}
+    <AppLayout
       accountName={pageData.accountName}
-      availableDbs={pageData.availableDbs}
-      availableAccounts={pageData.availableAccounts}
-      initialDocumentId={pageData.initialDocumentId}
-      onNavigateBack={onNavigateBack}
-    />
+      databaseName={pageData.dbInfo.name}
+      collections={pageData.dbInfo.collections}
+    >
+      <DataExplorerPage
+        resource={pageData.resource}
+        dbInfo={pageData.dbInfo}
+        accountName={pageData.accountName}
+        availableDbs={pageData.availableDbs}
+        availableAccounts={pageData.availableAccounts}
+        initialDocumentId={pageData.initialDocumentId}
+        onNavigateBack={onNavigateBack}
+        embedded
+      />
+    </AppLayout>
   );
 };
 

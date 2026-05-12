@@ -76,6 +76,7 @@ interface DataExplorerPageProps {
   availableAccounts: CosmosDBAccount[];
   initialDocumentId?: string;
   onNavigateBack: () => void;
+  embedded?: boolean;
 }
 
 interface PinnedDocument {
@@ -160,7 +161,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   availableDbs,
   availableAccounts,
   initialDocumentId,
-  onNavigateBack
+  onNavigateBack,
+  embedded = false,
 }) => {
   const navigate = useNavigate();
 
@@ -1091,9 +1093,9 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     }
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
-      <div className="flex flex-col h-screen relative">
+  const pageContent = (
+    <>
+    <div className={embedded ? 'flex flex-col h-full relative' : 'flex flex-col h-screen relative'}>
 
         {/* Loading Overlay */}
         {isLoadingDbsForAccount && (
@@ -1105,8 +1107,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
           </div>
         )}
 
-        {/* Header */}
-        <header className="flex-shrink-0 bg-white dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+        {/* Header — hidden in embedded mode (AppTopBar handles breadcrumb) */}
+        {!embedded && <header className="flex-shrink-0 bg-white dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center gap-4">
@@ -1202,7 +1204,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
               </div>
             </div>
           </div>
-        </header>
+        </header>}
 
         {/* Main Content Area */}
         <main className="flex-grow overflow-hidden block w-full h-full relative">
@@ -1732,6 +1734,12 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
             animation: pulse 1s infinite; 
           }
       `}</style>
+    </>
+  );
+
+  return embedded ? pageContent : (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
+      {pageContent}
     </div>
   );
 };
