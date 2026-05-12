@@ -198,7 +198,6 @@ const HubPage: React.FC = () => {
         <nav style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 8 }}>
           {[
             { label: 'Home', href: '/hub', active: true },
-            { label: 'Workspace', href: '/query-generator', active: false },
             { label: 'Analytics', href: '/analytics', active: false },
             { label: 'Audit Log', href: '/audit', active: false },
           ].map((item) => (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useMsal } from "@azure/msal-react";
 import { useAuth } from '../contexts/AuthContext';
 import { USE_MSAL_AUTH } from '../app.config';
@@ -7,10 +7,17 @@ import QueryGeneratorPage from './QueryGeneratorPage';
 import AppLayout from '../components/AppLayout';
 import { SelectedResource, DbInfo, CosmosDBAccount } from '../types';
 
+interface HubNavState {
+  preselectedAccountId?: string;
+  preselectedAccountName?: string;
+}
+
 // Component for the real MSAL authentication flow
 const MsalQueryGeneratorPageWrapper: React.FC = () => {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
+  const location = useLocation();
+  const hubState = (location.state as HubNavState) ?? {};
 
   const name = accounts[0]?.name;
   const email = accounts[0]?.username;
@@ -40,6 +47,7 @@ const MsalQueryGeneratorPageWrapper: React.FC = () => {
         email={email}
         onLogout={onLogout}
         onNavigateToExplorer={onNavigateToExplorer}
+        preselectedAccountId={hubState.preselectedAccountId}
         embedded
       />
     </AppLayout>
@@ -50,6 +58,8 @@ const MsalQueryGeneratorPageWrapper: React.FC = () => {
 const BypassQueryGeneratorPageWrapper: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const hubState = (location.state as HubNavState) ?? {};
 
   const name = user?.name;
   const email = user?.email;
@@ -78,6 +88,7 @@ const BypassQueryGeneratorPageWrapper: React.FC = () => {
         email={email}
         onLogout={logout}
         onNavigateToExplorer={onNavigateToExplorer}
+        preselectedAccountId={hubState.preselectedAccountId}
         embedded
       />
     </AppLayout>

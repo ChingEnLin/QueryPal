@@ -330,10 +330,11 @@ export interface QueryGeneratorPageProps {
   onLogout: () => void;
   onNavigateToExplorer: (connection: { resource: SelectedResource; dbInfo: DbInfo; accountName: string; availableDbs: DbInfo[], availableAccounts: CosmosDBAccount[] }) => void;
   embedded?: boolean;
+  preselectedAccountId?: string;
 }
 
 // --- Main Page Component ---
-const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, embedded = false }) => {
+const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, embedded = false, preselectedAccountId }) => {
   const [userInput, setUserInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -351,7 +352,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [quickExploringAccountId, setQuickExploringAccountId] = useState<string | null>(null);
 
   // State for AI query generation
-  const [queryResult, setQueryResult] = useState<QueryResultData | null>(null);
+  const [_queryResult, setQueryResult] = useState<QueryResultData | null>(null);
   const [querySourceCollection, setQuerySourceCollection] = useState<string | null>(null);
   const [editableCode, setEditableCode] = useState<string>('');
   const [codeHistory, setCodeHistory] = useState<string[]>([]);
@@ -393,7 +394,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [collectionDetailsMap, setCollectionDetailsMap] = useState<Record<string, CollectionInfo>>({});
   const [loadingCollections, setLoadingCollections] = useState<Record<string, boolean>>({});
   const [expandedCollectionSchemas, setExpandedCollectionSchemas] = useState<Record<string, boolean>>({}); // Track open/close state for stacking
-  const [collectionInfoError, setCollectionInfoError] = useState<string | null>(null);
+  const [collectionInfoError, _setCollectionInfoError] = useState<string | null>(null);
 
   // State for relationship inference
   const [relationships, setRelationships] = useState<SchemaRelationshipsResponse | null>(null);
@@ -424,6 +425,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
   // State for Keyboard Shortcuts
   const [isShortcutCheatsheetOpen, setIsShortcutCheatsheetOpen] = useState(false);
+
+  // State for DB switcher dropdown (embedded workspace)
+  const [isDbSwitcherOpen, setIsDbSwitcherOpen] = useState(false);
 
 
   const connectedAccountName = useMemo(() => {
@@ -614,6 +618,27 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     clearQueryState();
     setIsConnectingToDb(null);
   }, [selectedAccountId, azureAccounts, clearQueryState]);
+
+  // Auto-select the account passed from Hub navigation
+  useEffect(() => {
+    if (preselectedAccountId && azureAccounts.length > 0 && !connectedResource && !selectedAccountId) {
+      handleSelectAccount(preselectedAccountId);
+    }
+  }, [preselectedAccountId, azureAccounts, connectedResource, selectedAccountId, handleSelectAccount]);
+
+  // Auto-connect when the preselected account has exactly one database
+  useEffect(() => {
+    if (
+      preselectedAccountId &&
+      selectedAccountId === preselectedAccountId &&
+      accountDatabases.length === 1 &&
+      !connectedResource &&
+      !isLoadingDatabases &&
+      !isConnectingToDb
+    ) {
+      handleConnectDatabase(accountDatabases[0]);
+    }
+  }, [preselectedAccountId, selectedAccountId, accountDatabases, connectedResource, isLoadingDatabases, isConnectingToDb, handleConnectDatabase]);
 
   const handleGenerateQuery = useCallback(async (prompt: string, collectionCtx?: CollectionInfo) => {
     if (!prompt.trim()) {
@@ -1264,7 +1289,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
   const innerContent = (
     <>
-      <div className="max-w-4xl mx-auto">
+      <div style={{ maxWidth: 860, margin: '0 auto' }}>
 
         {!embedded && (
           <HeaderUI
@@ -1282,20 +1307,20 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
         <main className="space-y-8">
           {/* Connection Manager */}
-          <div id="tutorial-account-section" className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6">
+          <div id="tutorial-account-section" style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 24, marginBottom: 16 }}>
             {isConnectedForRender && dbInfoForRender ? (
               <div className="animate-fade-in">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Database Information</h2>
-                    <p className="text-blue-600 dark:text-blue-400 font-mono text-sm">
+                    <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18, color: 'var(--fg)' }}>Database Information</h2>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                       Connected to: {accountNameForRender} / <span className="font-bold">{dbInfoForRender.name}</span>
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => connectedDbInfo && connectedResource && handleLaunchExplorer(connectedDbInfo, azureAccounts.find(a => a.id === connectedResource.accountId) || azureAccounts[0])}
-                      className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
+                      className="qa-btn"
                       title="Open in Data Explorer"
                     >
                       <DataGridIcon className="w-4 h-4" />
@@ -1303,7 +1328,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     </button>
                     <button
                       onClick={handleDisconnect}
-                      className="px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/50 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors"
+                      style={{ padding: '5px 10px', border: '1px solid color-mix(in oklch, var(--status-err) 30%, var(--border))', borderRadius: 'var(--radius-sm)', background: 'none', color: 'var(--status-err)', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'var(--font-body)' }}
                       title="Disconnect from database"
                     >
                       Disconnect
@@ -1311,16 +1336,16 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div className="bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg">
-                    <p className="text-slate-500 dark:text-slate-400">Total Documents</p>
-                    <p className="text-slate-900 dark:text-slate-100 font-semibold text-lg">{dbInfoForRender.totalDocuments.toLocaleString()}</p>
+                  <div style={{ background: 'var(--soft)', padding: 12, borderRadius: 8 }}>
+                    <p style={{ color: 'var(--muted)', fontSize: 12 }}>Total Documents</p>
+                    <p style={{ color: 'var(--fg)', fontWeight: 600, fontSize: 18 }}>{dbInfoForRender.totalDocuments.toLocaleString()}</p>
                   </div>
-                  <div className="bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg">
-                    <p className="text-slate-500 dark:text-slate-400">Database Size</p>
-                    <p className="text-slate-900 dark:text-slate-100 font-semibold text-lg">{dbInfoForRender.size ?? 'N/A'}</p>
+                  <div style={{ background: 'var(--soft)', padding: 12, borderRadius: 8 }}>
+                    <p style={{ color: 'var(--muted)', fontSize: 12 }}>Database Size</p>
+                    <p style={{ color: 'var(--fg)', fontWeight: 600, fontSize: 18 }}>{dbInfoForRender.size ?? 'N/A'}</p>
                   </div>
-                  <div className="bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg col-span-1 md:col-span-3">
-                    <p className="text-slate-600 dark:text-slate-300 mb-2 flex items-center gap-2 font-medium">
+                  <div style={{ background: 'var(--soft)', padding: 12, borderRadius: 8 }} className="col-span-1 md:col-span-3">
+                    <p style={{ color: 'var(--fg)', fontSize: 13, fontWeight: 500 }} className="mb-2 flex items-center gap-2">
                       <ServerIcon className="w-4 h-4" /> Collections
                       <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Hold Ctrl/Cmd to select multiple)</span>
                     </p>
@@ -1329,7 +1354,17 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                         <button
                           key={col.name}
                           onClick={(e) => handleCollectionClick(col.name, e)}
-                          className={`text-xs font-mono px-3 py-1 rounded-full transition-all duration-200 ${selectedCollectionsForRender.includes(col.name) ? 'bg-blue-500 text-white font-bold ring-2 ring-blue-300 dark:bg-blue-600 dark:ring-blue-500' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'}`}
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 11,
+                            padding: '3px 10px',
+                            borderRadius: 99,
+                            border: selectedCollectionsForRender.includes(col.name) ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                            background: selectedCollectionsForRender.includes(col.name) ? 'var(--accent)' : 'var(--soft)',
+                            color: selectedCollectionsForRender.includes(col.name) ? '#fff' : 'var(--fg)',
+                            cursor: 'pointer',
+                            transition: 'all 0.1s',
+                          }}
                           title={`View details for the ${col.name} collection`}
                         >
                           {col.name}
@@ -1341,7 +1376,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
                 {/* Multi-Collection Analysis Panel */}
                 {selectedCollectionsForRender.length > 1 && (
-                  <div className="mt-6 bg-slate-50 dark:bg-slate-700/30 rounded-lg p-4 border border-slate-200 dark:border-slate-700 animate-fade-in">
+                  <div style={{ marginTop: 20, background: 'var(--soft)', borderRadius: 'var(--radius-md)', padding: 16, border: '1px solid var(--border)' }} className="animate-fade-in">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-md font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                         <span className="text-blue-500">🔗</span> Schema Connections
@@ -1395,10 +1430,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                       const isExpanded = expandedCollectionSchemas[colName] || (selectedCollectionsForRender.length === 1); // Default expanded if single
 
                       return (
-                        <div key={colName} className="bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div key={colName} style={{ background: 'var(--bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', overflow: 'hidden' }}>
                           <button
                             onClick={() => setExpandedCollectionSchemas(prev => ({ ...prev, [colName]: !prev[colName] }))}
-                            className="w-full flex items-center justify-between p-3 text-left hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg)', fontFamily: 'var(--font-body)' }}
                           >
                             <div className="flex items-center gap-2">
                               <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -1435,7 +1470,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
               </div>
             ) : (
               <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2"><DatabaseIcon className="w-6 h-6 text-blue-500" /> Select a Database to Connect</h2>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0 }}><DatabaseIcon className="w-6 h-6 text-blue-500" /> Select a Database to Connect</h2>
                 {dbError && !isLoadingAccounts && !isLoadingDatabases && (
                   <p className="text-red-600 bg-red-50 border border-red-200 text-sm mt-4 p-3 rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">{dbError}</p>
                 )}
@@ -1456,12 +1491,12 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                 ) : (
                   <div className="mt-4 space-y-4">
                     {azureAccounts.map(account => (
-                      <div key={account.id} className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border dark:border-slate-700">
+                      <div key={account.id} style={{ background: 'var(--soft)', padding: 14, borderRadius: 10, border: '1px solid var(--border)' }}>
                         <div className="flex items-center justify-between gap-2">
                           <button
                             onClick={() => handleSelectAccount(account.id)}
                             disabled={isLoadingDatabases}
-                            className="flex-grow text-left font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500, fontSize: 14, color: 'var(--fg)', flex: 1, textAlign: 'left' }}
                             title={`Load databases for ${account.name}`}
                           >
                             <CloudIcon className="w-5 h-5 text-slate-500" />
@@ -1473,7 +1508,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                           <button
                             onClick={(e) => { e.stopPropagation(); handleQuickExploreAccount(account); }}
                             disabled={quickExploringAccountId !== null}
-                            className={`flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-md transition-colors shadow-sm ml-2 ${quickExploringAccountId !== null && quickExploringAccountId !== account.id ? 'opacity-50' : ''}`}
+                            className="qa-btn"
                             title={`Quickly open Data Explorer for ${account.name} (first database)`}
                           >
                             {quickExploringAccountId === account.id ? (
@@ -1500,7 +1535,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                                     type="button"
                                     onClick={() => handleConnectDatabase(db)}
                                     disabled={isConnectingToDb !== null}
-                                    className={`px-4 py-2 border border-blue-600 dark:border-blue-500 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors flex items-center gap-2 ${isConnectingToDb !== null && isConnectingToDb !== db.name ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className="qa-btn primary"
                                     title={`Connect to the ${db.name} database`}
                                   >
                                     {isConnectingToDb === db.name ? (
@@ -1528,14 +1563,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
           </div>
 
           {/* Query Generator */}
-          <div id="tutorial-prompt-section" className={`bg-white dark:bg-slate-800 rounded-xl shadow-md p-6 transition-opacity duration-500 ${isQuerySectionDisabled ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+          <div id="tutorial-prompt-section" style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 24, opacity: isQuerySectionDisabled ? 0.4 : 1, pointerEvents: isQuerySectionDisabled ? 'none' : 'auto', transition: 'opacity 0.3s' }}>
             {showContextBanner && contextForRender && (
-              <div id="tutorial-context-banner" className="relative bg-blue-50 dark:bg-slate-800/60 border border-blue-200 dark:border-blue-500/30 rounded-lg p-4 mb-6 animate-fade-in">
+              <div id="tutorial-context-banner" style={{ position: 'relative', background: 'var(--accent-soft)', border: '1px solid color-mix(in oklch, var(--accent) 25%, var(--border))', borderRadius: 'var(--radius-md)', padding: 16, marginBottom: 24 }} className="animate-fade-in">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <PinIcon className="w-6 h-6 text-blue-500 flex-shrink-0" />
                     <div>
-                      <h4 className="font-bold text-blue-800 dark:text-blue-300">Query Context Active</h4>
+                      <h4 style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--accent)' }}>Query Context Active</h4>
                       <p className="text-sm text-blue-700 dark:text-blue-200/80">
                         Using results from <strong className="font-mono">{contextForRender.source}</strong> ({Array.isArray(contextForRender.data) ? contextForRender.data.length : 1} items) as context for the next query.
                       </p>
@@ -1550,7 +1585,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
             )}
 
             <div className="space-y-4">
-              <label htmlFor="userInput" className="block text-lg font-medium text-slate-700 dark:text-slate-300">
+              <label htmlFor="userInput" style={{ display: 'block', fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 14, color: 'var(--muted)', marginBottom: 8 }}>
                 Enter your command:
               </label>
               <textarea
@@ -1566,7 +1601,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                   }
                 }}
                 placeholder={isQuerySectionDisabled ? "Connect to a database to begin..." : (selectedCollections.length > 0 ? `Querying ${selectedCollections.length > 1 ? `${selectedCollections.length} collections` : `'${selectedCollections[0]}'`}... e.g., 'Find all users from Canada'` : "e.g., 'Find all users from Canada and sort them by name'")}
-                className="w-full h-28 p-4 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none"
+                style={{ width: '100%', height: 112, padding: 14, background: 'var(--soft)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: 14, fontFamily: 'var(--font-body)', color: 'var(--fg)', outline: 'none', resize: 'none', boxSizing: 'border-box' }}
                 disabled={isLoading || isQuerySectionDisabled}
               />
               {/* Agent iterations control */}
@@ -1574,7 +1609,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                 <div className="flex items-center gap-1.5">
                   <label
                     htmlFor="max-iterations-slider"
-                    className="text-sm font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap"
+                    style={{ fontSize: 12.5, color: 'var(--muted)', whiteSpace: 'nowrap' }}
                   >
                     Agent Iterations: <span className="text-blue-600 dark:text-blue-400 font-semibold">{maxIterations}</span>
                   </label>
@@ -1608,7 +1643,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
               <button
                 onClick={handleGenerateQueryClick}
                 disabled={isLoading || !userInput.trim() || isQuerySectionDisabled || isPromptUnchanged}
-                className="w-full flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.99]"
+                style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px 24px', border: 'none', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 500, cursor: 'pointer', background: 'var(--accent)', color: '#fff', opacity: (isLoading || !userInput.trim() || isQuerySectionDisabled || isPromptUnchanged) ? 0.45 : 1, transition: 'opacity 0.15s' }}
                 title={isPromptUnchanged ? "The current query matches the prompt. Modify the prompt to generate a new query." : "Generate MongoDB code from your natural language command (⌘ + G)"}
               >
                 {generateButtonText}
@@ -1617,13 +1652,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
             <div id="tutorial-results-area" className="mt-8">
               <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 ${isQuerySectionDisabled ? 'hidden' : ''}`}>
-                <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300">
+                <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 15, color: 'var(--fg)' }}>
                   Query Output
                 </h3>
                 <button
                   id="tutorial-notebook-button"
                   onClick={() => setIsNotebookPanelOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
+                  className="qa-btn"
                   title="View your session as a reproducible Jupyter Notebook"
                 >
                   <NotebookIcon className="w-5 h-5" />
@@ -1779,7 +1814,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
           </div>
         </main>
 
-        <footer className="text-center mt-8 text-slate-500 dark:text-slate-400 text-sm space-y-1">
+        <footer style={{ textAlign: 'center', marginTop: 32, color: 'var(--muted)', fontSize: 12 }}>
           <p>Powered by Microsoft Azure and Google Gemini. For internal use only.</p>
           <p className="text-xs">
             AI features use the Google Gemini API. Your data is not used to train their models. See the <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-700 dark:hover:text-slate-200">Terms of Service</a>.
@@ -1829,14 +1864,428 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     </>
   );
 
-  return embedded ? (
-    <div style={{ fontFamily: 'var(--font-body)', color: 'var(--fg)', padding: '16px 24px', minHeight: '100%' }}>
-      {innerContent}
+  // Portals and animations shared by all embedded layouts
+  const sharedTail = (
+    <>
+      <Tutorial
+        isActive={isTutorialActive}
+        onStepChange={setTutorialStepIndex}
+        onClose={() => {
+          setIsTutorialActive(false);
+          localStorage.setItem('hasSeenTutorial', 'true');
+        }}
+      />
+      {contextViewerDrawer}
+      {notebookPanelDrawer}
+      {savedQueriesPanelDrawer}
+      {saveQueryDialog}
+      {shareQueryDialog}
+      {shortcutCheatsheet}
+      <style>{`
+        @keyframes fade-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+        @keyframes fade-in-fast { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade-in-fast { animation: fade-in-fast 0.3s ease-out forwards; }
+        @keyframes slide-in-drawer { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .animate-slide-in-drawer { animation: slide-in-drawer 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      `}</style>
+    </>
+  );
+
+  if (!embedded) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
+        {innerContent}
+      </div>
+    );
+  }
+
+  // ── Embedded: not yet connected ───────────────────────────────────────
+  if (!isConnectedForRender) {
+    return (
+      <>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 24, fontFamily: 'var(--font-body)', color: 'var(--fg)', padding: '40px 32px' }}>
+          {(isLoadingAccounts || isLoadingDatabases || isConnectingToDb) ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--muted)', fontSize: 13 }}>
+              <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+              {isConnectingToDb ? `Connecting to ${isConnectingToDb}…` : isLoadingDatabases ? 'Loading databases…' : 'Loading accounts…'}
+            </div>
+          ) : dbError ? (
+            <div style={{ color: 'var(--status-err)', fontSize: 13, textAlign: 'center', maxWidth: 400 }}>{dbError}</div>
+          ) : accountDatabases.length > 0 ? (
+            <>
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 20, textAlign: 'center', marginBottom: 6 }}>Select a database</div>
+                <div style={{ color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>Choose which database to query</div>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
+                {accountDatabases.map(db => (
+                  <button
+                    key={db.name}
+                    onClick={() => handleConnectDatabase(db)}
+                    disabled={isConnectingToDb !== null}
+                    className="qa-btn primary"
+                    style={{ fontSize: 14, padding: '8px 20px', height: 'auto' }}
+                  >
+                    {db.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 20, textAlign: 'center' }}>No database selected</div>
+              <div style={{ color: 'var(--muted)', fontSize: 13, textAlign: 'center', maxWidth: 320 }}>
+                Go back to Hub and click a connection to start querying.
+              </div>
+            </>
+          )}
+        </div>
+        {sharedTail}
+      </>
+    );
+  }
+
+  // ── Embedded: connected — 2-column workspace layout ──────────────────
+  const insightsRail = (
+    <aside style={{
+      width: 300, flexShrink: 0,
+      borderLeft: '1px solid var(--border)',
+      overflow: 'auto',
+      padding: '16px 14px',
+      background: 'var(--bg)',
+      display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <path d="M8 2l1.6 4.4L14 8l-4.4 1.6L8 14l-1.6-4.4L2 8l4.4-1.6z"/>
+        </svg>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 500 }}>Insights</span>
+        <span className="qa-chip" style={{ marginLeft: 'auto', fontSize: 10 }}>auto</span>
+      </div>
+
+      {/* Analysis result */}
+      {analysisResult && (
+        <div className="qa-card animate-fade-in" style={{ padding: '10px 12px' }}>
+          <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 6 }}>Analysis</div>
+          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>{analysisResult.insight}</div>
+        </div>
+      )}
+
+      {/* Debug result */}
+      {debuggingResult && (
+        <div className="qa-card animate-fade-in" style={{ padding: '10px 12px' }}>
+          <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--status-warn)', marginBottom: 6 }}>Debug suggestion</div>
+          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>{debuggingResult.suggestion}</div>
+        </div>
+      )}
+
+      {/* Write evaluation */}
+      {writeEvaluationResult && (
+        <div className="qa-card animate-fade-in" style={{ padding: '10px 12px' }}>
+          <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--status-warn)', marginBottom: 6 }}>Write evaluation</div>
+          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>{writeEvaluationResult.evaluation}</div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!analysisResult && !debuggingResult && !writeEvaluationResult && (
+        <div style={{ background: 'var(--soft)', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', padding: '12px 14px' }}>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Run a query to see AI insights</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>After executing, use "Analyze" on the results to get patterns, anomalies, and follow-up suggestions.</div>
+        </div>
+      )}
+
+      {/* Notebook shortcut */}
+      <button
+        onClick={() => setIsNotebookPanelOpen(true)}
+        className="qa-btn"
+        style={{ width: '100%', justifyContent: 'center', marginTop: 'auto' }}
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <path d="M4 2h8a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM6 6h4M6 9h4M6 12h2"/>
+        </svg>
+        View notebook
+      </button>
+    </aside>
+  );
+
+  const queryColumn = (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', padding: '16px 20px', gap: 12, minWidth: 0 }}>
+      {/* DB switcher + collection selector strip */}
+      {dbInfoForRender && (
+        <div id="tutorial-account-section" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* Database switcher */}
+          {accountDatabases.length > 1 && connectedDbInfo && (
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setIsDbSwitcherOpen(o => !o)}
+                className="qa-btn"
+                style={{ fontSize: 11.5, gap: 5 }}
+                title="Switch database"
+              >
+                <DatabaseIcon className="w-3 h-3" />
+                {connectedDbInfo.name}
+                <ChevronDownIcon className={`w-3 h-3 transition-transform ${isDbSwitcherOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isDbSwitcherOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 20,
+                  background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                  boxShadow: '0 8px 24px -8px rgba(20,18,14,0.15)', minWidth: 160, overflow: 'hidden',
+                }}>
+                  {accountDatabases.map(db => (
+                    <button
+                      key={db.name}
+                      onClick={() => { handleConnectDatabase(db); setIsDbSwitcherOpen(false); }}
+                      style={{
+                        width: '100%', textAlign: 'left', padding: '8px 12px',
+                        background: db.name === connectedDbInfo.name ? 'var(--soft)' : 'none',
+                        border: 'none', borderBottom: '1px solid var(--border)',
+                        fontFamily: 'var(--font-mono)', fontSize: 12,
+                        color: db.name === connectedDbInfo.name ? 'var(--accent)' : 'var(--fg)',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                      }}
+                    >
+                      {db.name === connectedDbInfo.name && (
+                        <CheckIcon className="w-3 h-3" style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                      )}
+                      {db.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
+            {accountDatabases.length > 1 ? '›' : <><DatabaseIcon className="w-3 h-3" style={{ display: 'inline', marginRight: 3 }} />{connectedDbInfo?.name}</>}
+          </span>
+
+          {dbInfoForRender.collections.map(col => (
+            <button
+              key={col.name}
+              onClick={(e) => handleCollectionClick(col.name, e)}
+              title={`Select ${col.name} (hold ⌘/Ctrl for multi-select)`}
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 11,
+                padding: '3px 10px', borderRadius: 99,
+                border: selectedCollectionsForRender.includes(col.name) ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                background: selectedCollectionsForRender.includes(col.name) ? 'var(--accent)' : 'var(--soft)',
+                color: selectedCollectionsForRender.includes(col.name) ? '#fff' : 'var(--fg)',
+                cursor: 'pointer', transition: 'all 0.1s',
+              }}
+            >
+              {col.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Schema panel for selected collections */}
+      {selectedCollectionsForRender.length > 0 && (
+        <div id="tutorial-collection-panel" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {collectionInfoError && (
+            <div style={{ background: 'color-mix(in oklch, var(--status-err) 10%, var(--bg))', border: '1px solid color-mix(in oklch, var(--status-err) 30%, var(--border))', color: 'var(--status-err)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', fontSize: 12 }}>
+              {collectionInfoError}
+            </div>
+          )}
+
+          {/* Multi-collection schema relationships */}
+          {selectedCollectionsForRender.length > 1 && (
+            <div className="animate-fade-in" style={{ background: 'var(--soft)', borderRadius: 'var(--radius-md)', padding: 14, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 500 }}>Schema Connections</span>
+              </div>
+              {(isAnalyzingRelationships || !relationships) && !relationshipError && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted)', fontSize: 12, padding: '8px 0' }}>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                  Searching for connections…
+                </div>
+              )}
+              {relationshipError && (
+                <div style={{ color: 'var(--status-err)', fontSize: 12 }}>{relationshipError}</div>
+              )}
+              {relationships && !isAnalyzingRelationships && (
+                <div className="animate-fade-in" style={{ display: 'flex', justifyContent: 'center' }}>
+                  <SchemaRelationshipGraph relationships={relationships} selectedCollections={selectedCollections} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Per-collection schema accordion */}
+          {selectedCollectionsForRender.map(colName => {
+            const info = collectionDetailsMapForRender[colName];
+            const isColLoading = loadingCollections[colName];
+            const isExpanded = expandedCollectionSchemas[colName] ?? (selectedCollectionsForRender.length === 1);
+            return (
+              <div key={colName} style={{ background: 'var(--bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+                <button
+                  onClick={() => setExpandedCollectionSchemas(prev => ({ ...prev, [colName]: !isExpanded }))}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg)', fontFamily: 'var(--font-body)' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <ChevronDownIcon className={`w-4 h-4 transition-transform`} style={{ color: 'var(--muted)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500 }}>{colName}</span>
+                    {isColLoading && <SpinnerIcon className="w-3 h-3 animate-spin text-blue-500" />}
+                  </div>
+                  {info && <span style={{ fontSize: 11, color: 'var(--muted)' }}>{info.documentCount.toLocaleString()} docs</span>}
+                </button>
+                {isExpanded && (
+                  <div style={{ borderTop: '1px solid var(--border)', background: 'var(--panel)' }}>
+                    {isColLoading ? (
+                      <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--muted)' }}>Loading schema…</div>
+                    ) : info ? (
+                      <CollectionActionPanel info={info} onClose={() => setSelectedCollections(prev => prev.filter(c => c !== colName))} />
+                    ) : (
+                      <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--status-err)' }}>Failed to load schema.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Query Generator section */}
+      <div
+        id="tutorial-prompt-section"
+        style={{ opacity: isQuerySectionDisabled ? 0.4 : 1, pointerEvents: isQuerySectionDisabled ? 'none' : 'auto', transition: 'opacity 0.3s', display: 'flex', flexDirection: 'column', gap: 12 }}
+      >
+        {/* Context banner */}
+        {showContextBanner && contextForRender && (
+          <div id="tutorial-context-banner" className="animate-fade-in" style={{ position: 'relative', background: 'var(--accent-soft)', border: '1px solid color-mix(in oklch, var(--accent) 25%, var(--border))', borderRadius: 'var(--radius-md)', padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <PinIcon className="w-5 h-5" style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--accent)' }}>Query Context Active</div>
+                  <div style={{ fontSize: 12, color: 'var(--fg)', marginTop: 2 }}>
+                    Using results from <strong style={{ fontFamily: 'var(--font-mono)' }}>{contextForRender.source}</strong> ({Array.isArray(contextForRender.data) ? contextForRender.data.length : 1} items)
+                  </div>
+                  <button onClick={() => setIsContextViewerOpen(true)} style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 2 }}>View data →</button>
+                </div>
+              </div>
+              <button onClick={() => setIntermediateContext(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 4 }}>
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Prompt input card */}
+        <div className="qa-card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--muted)' }}>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 8l3 3 7-7"/></svg>
+            Ask in plain English · Gemini
+            {selectedCollectionsForRender.length > 0 && (
+              <span className="qa-chip" style={{ marginLeft: 'auto' }}>{selectedCollectionsForRender.join(', ')}</span>
+            )}
+          </div>
+          <textarea
+            id="userInput"
+            value={userInput}
+            onChange={(e) => setUserInput(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
+                e.preventDefault();
+                if (!isLoading && userInput.trim() && !isQuerySectionDisabled && !isPromptUnchanged) handleGenerateQueryClick();
+              }
+            }}
+            placeholder={isQuerySectionDisabled ? 'Select a collection to begin…' : selectedCollections.length > 0 ? `Querying '${selectedCollections.join(', ')}'… e.g. 'Find all documents from last 30 days'` : "e.g. 'Find all users from Canada and sort by name'"}
+            style={{ width: '100%', minHeight: 80, padding: 10, background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--fg)', lineHeight: 1.55, boxSizing: 'border-box' }}
+            disabled={isLoading || isQuerySectionDisabled}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              onClick={handleGenerateQueryClick}
+              disabled={isLoading || !userInput.trim() || isQuerySectionDisabled || isPromptUnchanged}
+              className="qa-btn primary"
+              style={{ fontSize: 13 }}
+            >
+              {isLoading ? 'Generating…' : isPromptUnchanged ? 'Generated ✓' : 'Generate query'}
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Iterations:</span>
+              <input
+                id="max-iterations-slider"
+                type="range" min={1} max={10} step={1}
+                value={maxIterations}
+                onChange={(e) => setMaxIterations(Number(e.target.value))}
+                disabled={isLoading || isQuerySectionDisabled}
+                className="accent-blue-600 disabled:opacity-40 cursor-pointer"
+                style={{ width: 72, accentColor: 'var(--accent)' }}
+              />
+              <span style={{ fontSize: 11.5, color: 'var(--accent)', fontFamily: 'var(--font-mono)', minWidth: 14 }}>{maxIterations}</span>
+            </div>
+            <span className="qa-chip" style={{ marginLeft: 'auto', fontSize: 10.5, cursor: 'pointer' }}
+              onClick={() => setIsShortcutCheatsheetOpen(true)} title="Keyboard shortcuts">⌘/</span>
+          </div>
+        </div>
+
+        {/* Loading */}
+        {isLoading && !isDemoModeForDebugStep && !isDemoModeForResultsStep && !isDemoModeForRunStep && (
+          <Loader message="Generating query…" />
+        )}
+
+        {/* Error */}
+        {error && !isDemoModeForDebugStep && !isDemoModeForResultsStep && !isDemoModeForRunStep && (
+          <div style={{ background: 'color-mix(in oklch, var(--status-err) 10%, var(--bg))', border: '1px solid color-mix(in oklch, var(--status-err) 30%, var(--border))', color: 'var(--status-err)', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: 13 }}>
+            <strong>Error: </strong>{error}
+          </div>
+        )}
+
+        {/* Results area */}
+        <div id="tutorial-results-area">
+          {/* Tutorial demo modes */}
+          {(isDemoModeForRunStep || isDemoModeForSaveStep) && (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <QueryDisplay code={mockFindUsersQuery.generated_code} onCodeChange={() => {}} onRunQuery={() => {}} onSaveQuery={() => {}} isExecuting={false} historyCount={1} historyIndex={0} onNavigateHistory={() => {}} />
+            </div>
+          )}
+          {(isDemoModeForResultsStep || isDemoModeForContextActiveStep) && (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <QueryDisplay code={mockFindUsersQuery.generated_code} onCodeChange={() => {}} onRunQuery={() => {}} onSaveQuery={() => {}} isExecuting={false} historyCount={1} historyIndex={0} onNavigateHistory={() => {}} />
+              <QueryResult isExecuting={false} executionError={null} executionResult={mockUserFindResult} onDebug={() => {}} isDebugging={false} debuggingResult={null} debugError={null} sourceCollection={'users'} onSetIntermediateContext={() => {}} intermediateContext={null} onAnalyze={() => {}} isAnalyzing={false} analysisResult={null} analysisError={null} onEvaluateWrite={() => {}} isEvaluatingWrite={false} writeEvaluationResult={null} writeEvaluationError={null} isTutorialActive={isTutorialActive} tutorialStepIndex={tutorialStepIndex} />
+            </div>
+          )}
+          {isDemoModeForDebugStep && (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <QueryDisplay code={"db['users'].find({}).sor([('name', 1)])"} onCodeChange={() => {}} onRunQuery={() => {}} onSaveQuery={() => {}} isExecuting={false} historyCount={1} historyIndex={0} onNavigateHistory={() => {}} />
+              <QueryResult isExecuting={false} executionError={"MongoDB query error: unknown operator: $sor (MongoServerError)"} executionResult={null} onDebug={() => {}} isDebugging={false} debuggingResult={null} debugError={null} sourceCollection={'users'} onSetIntermediateContext={() => {}} intermediateContext={null} onAnalyze={() => {}} isAnalyzing={false} analysisResult={null} analysisError={null} onEvaluateWrite={() => {}} isEvaluatingWrite={false} writeEvaluationResult={null} writeEvaluationError={null} isTutorialActive={isTutorialActive} tutorialStepIndex={tutorialStepIndex} />
+            </div>
+          )}
+
+          {/* Real results */}
+          {(!isLoading && !error && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep && !isDemoModeForSaveStep) && (
+            editableCode ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} />
+                <QueryResult isExecuting={isExecuting} executionError={executionError} executionResult={executionResult} onDebug={handleDebugQuery} isDebugging={isDebugging} debuggingResult={debuggingResult} debugError={debugError} sourceCollection={querySourceCollection} onSetIntermediateContext={handleSetIntermediateContext} intermediateContext={intermediateContext} onAnalyze={handleAnalyzeQuery} isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError} onEvaluateWrite={handleEvaluateWrite} isEvaluatingWrite={isEvaluatingWrite} writeEvaluationResult={writeEvaluationResult} writeEvaluationError={writeEvaluationError} />
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0', border: '1.5px dashed var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13 }}>
+                Your generated query will appear here.
+              </div>
+            )
+          )}
+        </div>
+      </div>
     </div>
-  ) : (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
-      {innerContent}
-    </div>
+  );
+
+  return (
+    <>
+      <div style={{ display: 'flex', height: '100%', overflow: 'hidden', fontFamily: 'var(--font-body)', color: 'var(--fg)', background: 'var(--bg)' }}>
+        {queryColumn}
+        {insightsRail}
+      </div>
+      {sharedTail}
+    </>
   );
 };
 
