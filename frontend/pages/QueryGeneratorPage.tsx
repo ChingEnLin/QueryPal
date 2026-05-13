@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships, evaluateWriteResult } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
@@ -194,21 +195,28 @@ const NotebookStepCard: React.FC<NotebookStepCardProps> = ({ step, index, onRemo
 
   if (step.type === 'note') {
     return (
-      <div className="bg-slate-800/70 p-4 rounded-lg border border-slate-700 space-y-3 group">
-        <div className="flex justify-between items-center mb-2">
-          <h4 className="font-bold text-slate-200">Note</h4>
-          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="qa-card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 500 }}>Note</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {step.isEditing ? (
-              <button onClick={handleSave} className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700" title="Save changes">
-                <CheckIcon className="w-3 h-3" /> Save
+              <button onClick={handleSave} className="qa-btn" style={{ fontSize: 11, padding: '3px 8px' }}>
+                <CheckIcon className="w-3 h-3" style={{ width: 12, height: 12 }} /> Save
               </button>
             ) : (
-              <button onClick={() => onSetEditing(step.id, true)} className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-slate-600 text-slate-200 hover:bg-slate-500" title="Edit note">
-                <EditIcon className="w-3 h-3" /> Edit
+              <button onClick={() => onSetEditing(step.id, true)} className="qa-btn" style={{ fontSize: 11, padding: '3px 8px' }}>
+                <EditIcon className="w-3 h-3" style={{ width: 12, height: 12 }} /> Edit
               </button>
             )}
-            <button onClick={() => onRemove(step.id)} className="p-1 rounded-full text-slate-500 hover:bg-red-900/50 hover:text-red-400" aria-label="Remove note" title="Remove step">
-              <TrashIcon className="w-4 h-4" />
+            <button
+              onClick={() => onRemove(step.id)}
+              aria-label="Remove note"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 4,
+                color: 'var(--muted)', display: 'flex',
+              }}
+            >
+              <TrashIcon className="w-4 h-4" style={{ width: 14, height: 14 }} />
             </button>
           </div>
         </div>
@@ -216,13 +224,21 @@ const NotebookStepCard: React.FC<NotebookStepCardProps> = ({ step, index, onRemo
           <textarea
             value={step.prompt}
             onChange={(e) => onUpdate(step.id, e.target.value)}
-            className="w-full h-28 bg-black/50 text-slate-200 p-2 rounded-md font-sans text-sm border border-slate-600 focus:border-blue-500 focus:ring-blue-500"
+            style={{
+              width: '100%', height: 96, padding: '8px 10px', background: 'var(--soft)',
+              color: 'var(--fg)', border: '1px solid var(--border)', borderRadius: 6,
+              fontFamily: 'var(--font-body)', fontSize: 12.5, resize: 'vertical', outline: 'none',
+              boxSizing: 'border-box',
+            }}
             placeholder="Enter your note here... (Markdown is supported on export)"
             autoFocus
           />
         ) : (
-          <div className="text-sm text-slate-300 whitespace-pre-wrap p-2 rounded-md bg-black/20 min-h-[4rem]">
-            {step.prompt || <span className="text-slate-500">Empty note</span>}
+          <div style={{
+            fontSize: 12.5, color: 'var(--fg)', whiteSpace: 'pre-wrap', lineHeight: 1.55,
+            padding: '6px 8px', background: 'var(--soft)', borderRadius: 5, minHeight: 48,
+          }}>
+            {step.prompt || <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Empty note</span>}
           </div>
         )}
       </div>
@@ -231,29 +247,43 @@ const NotebookStepCard: React.FC<NotebookStepCardProps> = ({ step, index, onRemo
 
   // Render Query Step
   return (
-    <div className="bg-slate-800/70 p-4 rounded-lg border border-slate-700 space-y-3 relative group">
-      <div className="flex justify-between items-start">
-        <h4 className="font-bold text-slate-200">Step {index + 1}</h4>
+    <div className="qa-card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 500 }}>
+          Step {index + 1}
+        </span>
         <button
           onClick={() => onRemove(step.id)}
-          className="p-1 rounded-full text-slate-500 hover:bg-red-900/50 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
           aria-label="Remove step"
-          title="Remove step"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 4,
+            color: 'var(--muted)', display: 'flex',
+          }}
         >
-          <TrashIcon className="w-4 h-4" />
+          <TrashIcon className="w-4 h-4" style={{ width: 14, height: 14 }} />
         </button>
       </div>
       {step.contextSource && (
-        <div className="text-xs text-blue-300 bg-blue-900/50 border border-blue-500/30 px-2 py-1 rounded-md">
-          <strong>Context Used:</strong> Output from <em>{step.contextSource}</em>
+        <div style={{
+          fontSize: 11, color: 'var(--accent)', background: 'var(--accent-soft)',
+          padding: '4px 8px', borderRadius: 5,
+        }}>
+          Context: output from <em>{step.contextSource}</em>
         </div>
       )}
-      <blockquote className="border-l-4 border-blue-400 pl-3 text-sm italic text-slate-400">
+      <blockquote style={{
+        borderLeft: '2px solid var(--accent)', paddingLeft: 10, margin: 0,
+        fontSize: 12.5, fontStyle: 'italic', color: 'var(--muted)', lineHeight: 1.5,
+      }}>
         {step.prompt}
       </blockquote>
       <div>
-        <p className="text-xs font-semibold uppercase text-slate-500 mb-1">Query</p>
-        <pre className="bg-black/50 p-2 rounded-md text-xs font-mono text-cyan-300 overflow-x-auto">
+        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: 5 }}>Query</div>
+        <pre style={{
+          margin: 0, padding: '8px 10px', background: '#0f0e0d', color: '#c8c4bc',
+          fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.6, borderRadius: 6,
+          overflowX: 'auto',
+        }}>
           <code>{step.query}</code>
         </pre>
       </div>
@@ -276,32 +306,67 @@ const NotebookPanel: React.FC<NotebookPanelProps> = ({ steps, onClose, onExport,
   <>
     <div
       onClick={onClose}
-      className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fade-in-fast"
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 40 }}
       aria-hidden="true"
-    ></div>
-    <aside id="tutorial-notebook-panel" className="fixed top-0 right-0 h-full w-full md:w-[450px] bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer">
-      <header className="flex items-center justify-between p-4 border-b border-slate-700 flex-shrink-0">
-        <h3 className="text-lg font-semibold text-white flex items-center gap-3">
-          <NotebookIcon className="w-5 h-5 text-blue-400" />
-          Query Notebook
-        </h3>
+    />
+    <aside
+      id="tutorial-notebook-panel"
+      className="qp-drawer"
+      style={{
+        position: 'fixed', top: 0, right: 0, height: '100%', width: 440,
+        maxWidth: '100vw', background: 'var(--panel)', borderLeft: '1px solid var(--border)',
+        zIndex: 50, display: 'flex', flexDirection: 'column',
+        fontFamily: 'var(--font-body)',
+      }}
+    >
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px',
+        borderBottom: '1px solid var(--border)', flexShrink: 0,
+      }}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.4">
+          <rect x="2" y="1" width="12" height="14" rx="2"/>
+          <path d="M5 5h6M5 8h6M5 11h4"/>
+        </svg>
+        <span style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--fg)' }}>Query Notebook</span>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
           aria-label="Close notebook panel"
-          title="Close notebook"
+          style={{
+            marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--muted)', display: 'flex', padding: 4, borderRadius: 5,
+          }}
         >
-          <XIcon className="w-5 h-5" />
+          <XIcon className="w-5 h-5" style={{ width: 16, height: 16 }} />
         </button>
-      </header>
-      <div className="flex-shrink-0 p-4 border-b border-slate-700 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <button onClick={onAddNote} className="flex items-center gap-2 px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors" title="Add a new markdown note"><PlusCircleIcon className="w-4 h-4" />Add Note</button>
-          <button onClick={onClear} disabled={steps.length === 0} className="flex items-center gap-2 px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" title="Clear all steps"><TrashIcon className="w-4 h-4" />Clear All</button>
-        </div>
-        <button onClick={onExport} disabled={steps.length === 0} className="flex items-center gap-2 px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" title="Export as .ipynb notebook"><DownloadIcon className="w-4 h-4" />Export .ipynb</button>
       </div>
-      <div className="flex-grow overflow-auto p-4 space-y-4">
+
+      {/* Toolbar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px',
+        borderBottom: '1px solid var(--border)', flexShrink: 0,
+      }}>
+        <button onClick={onAddNote} className="qa-btn" style={{ fontSize: 12 }}>
+          <PlusCircleIcon className="w-4 h-4" style={{ width: 14, height: 14 }} />
+          Add note
+        </button>
+        <button onClick={onClear} disabled={steps.length === 0} className="qa-btn" style={{ fontSize: 12, opacity: steps.length === 0 ? 0.4 : 1 }}>
+          <TrashIcon className="w-4 h-4" style={{ width: 14, height: 14 }} />
+          Clear all
+        </button>
+        <button
+          onClick={onExport}
+          disabled={steps.length === 0}
+          className="qa-btn primary"
+          style={{ fontSize: 12, marginLeft: 'auto', opacity: steps.length === 0 ? 0.4 : 1 }}
+        >
+          <DownloadIcon className="w-4 h-4" style={{ width: 14, height: 14 }} />
+          Export .ipynb
+        </button>
+      </div>
+
+      {/* Steps */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {steps.length > 0 ? (
           steps.map((step, index) => (
             <NotebookStepCard
@@ -314,9 +379,16 @@ const NotebookPanel: React.FC<NotebookPanelProps> = ({ steps, onClose, onExport,
             />
           ))
         ) : (
-          <div className="text-center text-slate-500 h-full flex flex-col items-center justify-center">
-            <p className="font-semibold">No steps recorded yet.</p>
-            <p className="text-sm">Run a query or add a note to begin.</p>
+          <div style={{
+            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', gap: 6, color: 'var(--muted)',
+          }}>
+            <svg width="32" height="32" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.4">
+              <rect x="2" y="1" width="12" height="14" rx="2"/>
+              <path d="M5 5h6M5 8h6M5 11h4"/>
+            </svg>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>No steps yet</p>
+            <p style={{ fontSize: 12, margin: 0 }}>Run a query or add a note to begin.</p>
           </div>
         )}
       </div>
@@ -419,6 +491,15 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [isLoadingSavedQueries, setIsLoadingSavedQueries] = useState<boolean>(false);
   const [isSavedQueriesPanelOpen, setIsSavedQueriesPanelOpen] = useState<boolean>(false);
+
+  // Open saved queries panel from sidebar URL param
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('panel') === 'saved') {
+      setIsSavedQueriesPanelOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   const [saveDialogState, setSaveDialogState] = useState<{ isOpen: boolean; data?: Partial<SavedQuery> & { prompt: string; code: string } }>({ isOpen: false });
   const [shareDialogState, setShareDialogState] = useState<{ isOpen: boolean; query?: SavedQuery }>({ isOpen: false });
   const [isSavingQuery, setIsSavingQuery] = useState(false);
@@ -2210,7 +2291,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
               {isLoading ? 'Generating…' : isPromptUnchanged ? 'Generated ✓' : 'Generate query'}
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Iterations:</span>
+              <span
+                style={{ fontSize: 11.5, color: 'var(--muted)', cursor: 'default' }}
+                title="More iterations let the AI agent self-correct by re-generating and re-testing the query when it detects errors. Higher values improve accuracy for complex queries but take longer. Max: 10."
+              >Iterations:</span>
               <input
                 id="max-iterations-slider"
                 type="range" min={1} max={10} step={1}
@@ -2219,6 +2303,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                 disabled={isLoading || isQuerySectionDisabled}
                 className="accent-blue-600 disabled:opacity-40 cursor-pointer"
                 style={{ width: 72, accentColor: 'var(--accent)' }}
+                title={`Agent iterations: ${maxIterations} — more iterations allow self-correction but take longer`}
               />
               <span style={{ fontSize: 11.5, color: 'var(--accent)', fontFamily: 'var(--font-mono)', minWidth: 14 }}>{maxIterations}</span>
             </div>

@@ -159,3 +159,26 @@ html.dark {
   flex-direction: column;
   min-height: 0;
 }
+
+/* ── Status dots ────────────────────────────────────────────── */
+
+.qa-dot {
+  width: 6px; height: 6px;
+  border-radius: 99px;
+  background: var(--muted);
+  display: inline-block;
+  flex-shrink: 0;
+}
+.qa-dot.ok   { background: var(--status-ok); }
+.qa-dot.warn { background: var(--status-warn); }
+.qa-dot.err  { background: var(--status-err); }
+
+/* ── Drawer slide-in animation ──────────────────────────────── */
+
+@keyframes qp-slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.qp-drawer {
+  animation: qp-slide-in-right 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
