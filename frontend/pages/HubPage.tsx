@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useTheme } from '../contexts/ThemeContext';
-import { getAzureCosmosAccounts } from '../services/dbService';
+import { getAzureCosmosAccounts, getDatabasesForAccount } from '../services/dbService';
 import { CosmosDBAccount } from '../types';
 import { API_BASE_URL } from '../app.config';
 
@@ -186,6 +186,17 @@ const HubPage: React.FC = () => {
     navigate('/query-generator', { state: { preselectedAccountId: account.id, preselectedAccountName: account.name } });
   };
 
+  const handleOpenExplorer = async (account: CosmosDBAccount) => {
+    try {
+      const databases = await getDatabasesForAccount(account.id);
+      if (databases.length === 0) return;
+      const firstDb = databases[0];
+      navigate(`/data-explorer/${encodeURIComponent(account.id)}/${encodeURIComponent(firstDb.name)}`);
+    } catch (e) {
+      console.error('Failed to open explorer:', e);
+    }
+  };
+
   return (
     <div style={s.page}>
       {/* Top bar */}
@@ -310,7 +321,7 @@ const HubPage: React.FC = () => {
               </div>
             )}
             {accounts.map((account) => (
-              <ConnectionCard key={account.id} account={account} onOpen={handleOpenAccount} />
+              <ConnectionCard key={account.id} account={account} onOpen={handleOpenAccount} onOpenExplorer={handleOpenExplorer} />
             ))}
           </div>
         </section>
@@ -397,11 +408,15 @@ const HubPage: React.FC = () => {
 };
 
 /* ── Connection card ── */
-const ConnectionCard: React.FC<{ account: CosmosDBAccount; onOpen: (a: CosmosDBAccount) => void }> = ({ account, onOpen }) => {
+const ConnectionCard: React.FC<{
+  account: CosmosDBAccount;
+  onOpen: (a: CosmosDBAccount) => void;
+  onOpenExplorer: (a: CosmosDBAccount) => void;
+}> = ({ account, onOpen, onOpenExplorer }) => {
   const [hovered, setHovered] = useState(false);
+  const [explorerHovered, setExplorerHovered] = useState(false);
   return (
     <div
-      onClick={() => onOpen(account)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -409,7 +424,6 @@ const ConnectionCard: React.FC<{ account: CosmosDBAccount; onOpen: (a: CosmosDBA
         border: `1px solid ${hovered ? 'color-mix(in oklch, var(--accent) 35%, var(--border))' : 'var(--border)'}`,
         borderRadius: 14, padding: 22,
         display: 'flex', flexDirection: 'column', gap: 14,
-        cursor: 'pointer',
         transform: hovered ? 'translateY(-1px)' : 'none',
         boxShadow: hovered ? '0 12px 24px -16px rgba(20,18,14,0.18)' : 'none',
         transition: 'transform 0.12s, border-color 0.12s, box-shadow 0.12s',
@@ -435,14 +449,43 @@ const ConnectionCard: React.FC<{ account: CosmosDBAccount; onOpen: (a: CosmosDBA
         </div>
       </div>
 
-      <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <span className="qa-chip ok">● live</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent)', fontSize: 12.5 }}>
-          Open
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-            <path d="M3 8h10M9 4l4 4-4 4"/>
-          </svg>
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => onOpenExplorer(account)}
+            onMouseEnter={() => setExplorerHovered(true)}
+            onMouseLeave={() => setExplorerHovered(false)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 12, padding: '5px 10px', borderRadius: 6,
+              border: `1px solid ${explorerHovered ? 'var(--accent)' : 'var(--border)'}`,
+              background: explorerHovered ? 'var(--accent-soft)' : 'var(--soft)',
+              color: explorerHovered ? 'var(--accent)' : 'var(--muted)',
+              cursor: 'pointer', fontFamily: 'var(--font-body)',
+              transition: 'border-color 0.12s, background 0.12s, color 0.12s',
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M2 3h12v3H2zM2 7h12v3H2zM2 11h12v3H2z"/>
+            </svg>
+            Explorer
+          </button>
+          <button
+            onClick={() => onOpen(account)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 12.5, padding: '5px 10px', borderRadius: 6,
+              border: 'none', background: 'none',
+              color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-body)',
+            }}
+          >
+            Open
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M3 8h10M9 4l4 4-4 4"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

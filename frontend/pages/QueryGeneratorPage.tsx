@@ -5,7 +5,7 @@ import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRel
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
-import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep, SavedQuery, SchemaRelationshipsResponse } from '../types';
+import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResource, DebuggingResult, AnalysisResult, NotebookStep, SavedQuery, SchemaRelationshipsResponse, CollectionSummary } from '../types';
 import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult, mockSavedQueries } from '../services/mockData';
 import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
 import QueryDisplay from '../components/QueryDisplay';
@@ -401,15 +401,25 @@ export interface QueryGeneratorPageProps {
   email?: string;
   onLogout: () => void;
   onNavigateToExplorer: (connection: { resource: SelectedResource; dbInfo: DbInfo; accountName: string; availableDbs: DbInfo[], availableAccounts: CosmosDBAccount[] }) => void;
+  onConnectionChange?: (accountId: string | null, databaseName: string | null, accountName?: string | null, collections?: CollectionSummary[], availableAccounts?: CosmosDBAccount[], availableDbs?: DbInfo[]) => void;
   embedded?: boolean;
   preselectedAccountId?: string;
 }
 
 // --- Main Page Component ---
-const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, embedded = false, preselectedAccountId }) => {
+const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, onConnectionChange, embedded = false, preselectedAccountId }) => {
   const [userInput, setUserInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Restore previous connection from sessionStorage (when navigating away and back, not from Hub)
+  const [initialConnection] = useState<{ accountId: string; databaseName: string } | null>(() => {
+    if (preselectedAccountId) return null;
+    try {
+      const saved = sessionStorage.getItem('qp_connection');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
 
   // State for DB resources & connection
   const [azureAccounts, setAzureAccounts] = useState<CosmosDBAccount[]>([]);
@@ -631,11 +641,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const handleDisconnect = useCallback(() => {
     setConnectedDbInfo(null);
     setConnectedResource(null);
+    sessionStorage.removeItem('qp_connection');
+    onConnectionChange?.(null, null, null, undefined);
     clearQueryState();
     setUserInput('');
     setSelectedCollections([]);
     setCollectionDetailsMap({});
-  }, [clearQueryState]);
+  }, [clearQueryState, onConnectionChange]);
 
   const handleSelectAccount = useCallback(async (accountId: string) => {
     if (selectedAccountId === accountId) {
@@ -657,8 +669,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       return;
     }
 
-    // If an old database was connected from another account, disconnect it
-    if (connectedResource?.accountId !== account.id) {
+    // If a database from a different account is connected, disconnect it first
+    if (connectedResource && connectedResource.accountId !== account.id) {
       handleDisconnect();
     }
 
@@ -696,30 +708,40 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       databaseName: dbInfo.name,
     });
     setConnectedDbInfo(dbInfo);
+    sessionStorage.setItem('qp_connection', JSON.stringify({ accountId: account.id, databaseName: dbInfo.name, accountName: account.name, collections: dbInfo.collections, availableAccounts: azureAccounts, availableDbs: accountDatabases }));
+    onConnectionChange?.(account.id, dbInfo.name, account.name, dbInfo.collections, azureAccounts, accountDatabases);
     clearQueryState();
     setIsConnectingToDb(null);
-  }, [selectedAccountId, azureAccounts, clearQueryState]);
+  }, [selectedAccountId, azureAccounts, clearQueryState, onConnectionChange]);
 
-  // Auto-select the account passed from Hub navigation
+  // Auto-select account from Hub navigation or restored session
   useEffect(() => {
-    if (preselectedAccountId && azureAccounts.length > 0 && !connectedResource && !selectedAccountId) {
-      handleSelectAccount(preselectedAccountId);
+    const targetAccountId = preselectedAccountId ?? initialConnection?.accountId;
+    if (targetAccountId && azureAccounts.length > 0 && !connectedResource && !selectedAccountId) {
+      handleSelectAccount(targetAccountId);
     }
-  }, [preselectedAccountId, azureAccounts, connectedResource, selectedAccountId, handleSelectAccount]);
+  }, [preselectedAccountId, initialConnection, azureAccounts, connectedResource, selectedAccountId, handleSelectAccount]);
 
-  // Auto-connect when the preselected account has exactly one database
+  // Auto-connect database after account is selected
   useEffect(() => {
+    const targetAccountId = preselectedAccountId ?? initialConnection?.accountId;
+    const targetDatabaseName = initialConnection?.databaseName;
     if (
-      preselectedAccountId &&
-      selectedAccountId === preselectedAccountId &&
-      accountDatabases.length === 1 &&
+      targetAccountId &&
+      selectedAccountId === targetAccountId &&
+      accountDatabases.length > 0 &&
       !connectedResource &&
       !isLoadingDatabases &&
       !isConnectingToDb
     ) {
-      handleConnectDatabase(accountDatabases[0]);
+      if (targetDatabaseName) {
+        const db = accountDatabases.find(d => d.name === targetDatabaseName) ?? accountDatabases[0];
+        handleConnectDatabase(db);
+      } else if (accountDatabases.length === 1) {
+        handleConnectDatabase(accountDatabases[0]);
+      }
     }
-  }, [preselectedAccountId, selectedAccountId, accountDatabases, connectedResource, isLoadingDatabases, isConnectingToDb, handleConnectDatabase]);
+  }, [preselectedAccountId, initialConnection, selectedAccountId, accountDatabases, connectedResource, isLoadingDatabases, isConnectingToDb, handleConnectDatabase]);
 
   const handleGenerateQuery = useCallback(async (prompt: string, collectionCtx?: CollectionInfo) => {
     if (!prompt.trim()) {

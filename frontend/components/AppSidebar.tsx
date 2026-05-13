@@ -1,15 +1,20 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
-import { CollectionSummary } from '../types';
+import { CollectionSummary, DbInfo, CosmosDBAccount } from '../types';
 
 interface AppSidebarProps {
   accountName?: string;
+  accountId?: string;
   databaseName?: string;
   collections?: CollectionSummary[];
   activeCollection?: string;
   onCollectionSelect?: (name: string) => void;
   latencyMs?: number;
+  availableDbs?: DbInfo[];
+  onSwitchDatabase?: (db: DbInfo) => void;
+  availableAccounts?: CosmosDBAccount[];
+  onSwitchAccount?: (account: CosmosDBAccount) => void;
 }
 
 type NavItem =
@@ -78,15 +83,44 @@ const itemBase: React.CSSProperties = {
 
 const AppSidebar: React.FC<AppSidebarProps> = ({
   accountName,
+  accountId,
   databaseName,
   collections,
   activeCollection,
   onCollectionSelect,
   latencyMs,
+  availableDbs,
+  onSwitchDatabase,
+  availableAccounts,
+  onSwitchAccount,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useUnifiedAuth();
+  const [showDbPicker, setShowDbPicker] = useState(false);
+  const [sortAlpha, setSortAlpha] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
+  const chipRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showDbPicker) return;
+    const handleClick = (e: MouseEvent) => {
+      if (chipRef.current && !chipRef.current.contains(e.target as Node)) {
+        setShowDbPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showDbPicker]);
+
+  // Reset loading state whenever the connection actually changes
+  useEffect(() => {
+    setIsSwitching(false);
+  }, [accountId, databaseName]);
+
+  const explorerHref = accountId && databaseName
+    ? `/data-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`
+    : null;
 
   const isActive = (href: string, matchPrefix?: boolean) => {
     if (matchPrefix) return location.pathname.startsWith(href);
@@ -112,30 +146,148 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
 
         {/* Connection chip */}
         {accountName && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            padding: '5px 9px', background: 'var(--soft)', borderRadius: 7,
-          }}>
-            <span style={{
-              width: 14, height: 14, borderRadius: 4, background: '#1d6cf2', flexShrink: 0,
-            }} />
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{
-                fontSize: 11.5, fontWeight: 500, color: 'var(--fg)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{accountName}</div>
-              {databaseName && (
-                <div style={{
-                  fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--font-mono)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>{databaseName}</div>
-              )}
-            </div>
+          <div ref={chipRef} style={{ position: 'relative' }}>
+            <style>{`@keyframes qp-spin { to { transform: rotate(360deg); } }`}</style>
+            {isSwitching ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 9px', background: 'var(--soft)', borderRadius: 7 }}>
+                <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'qp-spin 0.7s linear infinite', flexShrink: 0 }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    Connecting…
+                  </div>
+                  {databaseName && (
+                    <div style={{ fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.5 }}>
+                      {databaseName}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (() => {
+              const hasMultipleAccounts = availableAccounts && availableAccounts.length > 1;
+              const hasMultipleDbs = availableDbs && availableDbs.length > 1;
+              const isPickerEnabled = hasMultipleAccounts || hasMultipleDbs;
+              return (
+                <>
+                  <div
+                    onClick={() => isPickerEnabled ? setShowDbPicker(v => !v) : undefined}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 7,
+                      padding: '5px 9px', background: 'var(--soft)', borderRadius: 7,
+                      cursor: isPickerEnabled ? 'pointer' : 'default',
+                    }}
+                  >
+                    <span style={{ width: 14, height: 14, borderRadius: 4, background: '#1d6cf2', flexShrink: 0 }} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {accountName}
+                      </div>
+                      {databaseName && (
+                        <div style={{ fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {databaseName}
+                        </div>
+                      )}
+                    </div>
+                    {isPickerEnabled && (
+                      <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ color: 'var(--muted)', flexShrink: 0 }}>
+                        <path d="M4 6l4 4 4-4"/>
+                      </svg>
+                    )}
+                  </div>
+
+                  {showDbPicker && (
+                    <div style={{
+                      position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 100,
+                      background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8,
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.10)', overflow: 'hidden',
+                    }}>
+                      {/* Accounts section */}
+                      {hasMultipleAccounts && availableAccounts && (
+                        <>
+                          <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
+                            Cosmos account
+                          </div>
+                          {availableAccounts.map(acc => {
+                            const isCurrent = acc.id === accountId;
+                            return (
+                              <button
+                                key={acc.id}
+                                onClick={() => { if (!isCurrent) { setIsSwitching(true); setShowDbPicker(false); onSwitchAccount?.(acc); } }}
+                                style={{
+                                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                                  padding: '7px 10px', border: 'none', textAlign: 'left',
+                                  cursor: isCurrent ? 'default' : 'pointer',
+                                  background: isCurrent ? 'var(--accent-soft)' : 'transparent',
+                                  color: isCurrent ? 'var(--accent)' : 'var(--fg)',
+                                  fontSize: 12.5, fontFamily: 'var(--font-body)',
+                                }}
+                                onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                                onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
+                                <span style={{ width: 10, height: 10, borderRadius: 3, background: isCurrent ? '#1d6cf2' : 'var(--muted)', flexShrink: 0 }} />
+                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</span>
+                                {isCurrent && (
+                                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--accent)', flexShrink: 0 }}>
+                                    <path d="M3 8l4 4 6-6"/>
+                                  </svg>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </>
+                      )}
+
+                      {/* Divider between sections */}
+                      {hasMultipleAccounts && hasMultipleDbs && (
+                        <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                      )}
+
+                      {/* Databases section */}
+                      {hasMultipleDbs && availableDbs && (
+                        <>
+                          <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
+                            Database
+                          </div>
+                          {availableDbs.map(db => {
+                            const isCurrent = db.name === databaseName;
+                            return (
+                              <button
+                                key={db.name}
+                                onClick={() => { if (!isCurrent) { setIsSwitching(true); setShowDbPicker(false); onSwitchDatabase?.(db); } }}
+                                style={{
+                                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                                  padding: '7px 10px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                                  background: isCurrent ? 'var(--accent-soft)' : 'transparent',
+                                  color: isCurrent ? 'var(--accent)' : 'var(--fg)',
+                                  fontSize: 12.5, fontFamily: 'var(--font-mono)',
+                                }}
+                                onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                                onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
+                                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" style={{ color: isCurrent ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>
+                                  <ellipse cx="8" cy="4" rx="6" ry="2"/><path d="M2 4v8c0 1.1 2.7 2 6 2s6-.9 6-2V4M2 8c0 1.1 2.7 2 6 2s6-.9 6-2"/>
+                                </svg>
+                                {db.name}
+                                {isCurrent && (
+                                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 'auto', color: 'var(--accent)', flexShrink: 0 }}>
+                                    <path d="M3 8l4 4 6-6"/>
+                                  </svg>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
 
       {/* Navigation */}
+
       <div style={{ padding: '8px 8px 0', display: 'flex', flexDirection: 'column', gap: 1 }}>
         <div style={{
           fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em',
@@ -143,7 +295,8 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         }}>Workspace</div>
 
         {NAV_ITEMS.map((item) => {
-          const active = item.href ? isActive(item.href, item.matchPrefix) : false;
+          const resolvedHref = item.label === 'Explorer' ? (explorerHref ?? item.href) : item.href;
+          const active = resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false;
           const style: React.CSSProperties = {
             ...itemBase,
             color: active ? 'var(--fg)' : 'var(--muted)',
@@ -172,10 +325,23 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             );
           }
 
+          if (item.label === 'Explorer' && !explorerHref) {
+            return (
+              <span
+                key={item.label}
+                style={{ ...style, opacity: 0.4, cursor: 'not-allowed' }}
+                title="Connect to a database first"
+              >
+                {iconSpan}
+                {item.label}
+              </span>
+            );
+          }
+
           return (
             <Link
-              key={item.href}
-              to={item.href!}
+              key={resolvedHref}
+              to={resolvedHref!}
               style={style}
               onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
               onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
@@ -196,11 +362,25 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em',
             color: 'var(--muted)',
           }}>
-            <span>Collections</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{collections.length}</span>
+            <span>Collections <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{collections.length}</span></span>
+            <button
+              onClick={() => setSortAlpha(v => !v)}
+              title={sortAlpha ? 'Sorted A–Z (click to reset)' : 'Sort A–Z'}
+              style={{
+                background: sortAlpha ? 'var(--accent-soft)' : 'none',
+                border: 'none', cursor: 'pointer', padding: '2px 5px', borderRadius: 4,
+                color: sortAlpha ? 'var(--accent)' : 'var(--muted)',
+                display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontFamily: 'var(--font-body)',
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path d="M3 4h10M5 8h6M7 12h2"/>
+              </svg>
+              A–Z
+            </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
-            {collections.map((col) => {
+            {(sortAlpha ? [...collections].sort((a, b) => a.name.localeCompare(b.name)) : collections).map((col) => {
               const active = activeCollection === col.name;
               return (
                 <button
