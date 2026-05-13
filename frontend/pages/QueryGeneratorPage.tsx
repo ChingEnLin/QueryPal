@@ -830,8 +830,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     handleGenerateQuery(userInput, primaryContext);
   }, [userInput, intermediateContext, selectedCollections, collectionDetailsMap, handleGenerateQuery]);
 
-  const handleRunQuery = useCallback(async () => {
-    if (!editableCode.trim() || !connectedDbInfo || !connectedResource) {
+  const executeCode = useCallback(async (code: string) => {
+    if (!code.trim() || !connectedDbInfo || !connectedResource) {
       setExecutionError("Cannot run a query without a database connection.");
       return;
     }
@@ -846,7 +846,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setWriteEvaluationError(null);
 
     try {
-      const result = await runMongoQuery(connectedResource.accountId, editableCode, connectedResource);
+      const result = await runMongoQuery(connectedResource.accountId, code, connectedResource);
       setExecutionResult(result);
 
       // --- Add step to notebook ---
@@ -855,12 +855,12 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         id: new Date().toISOString() + Math.random(),
         type: 'query',
         prompt: lastSuccessfulPrompt || 'Query executed without a new prompt.',
-        query: editableCode,
+        query: code,
         resultSample: resultSample,
         contextSource: currentQueryContextSource ?? undefined,
       };
       setNotebookSteps(prev => [...prev, newStep]);
-      setCurrentQueryContextSource(null); // Reset after use
+      setCurrentQueryContextSource(null);
 
     } catch (e) {
       if (e instanceof Error) {
@@ -875,7 +875,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } finally {
       setIsExecuting(false);
     }
-  }, [editableCode, connectedDbInfo, connectedResource, lastSuccessfulPrompt, currentQueryContextSource]);
+  }, [connectedDbInfo, connectedResource, lastSuccessfulPrompt, currentQueryContextSource]);
+
+  const handleRunQuery = useCallback(() => executeCode(editableCode), [executeCode, editableCode]);
 
   const handleDebugQuery = useCallback(async () => {
     if (!editableCode || !executionError) return;
@@ -1130,16 +1132,24 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   }, [savedQueries]);
 
   const handleLoadSavedQuery = (query: SavedQuery) => {
-    clearQueryState(); // Clear all results and errors
+    clearQueryState();
     setUserInput(query.prompt);
     setLastSuccessfulPrompt(query.prompt);
     setEditableCode(query.code);
-
-    // Set code history for the loaded query
     setCodeHistory([query.code]);
     setHistoryIndex(0);
+    setIsSavedQueriesPanelOpen(false);
+  };
 
-    setIsSavedQueriesPanelOpen(false); // Close panel after loading
+  const handleLoadAndRunSavedQuery = (query: SavedQuery) => {
+    clearQueryState();
+    setUserInput(query.prompt);
+    setLastSuccessfulPrompt(query.prompt);
+    setEditableCode(query.code);
+    setCodeHistory([query.code]);
+    setHistoryIndex(0);
+    setIsSavedQueriesPanelOpen(false);
+    executeCode(query.code);
   };
 
   // --- Sharing Handlers ---
@@ -1346,15 +1356,18 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   ) : null;
 
   const showSavedQueriesPanel = isSavedQueriesPanelOpen || isDemoModeForSavedQueriesPanelStep;
+  const dbReady = !isLoadingAccounts && !isLoadingDatabases && !isConnectingToDb && !!connectedResource;
   const savedQueriesPanelDrawer = showSavedQueriesPanel ? createPortal(
     <SavedQueriesPanel
       onClose={() => setIsSavedQueriesPanelOpen(false)}
       queries={isDemoModeForSavedQueriesPanelStep ? mockSavedQueries : savedQueries}
       onLoad={handleLoadSavedQuery}
+      onLoadAndRun={handleLoadAndRunSavedQuery}
       onEdit={handleEditSavedQuery}
       onDelete={handleDeleteSavedQuery}
       onShare={handleOpenShareDialog}
       isLoading={isDemoModeForSavedQueriesPanelStep ? false : isLoadingSavedQueries}
+      dbReady={isDemoModeForSavedQueriesPanelStep ? true : dbReady}
       currentUserEmail={email || 'dev.user@example.com'}
     />,
     document.body

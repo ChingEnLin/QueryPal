@@ -7,10 +7,12 @@ interface SavedQueriesPanelProps {
     onClose: () => void;
     queries: SavedQuery[];
     onLoad: (query: SavedQuery) => void;
+    onLoadAndRun: (query: SavedQuery) => void;
     onEdit: (query: SavedQuery) => void;
     onDelete: (queryId: string) => void;
     onShare: (query: SavedQuery) => void;
     isLoading: boolean;
+    dbReady: boolean;
     currentUserEmail?: string | null;
 }
 
@@ -32,13 +34,15 @@ const PinIcon = () => (
 interface SavedQueryCardProps {
     query: SavedQuery;
     onLoad: (q: SavedQuery) => void;
+    onLoadAndRun: (q: SavedQuery) => void;
     onEdit: (q: SavedQuery) => void;
     onDelete: (id: string) => void;
     onShare: (q: SavedQuery) => void;
     isOwned: boolean;
+    dbReady: boolean;
 }
 
-const SavedQueryCard: React.FC<SavedQueryCardProps> = ({ query, onLoad, onEdit, onDelete, onShare, isOwned }) => {
+const SavedQueryCard: React.FC<SavedQueryCardProps> = ({ query, onLoad, onLoadAndRun, onEdit, onDelete, onShare, isOwned, dbReady }) => {
     const handleDelete = () => {
         if (window.confirm(`Delete "${query.name}"? This cannot be undone.`)) onDelete(query.id);
     };
@@ -79,10 +83,24 @@ const SavedQueryCard: React.FC<SavedQueryCardProps> = ({ query, onLoad, onEdit, 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                 <button
                     onClick={() => onLoad(query)}
-                    className="qa-btn primary"
-                    style={{ fontSize: 12, padding: '4px 12px' }}
+                    disabled={!dbReady}
+                    className="qa-btn"
+                    title={!dbReady ? 'Connect to a database first' : 'Load query into editor'}
+                    style={{ fontSize: 12, padding: '4px 12px', opacity: dbReady ? 1 : 0.45, cursor: dbReady ? 'pointer' : 'not-allowed' }}
                 >
                     Load
+                </button>
+                <button
+                    onClick={() => onLoadAndRun(query)}
+                    disabled={!dbReady}
+                    className="qa-btn primary"
+                    title={!dbReady ? 'Connect to a database first' : 'Load query and run it immediately'}
+                    style={{ fontSize: 12, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 5, opacity: dbReady ? 1 : 0.45, cursor: dbReady ? 'pointer' : 'not-allowed' }}
+                >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M5 3l9 5-9 5V3z" fill="currentColor" strokeLinejoin="round"/>
+                    </svg>
+                    Load & Run
                 </button>
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
                     {isOwned && (
@@ -117,7 +135,7 @@ const SavedQueryCard: React.FC<SavedQueryCardProps> = ({ query, onLoad, onEdit, 
 };
 
 const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({
-    onClose, queries, onLoad, onEdit, onDelete, onShare, isLoading, currentUserEmail,
+    onClose, queries, onLoad, onLoadAndRun, onEdit, onDelete, onShare, isLoading, dbReady, currentUserEmail,
 }) => {
     const [activeTab, setActiveTab] = useState<'my_queries' | 'shared_with_me'>('my_queries');
 
@@ -151,10 +169,12 @@ const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({
                     key={q.id}
                     query={q}
                     onLoad={onLoad}
+                    onLoadAndRun={onLoadAndRun}
                     onEdit={onEdit}
                     onDelete={onDelete}
                     onShare={onShare}
                     isOwned={activeTab === 'my_queries'}
+                    dbReady={dbReady}
                 />
             ));
         }

@@ -126,7 +126,7 @@ const DeleteDocumentDialog: React.FC<{
           Confirm Delete Document
         </h2>
         <p style={{ marginBottom: 12, color: 'var(--fg)', fontSize: 13 }}>Are you sure you want to delete this document? This action cannot be undone.</p>
-        <div style={{ background: '#0f0e0d', color: '#c8c4bc', borderRadius: 8, padding: 12, fontSize: 11.5, overflowX: 'auto', maxHeight: 240, marginBottom: 16, fontFamily: 'var(--font-mono)' }}>
+        <div style={{ background: 'var(--soft)', borderRadius: 8, padding: 12, fontSize: 11.5, overflowX: 'auto', maxHeight: 240, marginBottom: 16, fontFamily: 'var(--font-mono)', border: '1px solid var(--border)' }}>
           <JsonDisplay data={document} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -242,6 +242,9 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   // --- Editor Ref ---
   const editorRefs = useRef<Record<string, DocumentEditViewRef | null>>({});
 
+  // --- Unsaved changes discard confirmation ---
+  const [discardConfirmDocId, setDiscardConfirmDocId] = useState<string | null>(null);
+
   // Helper to infer schema for new document (mimic CollectionActionPanel logic)
   const getInitialDocFromSchema = useCallback(() => {
     if (!schemaTree || schemaTree.length === 0) return {};
@@ -351,8 +354,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   }, [selectedCollection, deleteTargetDoc, currentResource, setDocuments]);
 
   // --- Sorting State ---
-  const [collectionSortKey, setCollectionSortKey] = useState<'name' | 'count'>('name');
-  const [collectionSortOrder, setCollectionSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [collectionSort, setCollectionSort] = useState<'name_asc' | 'name_desc' | 'count_desc' | 'count_asc'>('name_asc');
 
   // --- Navigation State ---
   // global breadcrumbs removed
@@ -633,7 +635,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   // Auto-select first collection in embedded mode when none is selected
   useEffect(() => {
     if (embedded && !selectedCollection && !initialDocumentId && !sidebarSelectedCollection && currentDb && currentDb.collections.length > 0) {
-      handleCollectionClick(currentDb.collections[0].name);
+      const first = [...currentDb.collections].sort((a, b) => a.name.localeCompare(b.name))[0];
+      handleCollectionClick(first.name);
     }
   }, [embedded, selectedCollection, initialDocumentId, sidebarSelectedCollection, currentDb, handleCollectionClick]);
 
@@ -659,25 +662,15 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     }
   };
 
-  const handleSortCollections = (key: 'name' | 'count') => {
-    if (collectionSortKey === key) {
-      setCollectionSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setCollectionSortKey(key);
-      setCollectionSortOrder(key === 'name' ? 'asc' : 'desc');
-    }
-  };
-
   const sortedCollections = useMemo(() => {
     if (!currentDb) return [];
     return [...currentDb.collections].sort((a, b) => {
-      if (collectionSortKey === 'name') {
-        return a.name.localeCompare(b.name) * (collectionSortOrder === 'asc' ? 1 : -1);
-      } else {
-        return (a.count - b.count) * (collectionSortOrder === 'asc' ? 1 : -1);
-      }
+      if (collectionSort === 'name_asc') return a.name.localeCompare(b.name);
+      if (collectionSort === 'name_desc') return b.name.localeCompare(a.name);
+      if (collectionSort === 'count_desc') return b.count - a.count;
+      return a.count - b.count;
     });
-  }, [currentDb, collectionSortKey, collectionSortOrder]);
+  }, [currentDb, collectionSort]);
 
   const handleObjectIdClick = useCallback(async (openDocId: string | null, objectId: string, keyContext?: string, openInNewTab?: boolean, openToSide?: boolean) => {
     if (!currentDb) return;
@@ -762,12 +755,6 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     }
   }, []);
 
-  const renderSortArrow = (key: 'name' | 'count') => {
-    if (collectionSortKey !== key) return null;
-    return collectionSortOrder === 'asc'
-      ? <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 13V3M3 8l5-5 5 5"/></svg>
-      : <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8l5 5 5-5"/></svg>;
-  };
 
   const renderDocumentList = () => {
     if (isLoading && documents.length === 0) {
@@ -926,6 +913,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
           getDocId(openDoc.doc)
         );
 
+        setDiscardConfirmDocId(null);
         setOpenDocuments(prev => prev.map(od => od.id === openDocId ? { ...od, doc: refreshed, editMode: false } : od));
 
         // Sync pinned document if present
@@ -943,6 +931,20 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   };
 
   const handleEditCancel = (openDocId: string) => {
+    const od = openDocuments.find(d => d.id === openDocId);
+    if (od && editorRefs.current[openDocId]) {
+      const currentVal = editorRefs.current[openDocId]!.getCurrentValue();
+      const original = JSON.stringify(od.doc, null, 2);
+      if (currentVal !== original) {
+        setDiscardConfirmDocId(openDocId);
+        return;
+      }
+    }
+    setOpenDocuments(prev => prev.map(od => od.id === openDocId ? { ...od, editMode: false } : od));
+  };
+
+  const confirmDiscard = (openDocId: string) => {
+    setDiscardConfirmDocId(null);
     setOpenDocuments(prev => prev.map(od => od.id === openDocId ? { ...od, editMode: false } : od));
   };
 
@@ -1206,22 +1208,17 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                 <div style={{ padding: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                     <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', margin: 0 }}>Collections</h2>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: 2, background: 'var(--border)', borderRadius: 6 }}>
-                      <button
-                        onClick={() => handleSortCollections('name')}
-                        style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 7px', fontSize: 11.5, fontWeight: 600, borderRadius: 4, border: 'none', cursor: 'pointer', background: collectionSortKey === 'name' ? 'var(--panel)' : 'transparent', color: collectionSortKey === 'name' ? 'var(--accent)' : 'var(--muted)', boxShadow: collectionSortKey === 'name' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none' }}
-                        title={`Sort by name (${collectionSortKey === 'name' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
-                      >
-                        Name {renderSortArrow('name')}
-                      </button>
-                      <button
-                        onClick={() => handleSortCollections('count')}
-                        style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 7px', fontSize: 11.5, fontWeight: 600, borderRadius: 4, border: 'none', cursor: 'pointer', background: collectionSortKey === 'count' ? 'var(--panel)' : 'transparent', color: collectionSortKey === 'count' ? 'var(--accent)' : 'var(--muted)', boxShadow: collectionSortKey === 'count' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none' }}
-                        title={`Sort by count (${collectionSortKey === 'count' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
-                      >
-                        Count {renderSortArrow('count')}
-                      </button>
-                    </div>
+                    <select
+                      value={collectionSort}
+                      onChange={(e) => setCollectionSort(e.target.value as typeof collectionSort)}
+                      title="Sort collections"
+                      style={{ fontSize: 11.5, fontFamily: 'var(--font-body)', color: 'var(--muted)', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 5, padding: '2px 6px', cursor: 'pointer', outline: 'none' }}
+                    >
+                      <option value="name_asc">A → Z</option>
+                      <option value="name_desc">Z → A</option>
+                      <option value="count_desc">Most docs</option>
+                      <option value="count_asc">Fewest docs</option>
+                    </select>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {isLoadingDbsForAccount ? (
@@ -1439,12 +1436,16 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
             <PanelResizeHandle style={{ width: 1, background: 'var(--border)', cursor: 'col-resize', flexShrink: 0, zIndex: 10 }} />
 
-            {/* Column 3: Document Editor */}
+            {/* Column 3: Document View */}
             <Panel defaultSize={embedded ? 72 : 60} minSize={30}>
               <div style={{ height: '100%', background: 'var(--bg)', overflowX: 'auto', overflowY: 'hidden', display: 'flex', flexDirection: 'row', position: 'relative' }}>
                 {openDocuments.length === 0 ? (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                    <p>Select a document to open it here.</p>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--muted)' }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" style={{ opacity: 0.35 }}>
+                      <rect x="3" y="3" width="18" height="18" rx="3"/>
+                      <path d="M7 8h10M7 12h7M7 16h5"/>
+                    </svg>
+                    <span style={{ fontSize: 12.5, fontFamily: 'var(--font-body)' }}>Select a document to view it here</span>
                   </div>
                 ) : (
                   openDocuments.map((openDoc, index) => (
@@ -1462,6 +1463,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                         position: 'relative',
                       }}
                     >
+                      {/* Drag-resize handle for side-by-side docs */}
                       {openDocuments.length > 1 && (
                         <div
                           style={{ position: 'absolute', right: -1, top: 0, bottom: 0, width: 4, cursor: 'col-resize', zIndex: 20 }}
@@ -1484,213 +1486,266 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                         />
                       )}
-                      <div style={{ padding: 16, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <header style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 200, flex: 1 }}>
-                            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={openDoc.collectionName}>{openDoc.collectionName}</h2>
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', background: 'var(--soft)', padding: '3px 7px', borderRadius: 5, border: '1px solid var(--border)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, maxWidth: 160 }} title={getDocId(openDoc.doc)}>
-                              {getDocId(openDoc.doc)}
-                            </span>
-                          </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, marginLeft: 'auto', padding: 4, borderRadius: 8, border: '1px solid transparent' }}>
-                            <button
-                              onClick={() => handleTogglePin(openDoc.doc, openDoc.collectionName)}
-                              style={{ padding: 5, borderRadius: 5, background: isDocumentPinned(openDoc.doc) ? 'var(--accent-soft)' : 'none', border: 'none', cursor: 'pointer', color: isDocumentPinned(openDoc.doc) ? 'var(--accent)' : 'var(--muted)', display: 'flex' }}
-                              title={isDocumentPinned(openDoc.doc) ? 'Unpin document' : 'Pin document'}
-                            >
-                              <svg width="13" height="13" viewBox="0 0 16 16" fill={isDocumentPinned(openDoc.doc) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5"><path d="M9.5 1.5l5 5-1.5 1.5-1-1-3 3v4l-1.5-1.5-3-3-1.5 1.5v-4l3-3-1-1zM1.5 14.5l4-4"/></svg>
-                            </button>
-                            <button
-                              onClick={async () => {
-                                setIsLoading(true);
-                                try {
-                                  const refreshed = await getSingleDocument(
-                                    currentResource.accountId,
-                                    currentResource.databaseName,
-                                    openDoc.collectionName,
-                                    getDocId(openDoc.doc)
-                                  );
-                                  if (openDoc.editMode && editorRefs.current[openDoc.id]) {
-                                    const editedValue = editorRefs.current[openDoc.id]!.getCurrentValue();
-                                    let isDifferent = false;
-                                    try {
-                                      const parsedEdited = JSON.parse(editedValue);
-                                      const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
-                                      const editedWithoutIgnored = omit(parsedEdited, ignoredKeys);
-                                      const refreshedWithoutIgnored = omit(refreshed, ignoredKeys);
-                                      isDifferent = !isEqual(editedWithoutIgnored, refreshedWithoutIgnored);
-                                    } catch (e) {
-                                      const freshString = JSON.stringify(refreshed, null, 2);
-                                      isDifferent = editedValue !== freshString;
-                                    }
-                                    if (isDifferent) {
-                                      setDiffCurrentEditedText(editedValue);
-                                      setDiffIncomingDocument(refreshed);
-                                      setDiffTargetDocId(openDoc.id);
-                                      setIsDiffOverwriteDialogOpen(true);
-                                      setIsLoading(false);
-                                      return;
-                                    }
+                      {/* Header bar */}
+                      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', height: 44, borderBottom: '1px solid var(--border)', background: 'var(--panel)' }}>
+                        {/* Title: collection + id */}
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, maxWidth: '40%' }} title={openDoc.collectionName}>
+                            {openDoc.collectionName}
+                          </span>
+                          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="var(--border)" strokeWidth="2" style={{ flexShrink: 0 }}><path d="M6 3l5 5-5 5"/></svg>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={getDocId(openDoc.doc)}>
+                            {getDocId(openDoc.doc)}
+                          </span>
+                        </div>
+
+                        {/* Toolbar */}
+                        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {/* Pin */}
+                          <button
+                            onClick={() => handleTogglePin(openDoc.doc, openDoc.collectionName)}
+                            title={isDocumentPinned(openDoc.doc) ? 'Unpin document' : 'Pin document'}
+                            style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', background: isDocumentPinned(openDoc.doc) ? 'var(--accent-soft)' : 'transparent', color: isDocumentPinned(openDoc.doc) ? 'var(--accent)' : 'var(--muted)' }}
+                            onMouseEnter={(e) => { if (!isDocumentPinned(openDoc.doc)) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                            onMouseLeave={(e) => { if (!isDocumentPinned(openDoc.doc)) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill={isDocumentPinned(openDoc.doc) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5"><path d="M9.5 1.5l5 5-1.5 1.5-1-1-3 3v4l-1.5-1.5-3-3-1.5 1.5v-4l3-3-1-1zM1.5 14.5l4-4"/></svg>
+                          </button>
+
+                          {/* Refresh */}
+                          <button
+                            onClick={async () => {
+                              setIsLoading(true);
+                              try {
+                                const refreshed = await getSingleDocument(
+                                  currentResource.accountId,
+                                  currentResource.databaseName,
+                                  openDoc.collectionName,
+                                  getDocId(openDoc.doc)
+                                );
+                                if (openDoc.editMode && editorRefs.current[openDoc.id]) {
+                                  const editedValue = editorRefs.current[openDoc.id]!.getCurrentValue();
+                                  let isDifferent = false;
+                                  try {
+                                    const parsedEdited = JSON.parse(editedValue);
+                                    const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
+                                    const editedWithoutIgnored = omit(parsedEdited, ignoredKeys);
+                                    const refreshedWithoutIgnored = omit(refreshed, ignoredKeys);
+                                    isDifferent = !isEqual(editedWithoutIgnored, refreshedWithoutIgnored);
+                                  } catch (e) {
+                                    const freshString = JSON.stringify(refreshed, null, 2);
+                                    isDifferent = editedValue !== freshString;
                                   }
-                                  setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, doc: refreshed } : od));
-                                  setPinnedDocuments(prev => prev.map(p =>
-                                    getDocId(p.doc) === getDocId(openDoc.doc) ? { ...p, doc: refreshed } : p
-                                  ));
-                                  if (openDoc.editMode && editorRefs.current[openDoc.id]) {
-                                    editorRefs.current[openDoc.id]!.setCurrentValue(JSON.stringify(refreshed, null, 2));
+                                  if (isDifferent) {
+                                    setDiffCurrentEditedText(editedValue);
+                                    setDiffIncomingDocument(refreshed);
+                                    setDiffTargetDocId(openDoc.id);
+                                    setIsDiffOverwriteDialogOpen(true);
+                                    setIsLoading(false);
+                                    return;
                                   }
-                                } catch (e) {
-                                } finally {
-                                  setIsLoading(false);
                                 }
-                              }}
-                              style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', color: 'var(--muted)', display: 'flex', opacity: isLoading ? 0.5 : 1 }}
-                              title="Refresh document"
-                              disabled={isLoading}
-                              onMouseEnter={(e) => { if (!isLoading) (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
-                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
-                            >
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
-                            </button>
-                            {!openDoc.editMode && (
-                              <>
-                                <button
-                                  style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', color: 'var(--muted)', display: 'flex', opacity: isLoading ? 0.5 : 1 }}
-                                  onClick={() => setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, editMode: true } : od))}
-                                  disabled={isLoading}
-                                  title="Edit document"
-                                  onMouseEnter={(e) => { if (!isLoading) (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
-                                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                </button>
-                                <button
-                                  style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', color: 'var(--muted)', display: 'flex', opacity: isLoading ? 0.5 : 1 }}
-                                  onClick={() => { const { _id, ...rest } = openDoc.doc; setCreateDocInitial(rest); setIsCreateDialogOpen(true); }}
-                                  disabled={isLoading}
-                                  title="Insert copy as new document"
-                                  onMouseEnter={(e) => { if (!isLoading) (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
-                                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                                </button>
-                                <button
-                                  style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', color: 'var(--muted)', display: 'flex', opacity: isLoading ? 0.5 : 1 }}
-                                  onClick={() => { setDeleteTargetDoc(openDoc.doc); setIsDeleteDialogOpen(true); }}
-                                  disabled={isLoading}
-                                  title="Delete document"
-                                  onMouseEnter={(e) => { if (!isLoading) (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; }}
-                                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
-                                </button>
-                                <button
-                                  style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', color: 'var(--muted)', display: 'flex', opacity: isLoading ? 0.5 : 1 }}
-                                  onClick={() => setHistoryTargetDoc({ docId: getDocId(openDoc.doc), collectionName: openDoc.collectionName })}
-                                  disabled={isLoading}
-                                  title="View document history"
-                                  onMouseEnter={(e) => { if (!isLoading) (e.currentTarget as HTMLElement).style.color = 'var(--fg)'; }}
-                                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                </button>
-                              </>
-                            )}
-                            {openDoc.editMode && (
+                                setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, doc: refreshed } : od));
+                                setPinnedDocuments(prev => prev.map(p =>
+                                  getDocId(p.doc) === getDocId(openDoc.doc) ? { ...p, doc: refreshed } : p
+                                ));
+                                if (openDoc.editMode && editorRefs.current[openDoc.id]) {
+                                  editorRefs.current[openDoc.id]!.setCurrentValue(JSON.stringify(refreshed, null, 2));
+                                }
+                              } catch (e) {
+                              } finally {
+                                setIsLoading(false);
+                              }
+                            }}
+                            title="Refresh document"
+                            disabled={isLoading}
+                            style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                            onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; } }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+                          </button>
+
+                          {!openDoc.editMode && (
+                            <>
+                              {/* Edit */}
                               <button
-                                style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', color: 'var(--muted)', display: 'flex', opacity: isLoading ? 0.5 : 1 }}
-                                onClick={() => handleEditCancel(openDoc.id)}
+                                onClick={() => setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, editMode: true } : od))}
                                 disabled={isLoading}
-                                title="Cancel edit"
-                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--fg)'; }}
+                                title="Edit document"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                                onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; } }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                              </button>
+                              {/* Duplicate */}
+                              <button
+                                onClick={() => { const { _id, ...rest } = openDoc.doc; setCreateDocInitial(rest); setIsCreateDialogOpen(true); }}
+                                disabled={isLoading}
+                                title="Insert copy as new document"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                                onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; } }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                              </button>
+                              {/* History */}
+                              <button
+                                onClick={() => setHistoryTargetDoc({ docId: getDocId(openDoc.doc), collectionName: openDoc.collectionName })}
+                                disabled={isLoading}
+                                title="View document history"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                                onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--fg)'; } }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                              </button>
+                              {/* Delete */}
+                              <button
+                                onClick={() => { setDeleteTargetDoc(openDoc.doc); setIsDeleteDialogOpen(true); }}
+                                disabled={isLoading}
+                                title="Delete document"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                                onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'color-mix(in oklch, var(--status-err) 8%, var(--bg))'; (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; } }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
+                              </button>
+                            </>
+                          )}
+
+                          {openDoc.editMode && (
+                            /* Cancel edit */
+                            <button
+                              onClick={() => handleEditCancel(openDoc.id)}
+                              disabled={isLoading}
+                              title="Cancel edit"
+                              style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--fg)'; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3l10 10M13 3L3 13"/></svg>
+                            </button>
+                          )}
+
+                          {/* Divider */}
+                          <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 3px' }} />
+
+                          {/* Move left/right (multi-doc) */}
+                          {openDocuments.length > 1 && (
+                            <>
+                              <button
+                                onClick={() => handleMoveDocument(openDoc.id, 'left')}
+                                disabled={index === 0}
+                                title="Move left"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: index === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: index === 0 ? 0.3 : 1 }}
+                                onMouseEnter={(e) => { if (index !== 0) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 3L5 8l5 5"/></svg>
+                              </button>
+                              <button
+                                onClick={() => handleMoveDocument(openDoc.id, 'right')}
+                                disabled={index === openDocuments.length - 1}
+                                title="Move right"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: index === openDocuments.length - 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: index === openDocuments.length - 1 ? 0.3 : 1 }}
+                                onMouseEnter={(e) => { if (index !== openDocuments.length - 1) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 3l5 5-5 5"/></svg>
+                              </button>
+                            </>
+                          )}
+
+                          {/* Close — disabled while editing */}
+                          <button
+                            onClick={() => setOpenDocuments(prev => prev.filter(od => od.id !== openDoc.id))}
+                            title={openDoc.editMode ? 'Exit edit mode before closing' : 'Close'}
+                            disabled={openDoc.editMode}
+                            style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: openDoc.editMode ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'var(--soft)', color: 'var(--muted)', opacity: openDoc.editMode ? 0.35 : 1 }}
+                            onMouseEnter={(e) => { if (!openDoc.editMode) { (e.currentTarget as HTMLElement).style.background = 'color-mix(in oklch, var(--status-err) 10%, var(--bg))'; (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; } }}
+                            onMouseLeave={(e) => { if (!openDoc.editMode) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; } }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Breadcrumb trail (linked-doc navigation) */}
+                      {openDoc.breadcrumbs.length > 0 && (
+                        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 3, padding: '5px 14px', background: 'var(--soft)', borderBottom: '1px solid var(--border)', fontSize: 11.5, color: 'var(--muted)' }}>
+                          {openDoc.breadcrumbs.map((crumb, i) => (
+                            <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
+                              <button
+                                onClick={() => handleBreadcrumbClick(openDoc.id, i)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontFamily: 'var(--font-body)', fontSize: 11.5, padding: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '14ch' }}
+                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                               >
-                                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3l10 10M13 3L3 13"/></svg>
+                                <span style={{ fontWeight: 600 }}>{crumb.collectionName}</span>
+                                <span style={{ fontFamily: 'var(--font-mono)', marginLeft: 3 }}>/ {getDocId(crumb.document)}</span>
                               </button>
-                            )}
+                              <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0, opacity: 0.4 }}><path d="M6 3l5 5-5 5"/></svg>
+                            </React.Fragment>
+                          ))}
+                          <span style={{ fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '14ch' }}>
+                            {openDoc.collectionName}<span style={{ fontFamily: 'var(--font-mono)', fontWeight: 400, marginLeft: 3 }}>/ {getDocId(openDoc.doc)}</span>
+                          </span>
+                        </div>
+                      )}
 
-                            <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px' }} />
-
-                            {openDocuments.length > 1 && (
-                              <div style={{ display: 'flex', alignItems: 'center', background: 'var(--soft)', borderRadius: 6, padding: 2, margin: '0 2px' }}>
-                                <button
-                                  onClick={() => handleMoveDocument(openDoc.id, 'left')}
-                                  disabled={index === 0}
-                                  style={{ padding: 4, borderRadius: 4, background: 'none', border: 'none', cursor: index === 0 ? 'not-allowed' : 'pointer', color: 'var(--muted)', display: 'flex', opacity: index === 0 ? 0.3 : 1 }}
-                                  title="Move Left"
-                                >
-                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 3L5 8l5 5"/></svg>
-                                </button>
-                                <button
-                                  onClick={() => handleMoveDocument(openDoc.id, 'right')}
-                                  disabled={index === openDocuments.length - 1}
-                                  style={{ padding: 4, borderRadius: 4, background: 'none', border: 'none', cursor: index === openDocuments.length - 1 ? 'not-allowed' : 'pointer', color: 'var(--muted)', display: 'flex', opacity: index === openDocuments.length - 1 ? 0.3 : 1 }}
-                                  title="Move Right"
-                                >
-                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 3l5 5-5 5"/></svg>
-                                </button>
-                              </div>
-                            )}
-                            <button
-                              onClick={() => setOpenDocuments(prev => prev.filter(od => od.id !== openDoc.id))}
-                              style={{ padding: 5, borderRadius: 5, background: 'var(--soft)', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex' }}
-                              title="Close"
-                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; (e.currentTarget as HTMLElement).style.background = 'color-mix(in oklch, #c94250 8%, var(--bg))'; }}
-                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
-                            >
-                              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3l10 10M13 3L3 13"/></svg>
-                            </button>
-                          </div>
-                        </header>
-
-                        {/* Breadcrumbs */}
-                        {openDoc.breadcrumbs.length > 0 && (
-                          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, fontSize: 11.5, color: 'var(--muted)', padding: '6px 10px', background: 'var(--soft)', borderRadius: 6 }}>
-                            {openDoc.breadcrumbs.map((crumb, i) => (
-                              <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
-                                <button
-                                  onClick={() => handleBreadcrumbClick(openDoc.id, i)}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontFamily: 'var(--font-body)', fontSize: 11.5, padding: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '15ch' }}
-                                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
-                                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
-                                >
-                                  <span style={{ fontWeight: 600 }}>{crumb.collectionName}</span>
-                                  <span style={{ fontFamily: 'var(--font-mono)' }}> / {getDocId(crumb.document)}</span>
-                                </button>
-                                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}><path d="M6 3l5 5-5 5"/></svg>
-                              </React.Fragment>
-                            ))}
-                            <span style={{ fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '15ch' }}>
-                              {openDoc.collectionName} / <span style={{ fontFamily: 'var(--font-mono)' }}>{getDocId(openDoc.doc)}</span>
-                            </span>
+                      {/* Document content */}
+                      <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12, opacity: isLoading ? 0.45 : 1 }}>
+                        {!openDoc.editMode && (
+                          <div style={{ background: 'var(--soft)', flex: 1, borderRadius: 8, padding: '12px 14px', fontSize: 11.5, overflowX: 'auto', fontFamily: 'var(--font-mono)', lineHeight: 1.7, border: '1px solid var(--border)' }}>
+                            <JsonDisplay data={openDoc.doc} onObjectIdClick={(objId, keyCtx, openNewTab, openToSide) => handleObjectIdClick(openDoc.id, objId, keyCtx, openNewTab, openToSide)} />
                           </div>
                         )}
-
-                        {/* Content */}
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, opacity: isLoading ? 0.5 : 1 }}>
-                          {!openDoc.editMode && (
-                            <div style={{ background: '#0f0e0d', flex: 1, borderRadius: 8, padding: 12, fontSize: 11.5, overflowX: 'auto', color: '#c8c4bc', fontFamily: 'var(--font-mono)', lineHeight: 1.65, border: '1px solid #2a2826' }}>
-                              <JsonDisplay data={openDoc.doc} onObjectIdClick={(objId, keyCtx, openNewTab, openToSide) => handleObjectIdClick(openDoc.id, objId, keyCtx, openNewTab, openToSide)} />
-                            </div>
-                          )}
-                          {openDoc.editMode && (
-                            <DocumentEditView
-                              ref={(el) => {
-                                if (el) editorRefs.current[openDoc.id] = el;
-                                else delete editorRefs.current[openDoc.id];
-                              }}
-                              accountId={currentResource.accountId}
-                              databaseName={currentResource.databaseName}
-                              document={openDoc.doc}
-                              collection={openDoc.collectionName}
-                              docId={getDocId(openDoc.doc)}
-                              loading={isLoading}
-                              onCancel={() => handleEditCancel(openDoc.id)}
-                              onSave={() => handleEditSave(openDoc.id)}
-                            />
-                          )}
-                        </div>
+                        {openDoc.editMode && discardConfirmDocId === openDoc.id && (
+                          <div style={{
+                            padding: '10px 14px', borderRadius: 8, flexShrink: 0,
+                            background: 'color-mix(in oklch, var(--status-err) 9%, var(--panel))',
+                            border: '1px solid color-mix(in oklch, var(--status-err) 28%, var(--border))',
+                            display: 'flex', alignItems: 'center', gap: 10,
+                          }}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--status-err)" strokeWidth="1.5" style={{ flexShrink: 0 }}>
+                              <path d="M8 1L15 14H1L8 1z"/><path d="M8 6v4M8 11.5v.5"/>
+                            </svg>
+                            <span style={{ flex: 1, fontSize: 12.5, color: 'var(--status-err)', fontFamily: 'var(--font-body)' }}>
+                              You have unsaved changes. Discard them?
+                            </span>
+                            <button
+                              onClick={() => setDiscardConfirmDocId(null)}
+                              style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 6, border: '1px solid color-mix(in oklch, var(--status-err) 28%, var(--border))', background: 'var(--panel)', color: 'var(--fg)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+                            >
+                              Keep editing
+                            </button>
+                            <button
+                              onClick={() => confirmDiscard(openDoc.id)}
+                              style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--status-err)', background: 'var(--status-err)', color: '#fff', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+                            >
+                              Discard
+                            </button>
+                          </div>
+                        )}
+                        {openDoc.editMode && (
+                          <DocumentEditView
+                            ref={(el) => {
+                              if (el) editorRefs.current[openDoc.id] = el;
+                              else delete editorRefs.current[openDoc.id];
+                            }}
+                            accountId={currentResource.accountId}
+                            databaseName={currentResource.databaseName}
+                            document={openDoc.doc}
+                            collection={openDoc.collectionName}
+                            docId={getDocId(openDoc.doc)}
+                            loading={isLoading}
+                            onCancel={() => handleEditCancel(openDoc.id)}
+                            onSave={() => handleEditSave(openDoc.id)}
+                          />
+                        )}
                       </div>
                     </div>
                   ))

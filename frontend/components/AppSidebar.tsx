@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { CollectionSummary, DbInfo, CosmosDBAccount } from '../types';
+import { API_BASE_URL } from '../app.config';
 
 interface AppSidebarProps {
   accountName?: string;
@@ -10,7 +10,6 @@ interface AppSidebarProps {
   collections?: CollectionSummary[];
   activeCollection?: string;
   onCollectionSelect?: (name: string) => void;
-  latencyMs?: number;
   availableDbs?: DbInfo[];
   onSwitchDatabase?: (db: DbInfo) => void;
   availableAccounts?: CosmosDBAccount[];
@@ -41,16 +40,6 @@ const NAV_ITEMS: NavItem[] = [
     icon: (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
         <path d="M2 3h12v3H2zM2 7h12v3H2zM2 11h12v3H2z"/>
-      </svg>
-    ),
-  },
-  {
-    label: 'Saved queries',
-    panel: 'saved',
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-        <path d="M4 2h6l3 3v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/>
-        <path d="M6 7h5M6 10h3"/>
       </svg>
     ),
   },
@@ -88,7 +77,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   collections,
   activeCollection,
   onCollectionSelect,
-  latencyMs,
   availableDbs,
   onSwitchDatabase,
   availableAccounts,
@@ -96,9 +84,9 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useUnifiedAuth();
   const [showDbPicker, setShowDbPicker] = useState(false);
-  const [sortAlpha, setSortAlpha] = useState(false);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [collectionSort, setCollectionSort] = useState<'name_asc' | 'name_desc' | 'count_desc' | 'count_asc'>('name_asc');
   const [isSwitching, setIsSwitching] = useState(false);
   const chipRef = useRef<HTMLDivElement>(null);
 
@@ -117,6 +105,22 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   useEffect(() => {
     setIsSwitching(false);
   }, [accountId, databaseName]);
+
+  // Measure API latency by pinging /health every 30s
+  useEffect(() => {
+    const measure = async () => {
+      try {
+        const t0 = performance.now();
+        await fetch(`${API_BASE_URL}/health`, { method: 'GET', cache: 'no-store' });
+        setLatencyMs(Math.round(performance.now() - t0));
+      } catch {
+        setLatencyMs(null);
+      }
+    };
+    measure();
+    const id = setInterval(measure, 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const explorerHref = accountId && databaseName
     ? `/data-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`
@@ -363,24 +367,30 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             color: 'var(--muted)',
           }}>
             <span>Collections <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{collections.length}</span></span>
-            <button
-              onClick={() => setSortAlpha(v => !v)}
-              title={sortAlpha ? 'Sorted A–Z (click to reset)' : 'Sort A–Z'}
+            <select
+              value={collectionSort}
+              onChange={(e) => setCollectionSort(e.target.value as typeof collectionSort)}
+              title="Sort collections"
               style={{
-                background: sortAlpha ? 'var(--accent-soft)' : 'none',
-                border: 'none', cursor: 'pointer', padding: '2px 5px', borderRadius: 4,
-                color: sortAlpha ? 'var(--accent)' : 'var(--muted)',
-                display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontFamily: 'var(--font-body)',
+                fontSize: 10, fontFamily: 'var(--font-body)', color: 'var(--muted)',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                padding: '1px 2px', borderRadius: 4, outline: 'none',
+                appearance: 'none', WebkitAppearance: 'none',
               }}
             >
-              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-                <path d="M3 4h10M5 8h6M7 12h2"/>
-              </svg>
-              A–Z
-            </button>
+              <option value="name_asc">A → Z</option>
+              <option value="name_desc">Z → A</option>
+              <option value="count_desc">Most docs</option>
+              <option value="count_asc">Fewest docs</option>
+            </select>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
-            {(sortAlpha ? [...collections].sort((a, b) => a.name.localeCompare(b.name)) : collections).map((col) => {
+            {([...collections].sort((a, b) => {
+              if (collectionSort === 'name_asc') return a.name.localeCompare(b.name);
+              if (collectionSort === 'name_desc') return b.name.localeCompare(a.name);
+              if (collectionSort === 'count_desc') return b.count - a.count;
+              return a.count - b.count;
+            })).map((col) => {
               const active = activeCollection === col.name;
               return (
                 <button
@@ -421,24 +431,18 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         borderTop: '1px solid var(--border)',
         display: 'flex', alignItems: 'center', gap: 6,
       }}>
-        <span className="qa-dot ok" />
-        <span style={{ fontSize: 11.5, color: 'var(--muted)', flex: 1 }}>
-          Cluster healthy{latencyMs != null ? ` · ${latencyMs}ms` : ''}
+        {latencyMs == null ? (
+          <span className="qa-dot" style={{ background: 'var(--muted)', opacity: 0.4 }} />
+        ) : latencyMs < 150 ? (
+          <span className="qa-dot ok" />
+        ) : latencyMs < 500 ? (
+          <span className="qa-dot" style={{ background: 'var(--status-warn, #d97706)' }} />
+        ) : (
+          <span className="qa-dot" style={{ background: 'var(--status-err)' }} />
+        )}
+        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+          {latencyMs == null ? 'Connecting…' : latencyMs < 150 ? `${latencyMs}ms · healthy` : latencyMs < 500 ? `${latencyMs}ms · slow` : `${latencyMs}ms · degraded`}
         </span>
-        <button
-          onClick={logout}
-          title="Sign out"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--muted)', display: 'flex', padding: 4, borderRadius: 5,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--fg)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
-        >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M11 11l3-3-3-3M14 8H6"/>
-          </svg>
-        </button>
       </div>
     </aside>
   );
