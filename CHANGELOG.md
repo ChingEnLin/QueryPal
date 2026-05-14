@@ -1,3 +1,30 @@
+## [2.10.0](https://github.com/ChingEnLin/QueryPal/compare/v2.9.0...v2.10.0) (2026-05-14)
+
+### Features
+
+* add DESIGN_HANDBOOK.md to .gitignore ([e72e0eb](https://github.com/ChingEnLin/QueryPal/commit/e72e0eb5d57bc92c08891467315774cec9c6dec0))
+* add HubPage and refactor navigation structure ([169074a](https://github.com/ChingEnLin/QueryPal/commit/169074a19d94474d7dd100d479f6e0531e8c5165))
+* add support for preselected account navigation in QueryGeneratorPageWrapper ([8bc2338](https://github.com/ChingEnLin/QueryPal/commit/8bc2338989b7cbc94857a28a037c5ef99da675f7))
+* enhance Data Explorer and Query Generator with session management and improved navigation ([4aeed9e](https://github.com/ChingEnLin/QueryPal/commit/4aeed9e9cfca146498270c970bcbfea651886966))
+* enhance QueryDisplay and DataExplorer components with filter state and handover functionality ([fc3d144](https://github.com/ChingEnLin/QueryPal/commit/fc3d144162f59fba48131a1b78913643d7965fd5))
+* enhance ShareQueryDialog and ShortcutCheatsheet components with improved styling and functionality ([bccd212](https://github.com/ChingEnLin/QueryPal/commit/bccd2129f85d8bf619aae8b2741e8c5c72fc5400))
+* enhance UI components and add command palette functionality ([53795d4](https://github.com/ChingEnLin/QueryPal/commit/53795d4002eac1a04bc285aca4ae6e2f2fc57736))
+* implement AnalyticsPageWrapper for session management and routing ([fb15a31](https://github.com/ChingEnLin/QueryPal/commit/fb15a31d735fd9a343bbf8c13c40f0ce92694070))
+* pass initialCollection state when navigating from CommandPalette ([0510ba8](https://github.com/ChingEnLin/QueryPal/commit/0510ba88cbba56c14dd6967fef0e59af0b10b5a6))
+* refactor AppSidebar and DataExplorerPageWrapper for improved state management and UI consistency ([092b491](https://github.com/ChingEnLin/QueryPal/commit/092b4913e1d84aebcbbc3bf8285a20ce8d41397d))
+* refactor query execution logic and enhance saved query handling ([6a7d31f](https://github.com/ChingEnLin/QueryPal/commit/6a7d31fa320772bd848baa4fda74a52a97c4b4ce))
+* remove 'Audit Log' from AppSidebar and HubPage navigation ([0ccefaa](https://github.com/ChingEnLin/QueryPal/commit/0ccefaa376c1f7a2a9d2f759affc4c0dba9e15f0))
+* rework LoginPage UI with enhanced design and functionality ([7684762](https://github.com/ChingEnLin/QueryPal/commit/7684762f6a1501bbd0cfbed7fdd53bcd2ff636ac))
+* update database engine badges to reflect availability status ([706bb77](https://github.com/ChingEnLin/QueryPal/commit/706bb771a059699d30fcb4f86cb30df364f8db65))
+
+### Bug Fixes
+
+* apply black formatting to react_agent_service.py ([8305dfb](https://github.com/ChingEnLin/QueryPal/commit/8305dfb09013f3b18f6020cba92a7dcb0c8b5f79))
+
+### Refactoring
+
+* update Claude Code Review workflow to trigger on issue comments and pull request review comments ([b945405](https://github.com/ChingEnLin/QueryPal/commit/b945405c6853039be161293f98bfe14b9bb683ad))
+
 ## [2.9.0](https://github.com/ChingEnLin/QueryPal/compare/v2.8.0...v2.9.0) (2026-05-10)
 
 ### Features
