@@ -210,7 +210,6 @@ const HubPage: React.FC = () => {
           {[
             { label: 'Home', href: '/hub', active: true },
             { label: 'Analytics', href: '/analytics', active: false },
-            { label: 'Audit Log', href: '/audit', active: false },
           ].map((item) => (
             <Link
               key={item.href}

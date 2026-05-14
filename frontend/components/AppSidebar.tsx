@@ -52,15 +52,6 @@ const NAV_ITEMS: NavItem[] = [
       </svg>
     ),
   },
-  {
-    label: 'Audit Log',
-    href: '/audit',
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-        <path d="M3 2h7l3 3v9H3zM6 7h5M6 9h5M6 11h3"/>
-      </svg>
-    ),
-  },
 ];
 
 const itemBase: React.CSSProperties = {
