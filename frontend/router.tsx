@@ -3,7 +3,7 @@ import LoginPage from './pages/LoginPage';
 import HubPage from './pages/HubPage';
 import QueryGeneratorPageWrapper from './pages/QueryGeneratorPageWrapper';
 import DataExplorerPageWrapper from './pages/DataExplorerPageWrapper';
-import AnalyticsPage from './pages/AnalyticsPage';
+import AnalyticsPageWrapper from './pages/AnalyticsPageWrapper';
 import NotFoundPage from './pages/NotFoundPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import AuditPage from './pages/AuditPage';
@@ -37,7 +37,7 @@ export const router = createBrowserRouter([
     path: "/analytics",
     element: (
       <ProtectedRoute>
-        <AnalyticsPage />
+        <AnalyticsPageWrapper />
       </ProtectedRoute>
     ),
   },
