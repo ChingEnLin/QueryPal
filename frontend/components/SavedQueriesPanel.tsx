@@ -1,94 +1,142 @@
 
 import React, { useState, useMemo } from 'react';
 import { SavedQuery } from '../types';
-import { XIcon, SpinnerIcon, EditIcon, BookmarkIcon, TrashIcon, ShareIcon } from './icons/material-icons-imports';
+import { EditIcon, TrashIcon, ShareIcon } from './icons/material-icons-imports';
 
 interface SavedQueriesPanelProps {
     onClose: () => void;
     queries: SavedQuery[];
     onLoad: (query: SavedQuery) => void;
+    onLoadAndRun: (query: SavedQuery) => void;
     onEdit: (query: SavedQuery) => void;
     onDelete: (queryId: string) => void;
     onShare: (query: SavedQuery) => void;
     isLoading: boolean;
+    dbReady: boolean;
     currentUserEmail?: string | null;
 }
 
-const SavedQueryCard: React.FC<{
+const timeAgo = (dateString: string) => {
+    const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
+    if (seconds < 60) return 'just now';
+    const m = Math.floor(seconds / 60); if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24); if (d < 30) return `${d}d ago`;
+    return `${Math.floor(d / 30)}mo ago`;
+};
+
+const PinIcon = () => (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="var(--accent)" stroke="var(--accent)" strokeWidth="1.2">
+        <path d="M5 2v6l-2 2v1h4v4h2v-4h4v-1l-2-2V2z"/>
+    </svg>
+);
+
+interface SavedQueryCardProps {
     query: SavedQuery;
-    onLoad: (query: SavedQuery) => void;
-    onEdit: (query: SavedQuery) => void;
-    onDelete: (queryId: string) => void;
-    onShare: (query: SavedQuery) => void;
+    onLoad: (q: SavedQuery) => void;
+    onLoadAndRun: (q: SavedQuery) => void;
+    onEdit: (q: SavedQuery) => void;
+    onDelete: (id: string) => void;
+    onShare: (q: SavedQuery) => void;
     isOwned: boolean;
-}> = ({ query, onLoad, onEdit, onDelete, onShare, isOwned }) => {
-    
+    dbReady: boolean;
+}
+
+const SavedQueryCard: React.FC<SavedQueryCardProps> = ({ query, onLoad, onLoadAndRun, onEdit, onDelete, onShare, isOwned, dbReady }) => {
     const handleDelete = () => {
-        if (window.confirm(`Are you sure you want to delete "${query.name}"? This action cannot be undone.`)) {
-            onDelete(query.id);
-        }
+        if (window.confirm(`Delete "${query.name}"? This cannot be undone.`)) onDelete(query.id);
     };
-
-    const timeAgo = (dateString: string) => {
-        const date = new Date(dateString);
-        const now = new Date();
-        const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-        let interval = seconds / 31536000;
-        if (interval > 1) return Math.floor(interval) + " years ago";
-        interval = seconds / 2592000;
-        if (interval > 1) return Math.floor(interval) + " months ago";
-        interval = seconds / 86400;
-        if (interval > 1) return Math.floor(interval) + " days ago";
-        interval = seconds / 3600;
-        if (interval > 1) return Math.floor(interval) + " hours ago";
-        interval = seconds / 60;
-        if (interval > 1) return Math.floor(interval) + " minutes ago";
-        return "just now";
-    };
-
     return (
-        <div className="bg-slate-800/70 p-4 rounded-lg border border-slate-700 space-y-3 group transition-all hover:border-slate-600 hover:bg-slate-800">
-            <div className="flex justify-between items-start gap-2">
-                <h4 className="font-bold text-slate-200 break-words">{query.name}</h4>
-                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div
+            className="qa-card"
+            style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', cursor: 'default' }}
+        >
+            {/* Pin icon */}
+            {(query as any).pinned && (
+                <span style={{ position: 'absolute', top: 12, right: 12 }}><PinIcon /></span>
+            )}
+
+            {/* Name + tags row */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, paddingRight: 20 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.3 }}>{query.name}</span>
+            </div>
+
+            {/* Prompt quote */}
+            <blockquote style={{
+                margin: 0, borderLeft: '2px solid var(--accent)',
+                paddingLeft: 10, fontSize: 12, fontStyle: 'italic',
+                color: 'var(--muted)', lineHeight: 1.5,
+                maxHeight: 60, overflow: 'hidden',
+            }}>
+                {query.prompt}
+            </blockquote>
+
+            {/* Shared-by info */}
+            {!isOwned && (
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                    Shared by <strong style={{ color: 'var(--fg)' }}>{query.ownerEmail}</strong>
+                    {' · '}edited {timeAgo(query.updatedAt)} by {query.lastModifiedBy.split('@')[0]}
+                </div>
+            )}
+
+            {/* Footer row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                <button
+                    onClick={() => onLoad(query)}
+                    disabled={!dbReady}
+                    className="qa-btn"
+                    title={!dbReady ? 'Connect to a database first' : 'Load query into editor'}
+                    style={{ fontSize: 12, padding: '4px 12px', opacity: dbReady ? 1 : 0.45, cursor: dbReady ? 'pointer' : 'not-allowed' }}
+                >
+                    Load
+                </button>
+                <button
+                    onClick={() => onLoadAndRun(query)}
+                    disabled={!dbReady}
+                    className="qa-btn primary"
+                    title={!dbReady ? 'Connect to a database first' : 'Load query and run it immediately'}
+                    style={{ fontSize: 12, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 5, opacity: dbReady ? 1 : 0.45, cursor: dbReady ? 'pointer' : 'not-allowed' }}
+                >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M5 3l9 5-9 5V3z" fill="currentColor" strokeLinejoin="round"/>
+                    </svg>
+                    Load & Run
+                </button>
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
                     {isOwned && (
-                        <button onClick={() => onShare(query)} className="p-1.5 rounded-full text-slate-400 hover:bg-slate-600 hover:text-white" aria-label="Share query" title="Share and manage access">
-                            <ShareIcon className="w-4 h-4" />
+                        <button
+                            onClick={() => onShare(query)}
+                            aria-label="Share query"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', padding: 4, borderRadius: 4 }}
+                        >
+                            <ShareIcon className="w-4 h-4" style={{ width: 14, height: 14 }} />
                         </button>
                     )}
-                    <button onClick={() => onEdit(query)} className="p-1.5 rounded-full text-slate-400 hover:bg-slate-600 hover:text-white" aria-label="Edit query" title="Edit query name, prompt, or code">
-                        <EditIcon className="w-4 h-4" />
+                    <button
+                        onClick={() => onEdit(query)}
+                        aria-label="Edit query"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', padding: 4, borderRadius: 4 }}
+                    >
+                        <EditIcon className="w-4 h-4" style={{ width: 14, height: 14 }} />
                     </button>
                     {isOwned && (
-                        <button onClick={handleDelete} className="p-1.5 rounded-full text-slate-400 hover:bg-red-900/50 hover:text-red-400" aria-label="Delete query" title="Permanently delete this query">
-                            <TrashIcon className="w-4 h-4" />
+                        <button
+                            onClick={handleDelete}
+                            aria-label="Delete query"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', padding: 4, borderRadius: 4 }}
+                        >
+                            <TrashIcon className="w-4 h-4" style={{ width: 14, height: 14 }} />
                         </button>
                     )}
                 </div>
             </div>
-
-            <blockquote className="border-l-4 border-blue-400 pl-3 text-sm italic text-slate-400 max-h-20 overflow-y-auto">
-                {query.prompt}
-            </blockquote>
-
-             {!isOwned && (
-                <div className="text-xs text-slate-400">
-                    Shared by <strong className="text-slate-300">{query.ownerEmail}</strong> &middot; Edited {timeAgo(query.updatedAt)} by {query.lastModifiedBy.split('@')[0]}
-                </div>
-            )}
-            
-            <button
-                onClick={() => onLoad(query)}
-                className="w-full px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-blue-500 transition-colors"
-                title="Load this query and prompt into the main editor"
-            >
-                Load Query
-            </button>
         </div>
     );
 };
 
-const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({ onClose, queries, onLoad, onEdit, onDelete, onShare, isLoading, currentUserEmail }) => {
+const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({
+    onClose, queries, onLoad, onLoadAndRun, onEdit, onDelete, onShare, isLoading, dbReady, currentUserEmail,
+}) => {
     const [activeTab, setActiveTab] = useState<'my_queries' | 'shared_with_me'>('my_queries');
 
     const { myQueries, sharedWithMe } = useMemo(() => {
@@ -96,11 +144,8 @@ const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({ onClose, queries,
         const myq: SavedQuery[] = [];
         const swm: SavedQuery[] = [];
         queries.forEach(q => {
-            if (q.ownerEmail === currentUserEmail) {
-                myq.push(q);
-            } else if (q.sharedWith.includes(currentUserEmail)) {
-                swm.push(q);
-            }
+            if (q.ownerEmail === currentUserEmail) myq.push(q);
+            else if (q.sharedWith.includes(currentUserEmail!)) swm.push(q);
         });
         return { myQueries: myq, sharedWithMe: swm };
     }, [queries, currentUserEmail]);
@@ -109,86 +154,124 @@ const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({ onClose, queries,
 
     const renderContent = () => {
         if (isLoading) {
-             return (
-                <div className="text-center text-slate-500 h-full flex flex-col items-center justify-center">
-                    <SpinnerIcon className="w-8 h-8 text-blue-500"/>
-                    <p className="mt-4 font-semibold">Loading your queries...</p>
+            return (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted)' }}>
+                    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.5" style={{ animation: 'qp-spin 0.8s linear infinite' }}>
+                        <circle cx="8" cy="8" r="6" strokeOpacity="0.3"/><path d="M8 2a6 6 0 0 1 6 6"/>
+                    </svg>
+                    <span style={{ fontSize: 13 }}>Loading queries…</span>
                 </div>
             );
         }
         if (queriesToDisplay.length > 0) {
-            return queriesToDisplay.map((query) => (
-              <SavedQueryCard 
-                key={query.id} 
-                query={query}
-                onLoad={onLoad}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onShare={onShare}
-                isOwned={activeTab === 'my_queries'}
-              />
+            return queriesToDisplay.map(q => (
+                <SavedQueryCard
+                    key={q.id}
+                    query={q}
+                    onLoad={onLoad}
+                    onLoadAndRun={onLoadAndRun}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onShare={onShare}
+                    isOwned={activeTab === 'my_queries'}
+                    dbReady={dbReady}
+                />
             ));
         }
-        if (activeTab === 'my_queries') {
-            return (
-                <div className="text-center text-slate-500 h-full flex flex-col items-center justify-center p-4">
-                    <p className="font-semibold">No queries saved yet.</p>
-                    <p className="text-sm">Click the "Save" button on a generated query to add it here.</p>
-                </div>
-            );
-        }
         return (
-            <div className="text-center text-slate-500 h-full flex flex-col items-center justify-center p-4">
-                <p className="font-semibold">No queries shared with you.</p>
-                <p className="text-sm">When a colleague shares a query with you, it will appear here.</p>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--muted)' }}>
+                <svg width="32" height="32" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.4">
+                    <path d="M4 2h6l3 3v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/>
+                    <path d="M6 7h5M6 10h3"/>
+                </svg>
+                {activeTab === 'my_queries' ? (
+                    <>
+                        <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>No saved queries yet</p>
+                        <p style={{ fontSize: 12, margin: 0, textAlign: 'center' }}>Click Save on a generated query to add it here.</p>
+                    </>
+                ) : (
+                    <>
+                        <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Nothing shared with you</p>
+                        <p style={{ fontSize: 12, margin: 0, textAlign: 'center' }}>When a colleague shares a query, it appears here.</p>
+                    </>
+                )}
             </div>
         );
     };
 
     return (
         <>
+            <style>{`@keyframes qp-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             <div
                 onClick={onClose}
-                className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fade-in-fast"
+                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 40 }}
                 aria-hidden="true"
-            ></div>
-            <aside 
+            />
+            <aside
                 id="tutorial-saved-queries-panel"
-                className="fixed top-0 right-0 h-full w-full md:w-[450px] bg-slate-900 shadow-2xl z-50 flex flex-col animate-slide-in-drawer"
+                className="qp-drawer"
+                style={{
+                    position: 'fixed', top: 0, right: 0, height: '100%', width: 460,
+                    maxWidth: '100vw', background: 'var(--panel)', borderLeft: '1px solid var(--border)',
+                    zIndex: 50, display: 'flex', flexDirection: 'column',
+                    fontFamily: 'var(--font-body)',
+                }}
             >
-                <header className="flex items-center justify-between p-4 border-b border-slate-700 flex-shrink-0">
-                    <h3 className="text-lg font-semibold text-white flex items-center gap-3">
-                        <BookmarkIcon className="w-5 h-5 text-blue-400" />
-                        Saved Queries
-                    </h3>
+                {/* Header */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px',
+                    borderBottom: '1px solid var(--border)', flexShrink: 0,
+                }}>
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.4">
+                        <path d="M4 2h6l3 3v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/>
+                        <path d="M6 7h5M6 10h3"/>
+                    </svg>
+                    <span style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--fg)' }}>Saved Queries</span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 2 }}>· {queries.length}</span>
                     <button
                         onClick={onClose}
-                        className="p-1.5 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
                         aria-label="Close saved queries panel"
-                        title="Close saved queries"
+                        style={{
+                            marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer',
+                            color: 'var(--muted)', display: 'flex', padding: 4, borderRadius: 5,
+                        }}
                     >
-                        <XIcon className="w-5 h-5" />
+                        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M3 3l10 10M13 3L3 13"/>
+                        </svg>
                     </button>
-                </header>
+                </div>
 
-                <div className="flex-shrink-0 p-2 border-b border-slate-700">
-                    <div className="flex items-center gap-2 p-1 bg-slate-800 rounded-lg">
-                        <button
-                            onClick={() => setActiveTab('my_queries')}
-                            className={`flex-1 px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${activeTab === 'my_queries' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-700'}`}
-                        >
-                            My Queries
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('shared_with_me')}
-                            className={`flex-1 px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${activeTab === 'shared_with_me' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-700'}`}
-                        >
-                            Shared With Me
-                        </button>
+                {/* Tabs */}
+                <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: 2, background: 'var(--soft)', borderRadius: 6, padding: 2 }}>
+                        {(['my_queries', 'shared_with_me'] as const).map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                style={{
+                                    flex: 1, padding: '4px 0', fontSize: 12, fontWeight: activeTab === tab ? 500 : 400,
+                                    border: 'none', borderRadius: 4, cursor: 'pointer',
+                                    background: activeTab === tab ? 'var(--panel)' : 'transparent',
+                                    boxShadow: activeTab === tab ? '0 0 0 1px var(--border)' : 'none',
+                                    color: activeTab === tab ? 'var(--fg)' : 'var(--muted)',
+                                    fontFamily: 'var(--font-body)',
+                                }}
+                            >
+                                {tab === 'my_queries' ? 'My queries' : 'Shared with me'}
+                                {tab === 'my_queries' && myQueries.length > 0 && (
+                                    <span style={{ marginLeft: 5, fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>{myQueries.length}</span>
+                                )}
+                                {tab === 'shared_with_me' && sharedWithMe.length > 0 && (
+                                    <span style={{ marginLeft: 5, fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>{sharedWithMe.length}</span>
+                                )}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
-                <div className="flex-grow overflow-auto p-4 space-y-4">
+                {/* Content */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {renderContent()}
                 </div>
             </aside>

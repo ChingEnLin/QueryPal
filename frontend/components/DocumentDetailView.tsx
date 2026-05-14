@@ -1,11 +1,9 @@
 import { useState, forwardRef, useImperativeHandle } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { Button, CircularProgress } from '@mui/material';
 import MonacoEditor from '@monaco-editor/react';
 import { updateDocument, getSingleDocument } from '../services/dbService';
 import { isEqual, omit } from 'lodash';
 import SaveConflictDialog from './SaveConflictDialog';
-
 
 interface DocumentEditViewProps {
   accountId?: string;
@@ -23,86 +21,81 @@ export interface DocumentEditViewRef {
   setCurrentValue: (val: string) => void;
 }
 
-const DocumentEditView = forwardRef<DocumentEditViewRef, DocumentEditViewProps>(({ accountId, databaseName, document, collection, docId, loading, onCancel, onSave }, ref) => {
-  const [jsonValue, setJsonValue] = useState(JSON.stringify(document, null, 2));
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const { theme } = useTheme();
-  const [isSaving, setIsSaving] = useState(false);
-  const [isConflictDialogOpen, setIsConflictDialogOpen] = useState(false);
-  const [conflictServerDocStr, setConflictServerDocStr] = useState<string>('');
+const DocumentEditView = forwardRef<DocumentEditViewRef, DocumentEditViewProps>(
+  ({ accountId, databaseName, document, collection, docId, loading, onCancel, onSave }, ref) => {
+    const [jsonValue, setJsonValue] = useState(JSON.stringify(document, null, 2));
+    const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const { theme } = useTheme();
+    const [isSaving, setIsSaving] = useState(false);
+    const [isConflictDialogOpen, setIsConflictDialogOpen] = useState(false);
+    const [conflictServerDocStr, setConflictServerDocStr] = useState<string>('');
 
-  useImperativeHandle(ref, () => ({
-    getCurrentValue: () => jsonValue,
-    setCurrentValue: (val: string) => setJsonValue(val)
-  }));
+    useImperativeHandle(ref, () => ({
+      getCurrentValue: () => jsonValue,
+      setCurrentValue: (val: string) => setJsonValue(val),
+    }));
 
-  const handleSave = async (forceSave = false) => {
-    setIsSaving(true);
-    try {
-      const parsed = JSON.parse(jsonValue);
-      if (!accountId || !databaseName || !collection || !docId) throw new Error('Missing DB info');
+    const handleSave = async (forceSave = false) => {
+      setIsSaving(true);
+      try {
+        const parsed = JSON.parse(jsonValue);
+        if (!accountId || !databaseName || !collection || !docId) throw new Error('Missing DB info');
 
-      if (!forceSave) {
-        // Fetch the latest document from DB
-        const refreshed = await getSingleDocument(accountId, databaseName, collection, docId);
-        
-        // Compare with the original document prop
-        const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
-        const oldWithoutIgnored = omit(document, ignoredKeys);
-        const newWithoutIgnored = omit(refreshed, ignoredKeys);
-        
-        if (!isEqual(oldWithoutIgnored, newWithoutIgnored)) {
-          // Sync ignored fields to match user's expected view without highlighting them
-          const displayServerDoc = { ...refreshed };
-          ignoredKeys.forEach(key => {
-            if (key in parsed) {
-              displayServerDoc[key] = parsed[key];
-            } else {
-              delete displayServerDoc[key];
-            }
-          });
-          
-          setConflictServerDocStr(JSON.stringify(displayServerDoc, null, 2));
-          setIsConflictDialogOpen(true);
-          setIsSaving(false);
-          return;
+        if (!forceSave) {
+          const refreshed = await getSingleDocument(accountId, databaseName, collection, docId);
+          const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
+          const oldWithoutIgnored = omit(document, ignoredKeys);
+          const newWithoutIgnored = omit(refreshed, ignoredKeys);
+
+          if (!isEqual(oldWithoutIgnored, newWithoutIgnored)) {
+            const displayServerDoc = { ...refreshed };
+            ignoredKeys.forEach(key => {
+              if (key in parsed) displayServerDoc[key] = parsed[key];
+              else delete displayServerDoc[key];
+            });
+            setConflictServerDocStr(JSON.stringify(displayServerDoc, null, 2));
+            setIsConflictDialogOpen(true);
+            setIsSaving(false);
+            return;
+          }
         }
+
+        await updateDocument(accountId, databaseName, collection, docId, parsed);
+        const refreshed = await getSingleDocument(accountId, databaseName, collection, docId);
+        setJsonValue(JSON.stringify(refreshed, null, 2));
+        setFeedback({ type: 'success', message: 'Document saved.' });
+        if (onSave) await onSave();
+        if (onCancel) onCancel();
+      } catch (e: any) {
+        setFeedback({ type: 'error', message: e?.message || 'Invalid JSON or failed to save.' });
+      } finally {
+        setIsSaving(false);
       }
+    };
 
-      await updateDocument(accountId, databaseName, collection, docId, parsed);
-      // Fetch the latest document after update
-      const refreshed = await getSingleDocument(accountId, databaseName, collection, docId);
-      setJsonValue(JSON.stringify(refreshed, null, 2));
-      setFeedback({ type: 'success', message: 'Document saved and refreshed.' });
-      if (onSave) await onSave();
-      if (onCancel) onCancel();
-    } catch (e: any) {
-      setFeedback({ type: 'error', message: e?.message || 'Invalid JSON or failed to save.' });
-    } finally {
-      setIsSaving(false);
-    }
-  };
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
 
-  return (
-    <div className="relative p-4 rounded-lg shadow bg-white dark:bg-slate-900">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Edit Document</h3>
-        <div className="flex gap-2">
-          <Button variant="contained" color="success" size="small" onClick={() => handleSave(false)} disabled={loading || isSaving} startIcon={isSaving ? <CircularProgress size={18} color="inherit" /> : undefined}>
-            {isSaving ? 'Saving...' : 'Save'}
-          </Button>
+        {/* Edit mode banner */}
+        <div style={{
+          padding: '8px 14px', borderRadius: 7,
+          background: 'var(--accent-soft)', border: '1px solid color-mix(in oklch, var(--accent) 25%, var(--border))',
+          fontSize: 12.5, color: 'var(--accent)', fontFamily: 'var(--font-body)',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ flexShrink: 0 }}>
+            <circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5.5v.5"/>
+          </svg>
+          <span>Edit mode — changes are not saved until you click <strong>Save</strong>.</span>
         </div>
-      </div>
-      <div className="mb-2">
-        <div className="w-full py-2 px-3 rounded bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 font-semibold text-center border border-blue-200 dark:border-blue-700 mb-2">
-          You are in <b>Edit Mode</b>. Changes are not saved until you click Save.
-        </div>
-      </div>
-      <div>
-        <div className="mb-1 text-xs text-slate-500 dark:text-slate-400 font-semibold">Edit JSON</div>
-        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden" style={{ minHeight: 400, height: 600, width: '100%', display: 'flex' }}>
+
+        {/* Monaco editor */}
+        <div style={{
+          flex: 1, border: '1px solid var(--border)', borderRadius: 8,
+          overflow: 'hidden', minHeight: 400, display: 'flex', flexDirection: 'column',
+        }}>
           <MonacoEditor
-            height="100%"
+            height="560px"
             width="100%"
             defaultLanguage="json"
             value={jsonValue}
@@ -112,7 +105,7 @@ const DocumentEditView = forwardRef<DocumentEditViewRef, DocumentEditViewProps>(
               minimap: { enabled: false },
               folding: true,
               scrollBeyondLastLine: false,
-              fontSize: 14,
+              fontSize: 13,
               wordWrap: 'on',
               readOnly: !!loading,
               lineNumbers: 'on',
@@ -122,24 +115,58 @@ const DocumentEditView = forwardRef<DocumentEditViewRef, DocumentEditViewProps>(
             }}
           />
         </div>
-      </div>
-      {feedback && (
-        <div className={`fixed left-1/2 -translate-x-1/2 bottom-6 px-4 py-2 rounded shadow text-sm font-semibold z-50 ${feedback.type === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}>
-          {feedback.message}
+
+        {/* Footer actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
+          <button
+            className="qa-btn"
+            onClick={onCancel}
+            disabled={isSaving || !!loading}
+            style={{ fontSize: 13 }}
+          >
+            Cancel
+          </button>
+          <button
+            className="qa-btn primary"
+            onClick={() => handleSave(false)}
+            disabled={isSaving || !!loading}
+            style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, opacity: (isSaving || loading) ? 0.7 : 1 }}
+          >
+            {isSaving && (
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ animation: 'qp-spin 0.7s linear infinite' }}>
+                <circle cx="8" cy="8" r="6" strokeOpacity="0.3"/><path d="M8 2a6 6 0 0 1 6 6"/>
+              </svg>
+            )}
+            {isSaving ? 'Saving…' : 'Save'}
+          </button>
         </div>
-      )}
-      <SaveConflictDialog
-        open={isConflictDialogOpen}
-        serverValue={conflictServerDocStr}
-        localValue={jsonValue}
-        onClose={() => setIsConflictDialogOpen(false)}
-        onOverwrite={() => {
-          setIsConflictDialogOpen(false);
-          handleSave(true);
-        }}
-      />
-    </div>
-  );
-});
+
+        {/* Feedback toast */}
+        {feedback && (
+          <div style={{
+            position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)',
+            padding: '9px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            zIndex: 50, fontFamily: 'var(--font-body)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+            background: feedback.type === 'error'
+              ? 'color-mix(in oklch, var(--status-err) 12%, var(--panel))'
+              : 'color-mix(in oklch, var(--status-ok) 12%, var(--panel))',
+            color: feedback.type === 'error' ? 'var(--status-err)' : 'var(--status-ok)',
+            border: `1px solid ${feedback.type === 'error' ? 'color-mix(in oklch, var(--status-err) 30%, var(--border))' : 'color-mix(in oklch, var(--status-ok) 30%, var(--border))'}`,
+          }}>
+            {feedback.message}
+          </div>
+        )}
+
+        <SaveConflictDialog
+          open={isConflictDialogOpen}
+          serverValue={conflictServerDocStr}
+          localValue={jsonValue}
+          onClose={() => setIsConflictDialogOpen(false)}
+          onOverwrite={() => { setIsConflictDialogOpen(false); handleSave(true); }}
+        />
+      </div>
+    );
+  }
+);
 
 export default DocumentEditView;

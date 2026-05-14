@@ -1,15 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import DataExplorerPage from './DataExplorerPage';
-import { SelectedResource, DbInfo, CosmosDBAccount } from '../types';
+import AppLayout from '../components/AppLayout';
+import { SelectedResource, DbInfo, CosmosDBAccount, CollectionSummary } from '../types';
 import { getAzureCosmosAccounts, getDatabasesForAccount } from '../services/dbService';
-import Loader from '../components/Loader';
+import { FilterState } from '../utils/queryHandover';
 
 interface LocationState {
   dbInfo?: DbInfo;
   accountName?: string;
   availableDbs?: DbInfo[];
   availableAccounts?: CosmosDBAccount[];
+  initialCollection?: string;
+  initialFilters?: FilterState[];
 }
 
 const DataExplorerPageWrapper: React.FC = () => {
@@ -24,6 +27,17 @@ const DataExplorerPageWrapper: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeCollection, setActiveCollection] = useState<string | undefined>(
+    (location.state as LocationState)?.initialCollection
+  );
+
+  // Used to keep sidebar populated during the async load so there's no visual flash
+  const [sessionCache] = useState<{ accountName?: string; collections?: CollectionSummary[]; availableAccounts?: CosmosDBAccount[]; availableDbs?: DbInfo[] } | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('qp_connection');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
   const [pageData, setPageData] = useState<{
     resource: SelectedResource;
     dbInfo: DbInfo;
@@ -31,7 +45,19 @@ const DataExplorerPageWrapper: React.FC = () => {
     availableDbs: DbInfo[];
     availableAccounts: CosmosDBAccount[];
     initialDocumentId?: string;
+    initialFilters?: FilterState[];
   } | null>(null);
+
+  // Reset active collection when DB/account changes so the new page starts fresh
+  const prevConnectionKey = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!pageData) return;
+    const key = `${pageData.resource.accountId}/${pageData.dbInfo.name}`;
+    if (prevConnectionKey.current !== null && prevConnectionKey.current !== key) {
+      setActiveCollection(undefined);
+    }
+    prevConnectionKey.current = key;
+  }, [pageData]);
 
   useEffect(() => {
     const initializePageData = async () => {
@@ -65,15 +91,50 @@ const DataExplorerPageWrapper: React.FC = () => {
           databaseName: decodedDatabaseName
         };
 
+        // Fast path: sessionStorage already has a matching connection — skip API calls
+        const sessionConn = (() => {
+          try { return JSON.parse(sessionStorage.getItem('qp_connection') ?? 'null'); }
+          catch { return null; }
+        })();
+        if (
+          sessionConn?.accountId === decodedAccountId &&
+          sessionConn?.databaseName === decodedDatabaseName &&
+          sessionConn?.availableAccounts?.length &&
+          sessionConn?.availableDbs?.length
+        ) {
+          const dbInfo = sessionConn.availableDbs.find((d: DbInfo) => d.name === decodedDatabaseName);
+          if (dbInfo) {
+            setPageData({
+              resource,
+              dbInfo,
+              accountName: sessionConn.accountName,
+              availableDbs: sessionConn.availableDbs,
+              availableAccounts: sessionConn.availableAccounts,
+              initialDocumentId: decodedDocumentId,
+              initialFilters: state?.initialFilters,
+            });
+            return;
+          }
+        }
+
         // If we have state from navigation, use it
         if (state?.dbInfo && state?.accountName && state?.availableDbs && state?.availableAccounts) {
+          sessionStorage.setItem('qp_connection', JSON.stringify({
+            accountId: decodedAccountId,
+            databaseName: decodedDatabaseName,
+            accountName: state.accountName,
+            collections: state.dbInfo.collections,
+            availableAccounts: state.availableAccounts,
+            availableDbs: state.availableDbs,
+          }));
           setPageData({
             resource,
             dbInfo: state.dbInfo,
             accountName: state.accountName,
             availableDbs: state.availableDbs,
             availableAccounts: state.availableAccounts,
-            initialDocumentId: decodedDocumentId
+            initialDocumentId: decodedDocumentId,
+            initialFilters: state.initialFilters,
           });
         } else {
           // Otherwise, fetch the data we need
@@ -93,6 +154,14 @@ const DataExplorerPageWrapper: React.FC = () => {
             throw new Error(`Database '${decodedDatabaseName}' not found in account '${account.name}'`);
           }
 
+          sessionStorage.setItem('qp_connection', JSON.stringify({
+            accountId: decodedAccountId,
+            databaseName: decodedDatabaseName,
+            accountName: account.name,
+            collections: database.collections,
+            availableAccounts: accounts,
+            availableDbs: databases,
+          }));
           setPageData({
             resource,
             dbInfo: database,
@@ -117,111 +186,87 @@ const DataExplorerPageWrapper: React.FC = () => {
     navigate('/query-generator');
   };
 
+  const handleSwitchDatabase = useCallback((db: DbInfo) => {
+    if (!pageData) return;
+    navigate(`/data-explorer/${encodeURIComponent(pageData.resource.accountId)}/${encodeURIComponent(db.name)}`, {
+      state: {
+        dbInfo: db,
+        accountName: pageData.accountName,
+        availableDbs: pageData.availableDbs,
+        availableAccounts: pageData.availableAccounts,
+      },
+    });
+  }, [pageData, navigate]);
+
+  const handleSwitchAccount = useCallback(async (account: CosmosDBAccount) => {
+    if (!pageData || account.id === pageData.resource.accountId) return;
+    try {
+      const databases = await getDatabasesForAccount(account.id);
+      if (!databases.length) return;
+      navigate(`/data-explorer/${encodeURIComponent(account.id)}/${encodeURIComponent(databases[0].name)}`, {
+        state: {
+          dbInfo: databases[0],
+          accountName: account.name,
+          availableDbs: databases,
+          availableAccounts: pageData.availableAccounts,
+        },
+      });
+    } catch (e) {
+      console.error('Failed to switch account:', e);
+    }
+  }, [pageData, navigate]);
+
   if (loading) {
+    const decodedAccountId = accountId ? decodeURIComponent(accountId) : undefined;
+    const decodedDatabaseName = databaseName ? decodeURIComponent(databaseName) : undefined;
+    // sessionCache is initialised once from localStorage at mount; pageData holds the last
+    // successful load and works as a fallback when the user arrived via Hub (no prior session).
+    const sidebarFallback = sessionCache ?? (pageData ? {
+      accountName: pageData.accountName,
+      collections: pageData.dbInfo.collections,
+      availableAccounts: pageData.availableAccounts,
+      availableDbs: pageData.availableDbs,
+    } : null);
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
-        <div className="flex flex-col h-screen relative">
-          
-          {/* Loading Overlay */}
-          <div className="absolute inset-0 z-50 bg-black/20 dark:bg-black/40 backdrop-blur-sm flex items-center justify-center">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl px-6 py-4 flex items-center gap-3 border border-slate-200 dark:border-slate-700">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span className="text-slate-700 dark:text-slate-200 font-medium">Loading database information...</span>
-            </div>
+      <AppLayout
+        accountId={decodedAccountId}
+        databaseName={decodedDatabaseName}
+        accountName={sidebarFallback?.accountName}
+        collections={sidebarFallback?.collections}
+        availableAccounts={sidebarFallback?.availableAccounts}
+        availableDbs={sidebarFallback?.availableDbs}
+      >
+        <style>{`@keyframes qp-spin { to { transform: rotate(360deg); } }`}</style>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--bg)' }}>
+          <div style={{
+            background: 'var(--panel)', borderRadius: 10, padding: '16px 24px',
+            display: 'flex', alignItems: 'center', gap: 12,
+            border: '1px solid var(--border)', boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{
+              width: 18, height: 18, borderRadius: '50%',
+              border: '2px solid var(--border)', borderTopColor: 'var(--accent)',
+              animation: 'qp-spin 0.7s linear infinite', flexShrink: 0,
+            }} />
+            <span style={{ fontSize: 13.5, color: 'var(--fg)', fontFamily: 'var(--font-body)' }}>
+              Loading database information...
+            </span>
           </div>
-          
-          {/* Skeleton Layout */}
-          <header className="flex-shrink-0 bg-white dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex items-center justify-between h-16">
-                <div className="flex items-center gap-4">
-                  <div className="w-9 h-9 bg-blue-500 rounded"></div>
-                  <div>
-                    <div className="w-32 h-6 bg-slate-300 dark:bg-slate-600 rounded animate-pulse"></div>
-                    <div className="w-48 h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse mt-1"></div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                  <div className="w-9 h-9 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                  <div className="w-40 h-9 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          <main className="flex-grow flex overflow-hidden">
-            {/* Skeleton Collections Column */}
-            <div className="w-1/4 xl:w-1/5 bg-slate-100 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 overflow-y-auto">
-              <div className="p-4">
-                <div className="w-24 h-6 bg-slate-300 dark:bg-slate-600 rounded animate-pulse mb-4"></div>
-                <div className="space-y-2">
-                  {[1, 2, 3, 4, 5].map(i => (
-                    <div key={i} className="w-full h-12 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Skeleton Documents Column */}
-            <div className="w-1/4 xl:w-1/5 bg-white dark:bg-slate-800/50 border-r border-slate-200 dark:border-slate-700 flex flex-col">
-              <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-                <div className="w-28 h-6 bg-slate-300 dark:bg-slate-600 rounded animate-pulse mb-2"></div>
-                <div className="space-y-2">
-                  <div className="w-full h-10 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                  <div className="w-full h-10 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                </div>
-              </div>
-              <div className="flex-grow p-4 space-y-2">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <div key={i} className="w-full h-8 bg-slate-100 dark:bg-slate-700 rounded animate-pulse"></div>
-                ))}
-              </div>
-            </div>
-
-            {/* Skeleton Editor Column */}
-            <div className="w-2/4 xl:w-3/5 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
-              <div className="p-4 space-y-4">
-                <div className="w-20 h-6 bg-slate-300 dark:bg-slate-600 rounded animate-pulse"></div>
-                <div className="w-full h-64 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
-              </div>
-            </div>
-          </main>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   if (error) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        backgroundColor: '#121212',
-        color: 'white',
-        gap: '20px'
-      }}>
-        <div>Error: {error}</div>
-        <button 
-          onClick={onNavigateBack}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#1976d2',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Back to Query Generator
-        </button>
-      </div>
+      <AppLayout>
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', gap: 16, background: 'var(--bg)' }}>
+          <div style={{ color: 'var(--status-err)', fontSize: 14, fontFamily: 'var(--font-body)' }}>Error: {error}</div>
+          <button onClick={onNavigateBack} className="qa-btn primary" style={{ fontSize: 13 }}>
+            Back to Query Generator
+          </button>
+        </div>
+      </AppLayout>
     );
   }
 
@@ -230,15 +275,34 @@ const DataExplorerPageWrapper: React.FC = () => {
   }
 
   return (
-    <DataExplorerPage
-      resource={pageData.resource}
-      dbInfo={pageData.dbInfo}
+    <AppLayout
       accountName={pageData.accountName}
+      accountId={pageData.resource.accountId}
+      databaseName={pageData.dbInfo.name}
+      collectionName={activeCollection}
+      collections={pageData.dbInfo.collections}
+      activeCollection={activeCollection}
+      onCollectionSelect={setActiveCollection}
       availableDbs={pageData.availableDbs}
+      onSwitchDatabase={handleSwitchDatabase}
       availableAccounts={pageData.availableAccounts}
-      initialDocumentId={pageData.initialDocumentId}
-      onNavigateBack={onNavigateBack}
-    />
+      onSwitchAccount={handleSwitchAccount}
+    >
+      <DataExplorerPage
+        key={`${pageData.resource.accountId}/${pageData.dbInfo.name}`}
+        resource={pageData.resource}
+        dbInfo={pageData.dbInfo}
+        accountName={pageData.accountName}
+        availableDbs={pageData.availableDbs}
+        availableAccounts={pageData.availableAccounts}
+        initialDocumentId={pageData.initialDocumentId}
+        initialFilters={pageData.initialFilters}
+        onNavigateBack={onNavigateBack}
+        onCollectionChange={setActiveCollection}
+        sidebarSelectedCollection={activeCollection}
+        embedded
+      />
+    </AppLayout>
   );
 };
 
