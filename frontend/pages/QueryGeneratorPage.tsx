@@ -700,8 +700,6 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     if (!account) return;
 
     setIsConnectingToDb(dbInfo.name);
-    // Simulate connection delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 800));
 
     setConnectedResource({
       accountId: account.id,
@@ -714,13 +712,20 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setIsConnectingToDb(null);
   }, [selectedAccountId, azureAccounts, clearQueryState, onConnectionChange]);
 
-  // Auto-select account from Hub navigation or restored session
+  // Auto-select account from Hub navigation, restored session, or chip-based account switch
   useEffect(() => {
     const targetAccountId = preselectedAccountId ?? initialConnection?.accountId;
-    if (targetAccountId && azureAccounts.length > 0 && !connectedResource && !selectedAccountId) {
+    if (!targetAccountId || azureAccounts.length === 0) return;
+    const switchingToDifferentAccount =
+      preselectedAccountId &&
+      connectedResource &&
+      connectedResource.accountId !== preselectedAccountId &&
+      !isLoadingDatabases &&
+      !isConnectingToDb;
+    if ((!connectedResource && !selectedAccountId) || switchingToDifferentAccount) {
       handleSelectAccount(targetAccountId);
     }
-  }, [preselectedAccountId, initialConnection, azureAccounts, connectedResource, selectedAccountId, handleSelectAccount]);
+  }, [preselectedAccountId, initialConnection, azureAccounts, connectedResource, selectedAccountId, isLoadingDatabases, isConnectingToDb, handleSelectAccount]);
 
   // Auto-connect database after account is selected
   useEffect(() => {

@@ -85,6 +85,31 @@ const DataExplorerPageWrapper: React.FC = () => {
           databaseName: decodedDatabaseName
         };
 
+        // Fast path: sessionStorage already has a matching connection — skip API calls
+        const sessionConn = (() => {
+          try { return JSON.parse(sessionStorage.getItem('qp_connection') ?? 'null'); }
+          catch { return null; }
+        })();
+        if (
+          sessionConn?.accountId === decodedAccountId &&
+          sessionConn?.databaseName === decodedDatabaseName &&
+          sessionConn?.availableAccounts?.length &&
+          sessionConn?.availableDbs?.length
+        ) {
+          const dbInfo = sessionConn.availableDbs.find((d: DbInfo) => d.name === decodedDatabaseName);
+          if (dbInfo) {
+            setPageData({
+              resource,
+              dbInfo,
+              accountName: sessionConn.accountName,
+              availableDbs: sessionConn.availableDbs,
+              availableAccounts: sessionConn.availableAccounts,
+              initialDocumentId: decodedDocumentId,
+            });
+            return;
+          }
+        }
+
         // If we have state from navigation, use it
         if (state?.dbInfo && state?.accountName && state?.availableDbs && state?.availableAccounts) {
           sessionStorage.setItem('qp_connection', JSON.stringify({

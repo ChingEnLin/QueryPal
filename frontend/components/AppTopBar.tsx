@@ -8,6 +8,7 @@ interface AppTopBarProps {
   databaseName?: string;
   collectionName?: string;
   onNewQuery?: () => void;
+  onOpenPalette?: () => void;
 }
 
 const AppTopBar: React.FC<AppTopBarProps> = ({
@@ -15,6 +16,7 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
   databaseName,
   collectionName,
   onNewQuery,
+  onOpenPalette,
 }) => {
   const { user, logout } = useUnifiedAuth();
   const { theme, toggleTheme } = useTheme();
@@ -75,15 +77,16 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
         )}
       </div>
 
-      {/* ⌘K hint */}
+      {/* ⌘K command palette trigger */}
       <button
+        onClick={onOpenPalette}
         style={{
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '5px 10px', border: '1px solid var(--border)', borderRadius: 7,
           background: 'var(--soft)', color: 'var(--muted)', fontSize: 12,
           cursor: 'pointer', fontFamily: 'var(--font-body)',
         }}
-        title="Command palette (coming soon)"
+        title="Command palette (⌘K)"
       >
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
           <circle cx="7" cy="7" r="4.5"/>

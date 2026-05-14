@@ -149,9 +149,12 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         </Link>
 
         {/* Connection chip */}
-        {accountName && (
+        {(accountName || isSwitching) && (
           <div ref={chipRef} style={{ position: 'relative' }}>
-            <style>{`@keyframes qp-spin { to { transform: rotate(360deg); } }`}</style>
+            <style>{`
+              @keyframes qp-spin { to { transform: rotate(360deg); } }
+              @keyframes qp-pulse { 0%,100% { opacity: 0.45; } 50% { opacity: 0.9; } }
+            `}</style>
             {isSwitching ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 9px', background: 'var(--soft)', borderRadius: 7 }}>
                 <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'qp-spin 0.7s linear infinite', flexShrink: 0 }} />
@@ -159,11 +162,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                   <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     Connecting…
                   </div>
-                  {databaseName && (
-                    <div style={{ fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.5 }}>
-                      {databaseName}
-                    </div>
-                  )}
+                  <div style={{ height: 9, marginTop: 3, borderRadius: 4, background: 'var(--border)', animation: 'qp-pulse 1.4s ease-in-out infinite', width: '70%' }} />
                 </div>
               </div>
             ) : (() => {
@@ -357,8 +356,23 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         })}
       </div>
 
-      {/* Collections */}
-      {collections && collections.length > 0 && (
+      {/* Collections — skeleton while switching, real list when loaded */}
+      {isSwitching && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 12 }}>
+          <div style={{ padding: '0 8px 6px 8px', fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)' }}>
+            Collections
+          </div>
+          <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {[60, 80, 50].map((w, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px' }}>
+                <div style={{ width: 11, height: 11, borderRadius: 3, background: 'var(--border)', flexShrink: 0, animation: 'qp-pulse 1.4s ease-in-out infinite' }} />
+                <div style={{ height: 10, borderRadius: 4, background: 'var(--border)', width: `${w}%`, animation: 'qp-pulse 1.4s ease-in-out infinite', animationDelay: `${i * 0.15}s` }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {!isSwitching && collections && collections.length > 0 && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 12 }}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
