@@ -85,10 +85,10 @@ const DB_ENGINES = [
     markBg: '#326690',
     label: 'PostgreSQL',
     sub: 'Azure Flexible Server',
-    badge: 'Private preview',
+    badge: 'Unavailable',
     badgeOk: false,
     locked: true,
-    opacity: 0.65,
+    opacity: 0.4,
   },
   {
     key: 'snow',
@@ -96,7 +96,7 @@ const DB_ENGINES = [
     markBg: '#5da4d6',
     label: 'Snowflake',
     sub: 'Data Cloud',
-    badge: 'Vote',
+    badge: 'Unavailable',
     badgeOk: false,
     locked: true,
     opacity: 0.4,
@@ -107,7 +107,7 @@ const DB_ENGINES = [
     markBg: '#3f6acb',
     label: 'BigQuery',
     sub: 'Google Cloud',
-    badge: 'Vote',
+    badge: 'Unavailable',
     badgeOk: false,
     locked: true,
     opacity: 0.4,
@@ -118,7 +118,7 @@ const DB_ENGINES = [
     markBg: '#d4a52a',
     label: 'ClickHouse',
     sub: 'Open source OLAP',
-    badge: 'Vote',
+    badge: 'Unavailable',
     badgeOk: false,
     locked: true,
     opacity: 0.4,
@@ -331,10 +331,6 @@ const HubPage: React.FC = () => {
             <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', margin: 0 }}>
               Available databases
             </h2>
-            <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-              Don't see yours?{' '}
-              <a href="mailto:support@querypal.dev" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Tell us</a>
-            </span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
