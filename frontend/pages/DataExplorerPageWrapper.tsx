@@ -4,6 +4,7 @@ import DataExplorerPage from './DataExplorerPage';
 import AppLayout from '../components/AppLayout';
 import { SelectedResource, DbInfo, CosmosDBAccount, CollectionSummary } from '../types';
 import { getAzureCosmosAccounts, getDatabasesForAccount } from '../services/dbService';
+import { FilterState } from '../utils/queryHandover';
 
 interface LocationState {
   dbInfo?: DbInfo;
@@ -11,6 +12,7 @@ interface LocationState {
   availableDbs?: DbInfo[];
   availableAccounts?: CosmosDBAccount[];
   initialCollection?: string;
+  initialFilters?: FilterState[];
 }
 
 const DataExplorerPageWrapper: React.FC = () => {
@@ -43,6 +45,7 @@ const DataExplorerPageWrapper: React.FC = () => {
     availableDbs: DbInfo[];
     availableAccounts: CosmosDBAccount[];
     initialDocumentId?: string;
+    initialFilters?: FilterState[];
   } | null>(null);
 
   // Reset active collection when DB/account changes so the new page starts fresh
@@ -108,6 +111,7 @@ const DataExplorerPageWrapper: React.FC = () => {
               availableDbs: sessionConn.availableDbs,
               availableAccounts: sessionConn.availableAccounts,
               initialDocumentId: decodedDocumentId,
+              initialFilters: state?.initialFilters,
             });
             return;
           }
@@ -129,7 +133,8 @@ const DataExplorerPageWrapper: React.FC = () => {
             accountName: state.accountName,
             availableDbs: state.availableDbs,
             availableAccounts: state.availableAccounts,
-            initialDocumentId: decodedDocumentId
+            initialDocumentId: decodedDocumentId,
+            initialFilters: state.initialFilters,
           });
         } else {
           // Otherwise, fetch the data we need
@@ -283,6 +288,7 @@ const DataExplorerPageWrapper: React.FC = () => {
         availableDbs={pageData.availableDbs}
         availableAccounts={pageData.availableAccounts}
         initialDocumentId={pageData.initialDocumentId}
+        initialFilters={pageData.initialFilters}
         onNavigateBack={onNavigateBack}
         onCollectionChange={setActiveCollection}
         sidebarSelectedCollection={activeCollection}

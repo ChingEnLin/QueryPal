@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { parseQueryForHandover } from '../utils/queryHandover';
 import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships, evaluateWriteResult } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
@@ -408,7 +409,16 @@ export interface QueryGeneratorPageProps {
 
 // --- Main Page Component ---
 const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, onConnectionChange, embedded = false, preselectedAccountId }) => {
-  const [userInput, setUserInput] = useState<string>('');
+  const navigate = useNavigate();
+
+  const [userInput, setUserInput] = useState<string>(() => {
+    try {
+      const ws = JSON.parse(sessionStorage.getItem('qp_workspace') ?? 'null');
+      const conn = JSON.parse(sessionStorage.getItem('qp_connection') ?? 'null');
+      if (ws && conn && ws.accountId === conn.accountId && ws.databaseName === conn.databaseName) return ws.userInput ?? '';
+    } catch { /* ignore */ }
+    return '';
+  });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -434,16 +444,44 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [quickExploringAccountId, setQuickExploringAccountId] = useState<string | null>(null);
 
   // State for AI query generation
-  const [_queryResult, setQueryResult] = useState<QueryResultData | null>(null);
-  const [querySourceCollection, setQuerySourceCollection] = useState<string | null>(null);
-  const [editableCode, setEditableCode] = useState<string>('');
+  const [_queryResult, setQueryResult] = useState<QueryResultData | null>(() => {
+    try {
+      const ws = JSON.parse(sessionStorage.getItem('qp_workspace') ?? 'null');
+      const conn = JSON.parse(sessionStorage.getItem('qp_connection') ?? 'null');
+      if (ws && conn && ws.accountId === conn.accountId && ws.databaseName === conn.databaseName) return ws.queryResult ?? null;
+    } catch { /* ignore */ }
+    return null;
+  });
+  const [querySourceCollection, setQuerySourceCollection] = useState<string | null>(() => {
+    try {
+      const ws = JSON.parse(sessionStorage.getItem('qp_workspace') ?? 'null');
+      const conn = JSON.parse(sessionStorage.getItem('qp_connection') ?? 'null');
+      if (ws && conn && ws.accountId === conn.accountId && ws.databaseName === conn.databaseName) return ws.querySourceCollection ?? null;
+    } catch { /* ignore */ }
+    return null;
+  });
+  const [editableCode, setEditableCode] = useState<string>(() => {
+    try {
+      const ws = JSON.parse(sessionStorage.getItem('qp_workspace') ?? 'null');
+      const conn = JSON.parse(sessionStorage.getItem('qp_connection') ?? 'null');
+      if (ws && conn && ws.accountId === conn.accountId && ws.databaseName === conn.databaseName) return ws.editableCode ?? '';
+    } catch { /* ignore */ }
+    return '';
+  });
   const [codeHistory, setCodeHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [lastSuccessfulPrompt, setLastSuccessfulPrompt] = useState<string>('');
 
   // State for query execution
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
-  const [executionResult, setExecutionResult] = useState<any | null>(null);
+  const [executionResult, setExecutionResult] = useState<any | null>(() => {
+    try {
+      const ws = JSON.parse(sessionStorage.getItem('qp_workspace') ?? 'null');
+      const conn = JSON.parse(sessionStorage.getItem('qp_connection') ?? 'null');
+      if (ws && conn && ws.accountId === conn.accountId && ws.databaseName === conn.databaseName) return ws.executionResult ?? null;
+    } catch { /* ignore */ }
+    return null;
+  });
   const [executionError, setExecutionError] = useState<string | null>(null);
 
   // State for intermediate context (multi-step queries)
@@ -525,6 +563,50 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     if (!connectedResource) return '';
     return azureAccounts.find(acc => acc.id === connectedResource.accountId)?.name ?? 'Unknown Account';
   }, [connectedResource, azureAccounts]);
+
+  // Query handover — detect transferable find() queries for "Open in Explorer"
+  const handover = useMemo(
+    () => editableCode && !_queryResult?.is_write_action ? parseQueryForHandover(editableCode) : null,
+    [editableCode, _queryResult]
+  );
+
+  const handleOpenInExplorer = useCallback(() => {
+    if (!handover || !connectedResource || !connectedDbInfo) return;
+    navigate(
+      `/data-explorer/${encodeURIComponent(connectedResource.accountId)}/${encodeURIComponent(connectedResource.databaseName)}`,
+      {
+        state: {
+          dbInfo: connectedDbInfo,
+          accountName: connectedAccountName,
+          availableDbs: accountDatabases,
+          availableAccounts: azureAccounts,
+          initialCollection: handover.collection,
+          initialFilters: handover.filters,
+        },
+      }
+    );
+  }, [handover, connectedResource, connectedDbInfo, connectedAccountName, accountDatabases, azureAccounts, navigate]);
+
+  // Persist workspace state so it survives sidebar tab switches
+  useEffect(() => {
+    if (!connectedResource) return;
+    try {
+      const payload: Record<string, unknown> = {
+        accountId: connectedResource.accountId,
+        databaseName: connectedResource.databaseName,
+        userInput,
+        editableCode,
+        querySourceCollection,
+        queryResult: _queryResult,
+      };
+      // Only persist executionResult if it's under 1 MB to avoid quota errors
+      if (executionResult !== null) {
+        const resultStr = JSON.stringify(executionResult);
+        if (resultStr.length < 1_000_000) payload.executionResult = executionResult;
+      }
+      sessionStorage.setItem('qp_workspace', JSON.stringify(payload));
+    } catch { /* ignore */ }
+  }, [userInput, editableCode, querySourceCollection, connectedResource, _queryResult, executionResult]);
 
   const [isWaitingForAuth, setIsWaitingForAuth] = useState<boolean>(false);
 
@@ -636,6 +718,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setCurrentQueryContextSource(null);
     setRelationships(null); // Clear relationships
     setRelationshipError(null); // Clear relationship error
+    sessionStorage.removeItem('qp_workspace');
   }, []);
 
   const handleDisconnect = useCallback(() => {
@@ -695,7 +778,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     }
   }, [selectedAccountId, connectedResource, azureAccounts, handleDisconnect]);
 
-  const handleConnectDatabase = useCallback(async (dbInfo: DbInfo) => {
+  const handleConnectDatabase = useCallback(async (dbInfo: DbInfo, preserveWorkspace = false) => {
     const account = azureAccounts.find(acc => acc.id === selectedAccountId);
     if (!account) return;
 
@@ -708,7 +791,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setConnectedDbInfo(dbInfo);
     sessionStorage.setItem('qp_connection', JSON.stringify({ accountId: account.id, databaseName: dbInfo.name, accountName: account.name, collections: dbInfo.collections, availableAccounts: azureAccounts, availableDbs: accountDatabases }));
     onConnectionChange?.(account.id, dbInfo.name, account.name, dbInfo.collections, azureAccounts, accountDatabases);
-    clearQueryState();
+    if (!preserveWorkspace) clearQueryState();
     setIsConnectingToDb(null);
   }, [selectedAccountId, azureAccounts, clearQueryState, onConnectionChange]);
 
@@ -741,9 +824,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     ) {
       if (targetDatabaseName) {
         const db = accountDatabases.find(d => d.name === targetDatabaseName) ?? accountDatabases[0];
-        handleConnectDatabase(db);
+        handleConnectDatabase(db, true);
       } else if (accountDatabases.length === 1) {
-        handleConnectDatabase(accountDatabases[0]);
+        handleConnectDatabase(accountDatabases[0], true);
       }
     }
   }, [preselectedAccountId, initialConnection, selectedAccountId, accountDatabases, connectedResource, isLoadingDatabases, isConnectingToDb, handleConnectDatabase]);
@@ -2389,7 +2472,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
           {(!isLoading && !error && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep && !isDemoModeForSaveStep) && (
             editableCode ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} />
+                <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} isTransferable={!!handover} onOpenInExplorer={handleOpenInExplorer} />
                 <QueryResult isExecuting={isExecuting} executionError={executionError} executionResult={executionResult} onDebug={handleDebugQuery} isDebugging={isDebugging} debuggingResult={debuggingResult} debugError={debugError} sourceCollection={querySourceCollection} onSetIntermediateContext={handleSetIntermediateContext} intermediateContext={intermediateContext} onAnalyze={handleAnalyzeQuery} isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError} onEvaluateWrite={handleEvaluateWrite} isEvaluatingWrite={isEvaluatingWrite} writeEvaluationResult={writeEvaluationResult} writeEvaluationError={writeEvaluationError} />
               </div>
             ) : (

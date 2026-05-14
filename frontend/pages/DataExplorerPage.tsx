@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { FilterState } from '../utils/queryHandover';
 import { useNavigate } from 'react-router-dom';
 import { SelectedResource, DbInfo, BreadcrumbItem, CosmosDBAccount, CollectionInfo } from '../types';
 import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache, getSingleDocument, getDocumentsQueryCode } from '../services/dbService';
@@ -75,6 +76,7 @@ interface DataExplorerPageProps {
   availableDbs: DbInfo[];
   availableAccounts: CosmosDBAccount[];
   initialDocumentId?: string;
+  initialFilters?: FilterState[];
   onNavigateBack: () => void;
   embedded?: boolean;
   sidebarSelectedCollection?: string;
@@ -158,6 +160,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   availableDbs,
   availableAccounts,
   initialDocumentId,
+  initialFilters,
   onNavigateBack,
   embedded = false,
   sidebarSelectedCollection,
@@ -399,6 +402,15 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setOpenDocuments([]);
     // Do not reset pinned documents here, as they should persist across DB/collection changes.
   }, []);
+
+  // Apply handover filters once after the first collection selection
+  const appliedInitialFilters = useRef(false);
+  useEffect(() => {
+    if (!initialFilters?.length || appliedInitialFilters.current || !selectedCollection) return;
+    appliedInitialFilters.current = true;
+    setFilters(initialFilters);
+    setDebouncedFilters(initialFilters);
+  }, [selectedCollection, initialFilters]);
 
   // Debounce filters
   useEffect(() => {

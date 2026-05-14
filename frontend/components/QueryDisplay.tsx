@@ -10,6 +10,8 @@ interface QueryDisplayProps {
   historyCount: number;
   historyIndex: number;
   onNavigateHistory: (direction: 'prev' | 'next') => void;
+  isTransferable?: boolean;
+  onOpenInExplorer?: () => void;
 }
 
 const WRITE_OPERATION_REGEX = /\.(insert_one|insert_many|update_one|update_many|replace_one|delete_one|delete_many|bulk_write|drop|drop_index|drop_indexes|create_index|create_indexes|rename_collection)\s*\(/i;
@@ -30,6 +32,7 @@ const detectQueryType = (code: string): string => {
 const QueryDisplay: React.FC<QueryDisplayProps> = ({
   code, onCodeChange, onRunQuery, onSaveQuery,
   isExecuting, historyCount, historyIndex, onNavigateHistory,
+  isTransferable, onOpenInExplorer,
 }) => {
   const [copied, setCopied] = useState(false);
   const [allowWrite, setAllowWrite] = useState(false);
@@ -91,6 +94,34 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({
             <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 4, background: 'color-mix(in oklch, #c94250 12%, var(--bg))', color: '#c94250', fontFamily: 'var(--font-mono)' }}>
               write op
             </span>
+          )}
+          {onOpenInExplorer && (
+            <button
+              onClick={isTransferable ? onOpenInExplorer : undefined}
+              disabled={!isTransferable}
+              title={
+                isTransferable
+                  ? 'Open in Data Explorer'
+                  : 'This query can\'t be opened in Explorer (only find() queries are supported). Your result will be saved if you switch tabs.'
+              }
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: isTransferable ? 'var(--accent-soft)' : 'var(--soft)',
+                border: `1px solid ${isTransferable ? 'color-mix(in oklch, var(--accent) 30%, transparent)' : 'var(--border)'}`,
+                color: isTransferable ? 'var(--accent)' : 'var(--muted)',
+                borderRadius: 4, cursor: isTransferable ? 'pointer' : 'default',
+                fontSize: 11, padding: '2px 8px', fontFamily: 'var(--font-body)',
+                opacity: isTransferable ? 1 : 0.55,
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="1" y="1" width="6" height="6" rx="1" />
+                <rect x="9" y="1" width="6" height="6" rx="1" />
+                <rect x="1" y="9" width="6" height="6" rx="1" />
+                <path d="M11.5 11.5h3m-1.5-1.5v3" strokeLinecap="round" />
+              </svg>
+              Open in Explorer
+            </button>
           )}
         </div>
       </div>
