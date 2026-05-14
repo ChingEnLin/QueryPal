@@ -78,7 +78,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   const [showDbPicker, setShowDbPicker] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [collectionSort, setCollectionSort] = useState<'name_asc' | 'name_desc' | 'count_desc' | 'count_asc'>('name_asc');
-  const [isSwitching, setIsSwitching] = useState(false);
   const chipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -91,11 +90,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showDbPicker]);
-
-  // Reset loading state whenever the connection actually changes
-  useEffect(() => {
-    setIsSwitching(false);
-  }, [accountId, databaseName]);
 
   // Measure API latency by pinging /health every 30s
   useEffect(() => {
@@ -139,145 +133,128 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
           }}>QueryPal</span>
         </Link>
 
-        {/* Connection chip */}
-        {(accountName || isSwitching) && (
-          <div ref={chipRef} style={{ position: 'relative' }}>
-            <style>{`
-              @keyframes qp-spin { to { transform: rotate(360deg); } }
-              @keyframes qp-pulse { 0%,100% { opacity: 0.45; } 50% { opacity: 0.9; } }
-            `}</style>
-            {isSwitching ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 9px', background: 'var(--soft)', borderRadius: 7 }}>
-                <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'qp-spin 0.7s linear infinite', flexShrink: 0 }} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    Connecting…
-                  </div>
-                  <div style={{ height: 9, marginTop: 3, borderRadius: 4, background: 'var(--border)', animation: 'qp-pulse 1.4s ease-in-out infinite', width: '70%' }} />
-                </div>
+        {/* Connection chip — always rendered so the brand section never changes height */}
+        <div ref={chipRef} style={{ position: 'relative' }}>
+          {!accountName ? (
+            /* Placeholder keeps the same height as the real chip */
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 9px', background: 'var(--soft)', borderRadius: 7 }}>
+              <span style={{ width: 14, height: 14, borderRadius: 4, background: 'var(--border)', flexShrink: 0 }} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ height: 11, borderRadius: 3, background: 'var(--border)', width: '65%', marginBottom: 4 }} />
+                <div style={{ height: 9, borderRadius: 3, background: 'var(--border)', width: '45%' }} />
               </div>
-            ) : (() => {
-              const hasMultipleAccounts = availableAccounts && availableAccounts.length > 1;
-              const hasMultipleDbs = availableDbs && availableDbs.length > 1;
-              const isPickerEnabled = hasMultipleAccounts || hasMultipleDbs;
-              return (
-                <>
-                  <div
-                    onClick={() => isPickerEnabled ? setShowDbPicker(v => !v) : undefined}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 7,
-                      padding: '5px 9px', background: 'var(--soft)', borderRadius: 7,
-                      cursor: isPickerEnabled ? 'pointer' : 'default',
-                    }}
-                  >
-                    <span style={{ width: 14, height: 14, borderRadius: 4, background: '#1d6cf2', flexShrink: 0 }} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {accountName}
-                      </div>
-                      {databaseName && (
-                        <div style={{ fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {databaseName}
-                        </div>
-                      )}
-                    </div>
-                    {isPickerEnabled && (
-                      <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ color: 'var(--muted)', flexShrink: 0 }}>
-                        <path d="M4 6l4 4 4-4"/>
-                      </svg>
-                    )}
+            </div>
+          ) : (
+            <>
+              <div
+                onClick={() => ((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1)) ? setShowDbPicker(v => !v) : undefined}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '5px 9px', background: 'var(--soft)', borderRadius: 7,
+                  cursor: ((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1)) ? 'pointer' : 'default',
+                }}
+              >
+                <span style={{ width: 14, height: 14, borderRadius: 4, background: '#1d6cf2', flexShrink: 0 }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {accountName}
                   </div>
-
-                  {showDbPicker && (
-                    <div style={{
-                      position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 100,
-                      background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8,
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.10)', overflow: 'hidden',
-                    }}>
-                      {/* Accounts section */}
-                      {hasMultipleAccounts && availableAccounts && (
-                        <>
-                          <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
-                            Cosmos account
-                          </div>
-                          {availableAccounts.map(acc => {
-                            const isCurrent = acc.id === accountId;
-                            return (
-                              <button
-                                key={acc.id}
-                                onClick={() => { if (!isCurrent) { setIsSwitching(true); setShowDbPicker(false); onSwitchAccount?.(acc); } }}
-                                style={{
-                                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                                  padding: '7px 10px', border: 'none', textAlign: 'left',
-                                  cursor: isCurrent ? 'default' : 'pointer',
-                                  background: isCurrent ? 'var(--accent-soft)' : 'transparent',
-                                  color: isCurrent ? 'var(--accent)' : 'var(--fg)',
-                                  fontSize: 12.5, fontFamily: 'var(--font-body)',
-                                }}
-                                onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
-                                onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                              >
-                                <span style={{ width: 10, height: 10, borderRadius: 3, background: isCurrent ? '#1d6cf2' : 'var(--muted)', flexShrink: 0 }} />
-                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</span>
-                                {isCurrent && (
-                                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--accent)', flexShrink: 0 }}>
-                                    <path d="M3 8l4 4 6-6"/>
-                                  </svg>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </>
-                      )}
-
-                      {/* Divider between sections */}
-                      {hasMultipleAccounts && hasMultipleDbs && (
-                        <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
-                      )}
-
-                      {/* Databases section */}
-                      {hasMultipleDbs && availableDbs && (
-                        <>
-                          <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
-                            Database
-                          </div>
-                          {availableDbs.map(db => {
-                            const isCurrent = db.name === databaseName;
-                            return (
-                              <button
-                                key={db.name}
-                                onClick={() => { if (!isCurrent) { setIsSwitching(true); setShowDbPicker(false); onSwitchDatabase?.(db); } }}
-                                style={{
-                                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                                  padding: '7px 10px', border: 'none', cursor: 'pointer', textAlign: 'left',
-                                  background: isCurrent ? 'var(--accent-soft)' : 'transparent',
-                                  color: isCurrent ? 'var(--accent)' : 'var(--fg)',
-                                  fontSize: 12.5, fontFamily: 'var(--font-mono)',
-                                }}
-                                onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
-                                onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                              >
-                                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" style={{ color: isCurrent ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>
-                                  <ellipse cx="8" cy="4" rx="6" ry="2"/><path d="M2 4v8c0 1.1 2.7 2 6 2s6-.9 6-2V4M2 8c0 1.1 2.7 2 6 2s6-.9 6-2"/>
-                                </svg>
-                                {db.name}
-                                {isCurrent && (
-                                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 'auto', color: 'var(--accent)', flexShrink: 0 }}>
-                                    <path d="M3 8l4 4 6-6"/>
-                                  </svg>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </>
-                      )}
+                  {databaseName && (
+                    <div style={{ fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {databaseName}
                     </div>
                   )}
-                </>
-              );
-            })()}
-          </div>
-        )}
+                </div>
+                {((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1)) && (
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ color: 'var(--muted)', flexShrink: 0 }}>
+                    <path d="M4 6l4 4 4-4"/>
+                  </svg>
+                )}
+              </div>
+
+              {showDbPicker && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 100,
+                  background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.10)', overflow: 'hidden',
+                }}>
+                  {availableAccounts && availableAccounts.length > 1 && (
+                    <>
+                      <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
+                        Cosmos account
+                      </div>
+                      {availableAccounts.map(acc => {
+                        const isCurrent = acc.id === accountId;
+                        return (
+                          <button
+                            key={acc.id}
+                            onClick={() => { if (!isCurrent) { setShowDbPicker(false); onSwitchAccount?.(acc); } }}
+                            style={{
+                              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '7px 10px', border: 'none', textAlign: 'left',
+                              cursor: isCurrent ? 'default' : 'pointer',
+                              background: isCurrent ? 'var(--accent-soft)' : 'transparent',
+                              color: isCurrent ? 'var(--accent)' : 'var(--fg)',
+                              fontSize: 12.5, fontFamily: 'var(--font-body)',
+                            }}
+                            onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                            onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            <span style={{ width: 10, height: 10, borderRadius: 3, background: isCurrent ? '#1d6cf2' : 'var(--muted)', flexShrink: 0 }} />
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</span>
+                            {isCurrent && (
+                              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--accent)', flexShrink: 0 }}>
+                                <path d="M3 8l4 4 6-6"/>
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                  {availableAccounts && availableAccounts.length > 1 && availableDbs && availableDbs.length > 1 && (
+                    <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                  )}
+                  {availableDbs && availableDbs.length > 1 && (
+                    <>
+                      <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
+                        Database
+                      </div>
+                      {availableDbs.map(db => {
+                        const isCurrent = db.name === databaseName;
+                        return (
+                          <button
+                            key={db.name}
+                            onClick={() => { if (!isCurrent) { setShowDbPicker(false); onSwitchDatabase?.(db); } }}
+                            style={{
+                              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '7px 10px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                              background: isCurrent ? 'var(--accent-soft)' : 'transparent',
+                              color: isCurrent ? 'var(--accent)' : 'var(--fg)',
+                              fontSize: 12.5, fontFamily: 'var(--font-mono)',
+                            }}
+                            onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                            onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" style={{ color: isCurrent ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>
+                              <ellipse cx="8" cy="4" rx="6" ry="2"/><path d="M2 4v8c0 1.1 2.7 2 6 2s6-.9 6-2V4M2 8c0 1.1 2.7 2 6 2s6-.9 6-2"/>
+                            </svg>
+                            {db.name}
+                            {isCurrent && (
+                              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 'auto', color: 'var(--accent)', flexShrink: 0 }}>
+                                <path d="M3 8l4 4 6-6"/>
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Navigation */}
@@ -347,23 +324,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         })}
       </div>
 
-      {/* Collections — skeleton while switching, real list when loaded */}
-      {isSwitching && (
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 12 }}>
-          <div style={{ padding: '0 8px 6px 8px', fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)' }}>
-            Collections
-          </div>
-          <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {[60, 80, 50].map((w, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px' }}>
-                <div style={{ width: 11, height: 11, borderRadius: 3, background: 'var(--border)', flexShrink: 0, animation: 'qp-pulse 1.4s ease-in-out infinite' }} />
-                <div style={{ height: 10, borderRadius: 4, background: 'var(--border)', width: `${w}%`, animation: 'qp-pulse 1.4s ease-in-out infinite', animationDelay: `${i * 0.15}s` }} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {!isSwitching && collections && collections.length > 0 && (
+      {collections && collections.length > 0 && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 12 }}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',

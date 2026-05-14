@@ -219,14 +219,22 @@ const DataExplorerPageWrapper: React.FC = () => {
   if (loading) {
     const decodedAccountId = accountId ? decodeURIComponent(accountId) : undefined;
     const decodedDatabaseName = databaseName ? decodeURIComponent(databaseName) : undefined;
+    // sessionCache is initialised once from localStorage at mount; pageData holds the last
+    // successful load and works as a fallback when the user arrived via Hub (no prior session).
+    const sidebarFallback = sessionCache ?? (pageData ? {
+      accountName: pageData.accountName,
+      collections: pageData.dbInfo.collections,
+      availableAccounts: pageData.availableAccounts,
+      availableDbs: pageData.availableDbs,
+    } : null);
     return (
       <AppLayout
         accountId={decodedAccountId}
         databaseName={decodedDatabaseName}
-        accountName={sessionCache?.accountName}
-        collections={sessionCache?.collections}
-        availableAccounts={sessionCache?.availableAccounts}
-        availableDbs={sessionCache?.availableDbs}
+        accountName={sidebarFallback?.accountName}
+        collections={sidebarFallback?.collections}
+        availableAccounts={sidebarFallback?.availableAccounts}
+        availableDbs={sidebarFallback?.availableDbs}
       >
         <style>{`@keyframes qp-spin { to { transform: rotate(360deg); } }`}</style>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--bg)' }}>

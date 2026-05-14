@@ -96,12 +96,11 @@ export function parseQueryForHandover(code: string): HandoverResult | null {
     }
 
     // Operator object: {"$ne": "x"}, {"$gt": 5}, {"$exists": true}, etc.
+    // Multiple operators on the same field become multiple filter rows.
     const obj = value as Record<string, unknown>;
-    const ops = Object.keys(obj);
+    let handled = false;
 
-    if (ops.length === 1) {
-      const op = ops[0];
-
+    for (const op of Object.keys(obj)) {
       if (op === '$exists') {
         filters.push({
           id: makeid(), key,
@@ -110,12 +109,14 @@ export function parseQueryForHandover(code: string): HandoverResult | null {
           isCustom: false,
           type: 'string',
         });
+        handled = true;
         continue;
       }
 
       const explorerOp = MONGO_OP_MAP[op];
-      if (explorerOp && (typeof obj[op] !== 'object' || obj[op] === null)) {
-        const v = obj[op];
+      const v = obj[op];
+      // Skip null values for comparison operators — they can't be represented as a string filter
+      if (explorerOp && v !== null && v !== undefined && typeof v !== 'object') {
         filters.push({
           id: makeid(), key,
           value: String(v),
@@ -123,11 +124,12 @@ export function parseQueryForHandover(code: string): HandoverResult | null {
           isCustom: false,
           type: inferType(v),
         });
-        continue;
+        handled = true;
       }
     }
 
-    // Complex operator or multiple ops — skip (can't represent cleanly)
+    if (handled) continue;
+    // Complex operator — skip (can't represent cleanly)
   }
 
   return { collection, filters };
