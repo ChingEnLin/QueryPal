@@ -10,6 +10,7 @@ interface LocationState {
   accountName?: string;
   availableDbs?: DbInfo[];
   availableAccounts?: CosmosDBAccount[];
+  initialCollection?: string;
 }
 
 const DataExplorerPageWrapper: React.FC = () => {
@@ -24,7 +25,9 @@ const DataExplorerPageWrapper: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeCollection, setActiveCollection] = useState<string | undefined>(undefined);
+  const [activeCollection, setActiveCollection] = useState<string | undefined>(
+    (location.state as LocationState)?.initialCollection
+  );
 
   // Used to keep sidebar populated during the async load so there's no visual flash
   const [sessionCache] = useState<{ accountName?: string; collections?: CollectionSummary[]; availableAccounts?: CosmosDBAccount[]; availableDbs?: DbInfo[] } | null>(() => {

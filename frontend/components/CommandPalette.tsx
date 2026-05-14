@@ -256,7 +256,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
           ),
           action: () => {
             onCollectionSelect?.(col.name);
-            if (explorerHref) navigate(explorerHref);
+            if (explorerHref) navigate(explorerHref, { state: { initialCollection: col.name } });
           },
         });
       });
