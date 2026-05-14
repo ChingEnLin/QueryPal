@@ -53,6 +53,20 @@ import {
   mockUpdateDocument
 } from './mockData';
 
+const _cache = new Map<string, { data: unknown; expiry: number }>();
+const CACHE_TTL = 5 * 60 * 1000;
+function _getCached<T>(key: string): T | null {
+  const entry = _cache.get(key);
+  if (!entry || Date.now() > entry.expiry) return null;
+  return entry.data as T;
+}
+function _setCached(key: string, data: unknown): void {
+  _cache.set(key, { data, expiry: Date.now() + CACHE_TTL });
+}
+export function invalidateDbCache(): void {
+  _cache.clear();
+}
+
 /**
  * Helper function to get access token with proper error handling
  */
@@ -100,6 +114,9 @@ export const getAzureCosmosAccounts = async (): Promise<CosmosDBAccount[]> => {
   }
   // --- END DEVELOPMENT MOCK ---
 
+  const cached = _getCached<CosmosDBAccount[]>('accounts');
+  if (cached) return cached;
+
   const accessToken = await getAuthenticatedToken();
 
   console.log("Fetching Azure cosmosdb accounts from backend...");
@@ -119,7 +136,9 @@ export const getAzureCosmosAccounts = async (): Promise<CosmosDBAccount[]> => {
     throw new Error(errorMessage);
   }
 
-  return responseApi.json();
+  const data: CosmosDBAccount[] = await responseApi.json();
+  _setCached('accounts', data);
+  return data;
 };
 
 
@@ -147,9 +166,12 @@ export const getDatabasesForAccount = async (accountId: string): Promise<DbInfo[
   }
   // --- END DEVELOPMENT MOCK ---
 
+  const cacheKey = `dbs:${accountId}`;
+  const cached = _getCached<DbInfo[]>(cacheKey);
+  if (cached) return cached;
+
   console.log(`Fetching databases for account ID ${accountId} from backend...`);
 
-  // Use helper function to get authenticated token with proper error handling
   const accessToken = await getAuthenticatedToken();
 
   const response = await fetch(`${API_BASE_URL}/azure/account_details`, {
@@ -167,7 +189,9 @@ export const getDatabasesForAccount = async (accountId: string): Promise<DbInfo[
     throw new Error(errorMessage);
   }
 
-  return response.json();
+  const data: DbInfo[] = await response.json();
+  _setCached(cacheKey, data);
+  return data;
 };
 
 
@@ -296,6 +320,7 @@ export const clearSystemCache = async (): Promise<{ message: string }> => {
     throw new Error(errorMessage);
   }
 
+  invalidateDbCache();
   return response.json();
 };
 

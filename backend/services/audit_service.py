@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 from services.pg_connection import get_connection
 from services.gemini_service import generate_audit_sql, summarize_audit_results
 
@@ -34,6 +34,36 @@ def execute_audit_query(sql_query: str) -> list:
     except Exception as e:
         print(f"Error executing audit query: {e}")
         return [{"error": str(e)}]
+
+
+def get_recent_activity(user_email: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """Returns the most recent write_audit_log rows for a specific user."""
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT user_email, operation, database_name, collection_name, document_id, timestamp_utc
+            FROM write_audit_log
+            WHERE user_email = %s
+            ORDER BY timestamp_utc DESC
+            LIMIT %s
+            """,
+            (user_email, limit),
+        )
+        columns = [desc[0] for desc in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            item = dict(zip(columns, row))
+            if hasattr(item.get("timestamp_utc"), "isoformat"):
+                item["timestamp_utc"] = item["timestamp_utc"].isoformat()
+            rows.append(item)
+        cur.close()
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"Error fetching recent activity: {e}")
+        return []
 
 
 def process_audit_question(question: str) -> Dict[str, Any]:

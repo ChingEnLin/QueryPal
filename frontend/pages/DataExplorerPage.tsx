@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { FilterState } from '../utils/queryHandover';
 import { useNavigate } from 'react-router-dom';
 import { SelectedResource, DbInfo, BreadcrumbItem, CosmosDBAccount, CollectionInfo } from '../types';
 import { getDocuments, getCollectionInfo, findDocumentById, getDatabasesForAccount, clearDocumentsCache, getSingleDocument, getDocumentsQueryCode } from '../services/dbService';
@@ -75,7 +76,11 @@ interface DataExplorerPageProps {
   availableDbs: DbInfo[];
   availableAccounts: CosmosDBAccount[];
   initialDocumentId?: string;
+  initialFilters?: FilterState[];
   onNavigateBack: () => void;
+  embedded?: boolean;
+  sidebarSelectedCollection?: string;
+  onCollectionChange?: (name: string | undefined) => void;
 }
 
 interface PinnedDocument {
@@ -116,27 +121,22 @@ const DeleteDocumentDialog: React.FC<{
 }> = ({ open, document, onClose, onDelete, loading }) => {
   if (!open || !document) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 dark:bg-black/60 animate-fade-in-fast">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-700">
-        <h2 className="text-lg font-bold text-red-600 dark:text-red-400 mb-2 flex items-center gap-2">
-          <TrashIcon className="w-5 h-5" /> Confirm Delete Document
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', fontFamily: 'var(--font-body)' }}>
+      <div style={{ background: 'var(--panel)', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.14)', maxWidth: 480, width: '100%', padding: 24, border: '1px solid var(--border)' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--status-err)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
+          Confirm Delete Document
         </h2>
-        <p className="mb-3 text-slate-700 dark:text-slate-200 text-sm">Are you sure you want to delete this document? This action cannot be undone.</p>
-        <div className="bg-slate-100 dark:bg-slate-900 rounded p-3 text-xs overflow-x-auto text-slate-800 dark:text-slate-100 max-h-60 mb-4 border border-slate-200 dark:border-slate-700">
+        <p style={{ marginBottom: 12, color: 'var(--fg)', fontSize: 13 }}>Are you sure you want to delete this document? This action cannot be undone.</p>
+        <div style={{ background: 'var(--soft)', borderRadius: 8, padding: 12, fontSize: 11.5, overflowX: 'auto', maxHeight: 240, marginBottom: 16, fontFamily: 'var(--font-mono)', border: '1px solid var(--border)' }}>
           <JsonDisplay data={document} />
         </div>
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="px-4 py-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-          >
-            Cancel
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} disabled={loading} className="qa-btn" style={{ fontSize: 13 }}>Cancel</button>
           <button
             onClick={onDelete}
             disabled={loading}
-            className="px-4 py-2 rounded-md border border-red-400 bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors disabled:opacity-60"
+            style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: 'var(--status-err)', color: 'white', fontSize: 13, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, fontFamily: 'var(--font-body)' }}
           >
             {loading ? 'Deleting...' : 'Delete'}
           </button>
@@ -160,7 +160,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   availableDbs,
   availableAccounts,
   initialDocumentId,
-  onNavigateBack
+  initialFilters,
+  onNavigateBack,
+  embedded = false,
+  sidebarSelectedCollection,
+  onCollectionChange,
 }) => {
   const navigate = useNavigate();
 
@@ -198,14 +202,14 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     operator?: string;
     type?: 'string' | 'number' | 'boolean' | 'date';
   }
-  const [filters, setFilters] = useState<FilterState[]>([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
+  const [filters, setFilters] = useState<FilterState[]>([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'contains', type: 'string' }]);
   const [debouncedFilters, setDebouncedFilters] = useState<FilterState[]>(filters);
   const [schemaTree, setSchemaTree] = useState<SchemaKeyNode[]>([]);
   const [isFetchingSchema, setIsFetchingSchema] = useState(false);
   const [currentCollectionInfo, setCurrentCollectionInfo] = useState<CollectionInfo | null>(null);
 
   const addFilter = () => {
-    setFilters(prev => [...prev, { id: Math.random().toString(36).substring(7), key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
+    setFilters(prev => [...prev, { id: Math.random().toString(36).substring(7), key: 'all', value: '', isCustom: false, operator: 'contains', type: 'string' }]);
   };
 
   const removeFilter = (id: string) => {
@@ -240,6 +244,9 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
   // --- Editor Ref ---
   const editorRefs = useRef<Record<string, DocumentEditViewRef | null>>({});
+
+  // --- Unsaved changes discard confirmation ---
+  const [discardConfirmDocId, setDiscardConfirmDocId] = useState<string | null>(null);
 
   // Helper to infer schema for new document (mimic CollectionActionPanel logic)
   const getInitialDocFromSchema = useCallback(() => {
@@ -350,8 +357,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   }, [selectedCollection, deleteTargetDoc, currentResource, setDocuments]);
 
   // --- Sorting State ---
-  const [collectionSortKey, setCollectionSortKey] = useState<'name' | 'count'>('name');
-  const [collectionSortOrder, setCollectionSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [collectionSort, setCollectionSort] = useState<'name_asc' | 'name_desc' | 'count_desc' | 'count_asc'>('name_asc');
 
   // --- Navigation State ---
   // global breadcrumbs removed
@@ -389,13 +395,22 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     setTotalPages(1);
     setTotalDocuments(0);
     setPageInput('1');
-    setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
-    setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
+    setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'contains', type: 'string' }]);
+    setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'contains', type: 'string' }]);
     setSchemaTree([]);
     setIsFetchingSchema(false);
     setOpenDocuments([]);
     // Do not reset pinned documents here, as they should persist across DB/collection changes.
   }, []);
+
+  // Apply handover filters once after the first collection selection
+  const appliedInitialFilters = useRef(false);
+  useEffect(() => {
+    if (!initialFilters?.length || appliedInitialFilters.current || !selectedCollection) return;
+    appliedInitialFilters.current = true;
+    setFilters(initialFilters);
+    setDebouncedFilters(initialFilters);
+  }, [selectedCollection, initialFilters]);
 
   // Debounce filters
   useEffect(() => {
@@ -502,6 +517,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
       }
     } catch (e) {
       console.error("Failed to fetch schema for filters:", e);
+      if (e instanceof Error) setError(e.message);
     } finally {
       setIsFetchingSchema(false);
     }
@@ -611,10 +627,30 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     if (selectedCollection === collectionName) return;
     setSelectedCollection(collectionName);
     setCurrentPage(1);
-    setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
-    setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'equals', type: 'string' }]);
+    setFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'contains', type: 'string' }]);
+    setDebouncedFilters([{ id: 'default', key: 'all', value: '', isCustom: false, operator: 'contains', type: 'string' }]);
     await fetchSchemaForCollection(collectionName);
   }, [fetchSchemaForCollection, selectedCollection]);
+
+  // Sync active collection back to the sidebar
+  useEffect(() => {
+    onCollectionChange?.(selectedCollection ?? undefined);
+  }, [selectedCollection, onCollectionChange]);
+
+  // Respond to sidebar collection selection
+  useEffect(() => {
+    if (sidebarSelectedCollection && sidebarSelectedCollection !== selectedCollection) {
+      handleCollectionClick(sidebarSelectedCollection);
+    }
+  }, [sidebarSelectedCollection, selectedCollection, handleCollectionClick]);
+
+  // Auto-select first collection in embedded mode when none is selected
+  useEffect(() => {
+    if (embedded && !selectedCollection && !initialDocumentId && !sidebarSelectedCollection && currentDb && currentDb.collections.length > 0) {
+      const first = [...currentDb.collections].sort((a, b) => a.name.localeCompare(b.name))[0];
+      handleCollectionClick(first.name);
+    }
+  }, [embedded, selectedCollection, initialDocumentId, sidebarSelectedCollection, currentDb, handleCollectionClick]);
 
   const handleRefresh = useCallback(() => {
     if (!selectedCollection) return;
@@ -638,25 +674,15 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     }
   };
 
-  const handleSortCollections = (key: 'name' | 'count') => {
-    if (collectionSortKey === key) {
-      setCollectionSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setCollectionSortKey(key);
-      setCollectionSortOrder(key === 'name' ? 'asc' : 'desc');
-    }
-  };
-
   const sortedCollections = useMemo(() => {
     if (!currentDb) return [];
     return [...currentDb.collections].sort((a, b) => {
-      if (collectionSortKey === 'name') {
-        return a.name.localeCompare(b.name) * (collectionSortOrder === 'asc' ? 1 : -1);
-      } else {
-        return (a.count - b.count) * (collectionSortOrder === 'asc' ? 1 : -1);
-      }
+      if (collectionSort === 'name_asc') return a.name.localeCompare(b.name);
+      if (collectionSort === 'name_desc') return b.name.localeCompare(a.name);
+      if (collectionSort === 'count_desc') return b.count - a.count;
+      return a.count - b.count;
     });
-  }, [currentDb, collectionSortKey, collectionSortOrder]);
+  }, [currentDb, collectionSort]);
 
   const handleObjectIdClick = useCallback(async (openDocId: string | null, objectId: string, keyContext?: string, openInNewTab?: boolean, openToSide?: boolean) => {
     if (!currentDb) return;
@@ -699,6 +725,9 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
           }];
         });
       }
+      if (result.collectionName !== selectedCollection) {
+        onCollectionChange?.(result.collectionName);
+      }
       await fetchSchemaForCollection(result.collectionName);
     } catch (e) {
       if (e instanceof Error) setError(e.message);
@@ -706,7 +735,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [openDocuments, currentResource, currentDb, currentAccount.id, fetchSchemaForCollection]);
+  }, [openDocuments, currentResource, currentDb, currentAccount.id, fetchSchemaForCollection, selectedCollection, onCollectionChange]);
 
   const handleBreadcrumbClick = useCallback(async (openDocId: string, index: number) => {
     const openDoc = openDocuments.find(d => d.id === openDocId);
@@ -738,24 +767,22 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     }
   }, []);
 
-  const renderSortArrow = (key: 'name' | 'count') => {
-    if (collectionSortKey !== key) return null;
-    return collectionSortOrder === 'asc' ? <ArrowUpwardIcon className="w-3 h-3" /> : <ArrowDownwardIcon className="w-3 h-3" />;
-  };
 
   const renderDocumentList = () => {
     if (isLoading && documents.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
-          <SpinnerIcon className="w-8 h-8" />
-          <p className="mt-2">Loading documents...</p>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--muted)' }}>
+          <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ animation: 'qp-spin 0.8s linear infinite' }}>
+            <circle cx="8" cy="8" r="6" strokeOpacity="0.3"/><path d="M8 2a6 6 0 0 1 6 6"/>
+          </svg>
+          <p style={{ marginTop: 8, fontSize: 13 }}>Loading documents...</p>
         </div>
       );
     }
 
     if (error && !isLoading) {
       return (
-        <div className="p-4 text-red-600 bg-red-50 border border-red-200 text-sm rounded-md dark:bg-red-900/30 dark:border-red-500/50 dark:text-red-300">
+        <div style={{ margin: 12, padding: '10px 14px', color: 'var(--status-err)', background: 'color-mix(in oklch, #c94250 8%, var(--bg))', border: '1px solid color-mix(in oklch, #c94250 22%, var(--border))', fontSize: 13, borderRadius: 8 }}>
           {error}
         </div>
       );
@@ -763,25 +790,25 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
 
     if (!selectedCollection) {
       return (
-        <div className="text-center text-slate-500 dark:text-slate-400 py-10">
-          <p>Select a collection to view its documents.</p>
+        <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '40px 16px' }}>
+          <p style={{ fontSize: 13 }}>Select a collection to view its documents.</p>
         </div>
       );
     }
 
     if (documents.length === 0 && !isLoading) {
       return (
-        <div className="text-center text-slate-500 dark:text-slate-400 py-10">
-          <p>No documents found.</p>
-          {debouncedFilters.some(f => f.value || f.operator === 'exists' || f.operator === 'not_exists') && <p className="text-xs">Try a different filter or value.</p>}
+        <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '40px 16px' }}>
+          <p style={{ fontSize: 13 }}>No documents found.</p>
+          {debouncedFilters.some(f => f.value || f.operator === 'exists' || f.operator === 'not_exists') && <p style={{ fontSize: 11.5, marginTop: 4 }}>Try a different filter or value.</p>}
         </div>
       );
     }
 
     return (
-      <div className="flex flex-col h-full">
-        <div className={`flex-grow overflow-y-auto ${isLoading ? 'opacity-50' : ''}`}>
-          <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{ flexGrow: 1, overflowY: 'auto', opacity: isLoading ? 0.5 : 1 }}>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {documents.map((doc) => {
               const docId = getDocId(doc);
               const isSelected = openDocuments.some(od => getDocId(od.doc) === docId);
@@ -790,7 +817,9 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
               return (
                 <li
                   key={docId}
-                  className={`flex items-center justify-between transition-colors group ${isSelected ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', background: isSelected ? 'var(--accent-soft)' : 'transparent' }}
+                  onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                  onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
                   <button
                     onClick={(e) => {
@@ -804,15 +833,12 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                       const isAlreadyOpen = openDocuments.some(od => getDocId(od.doc) === docId && od.collectionName === selectedCollection);
 
                       if (e.metaKey || e.ctrlKey) {
-                        // Append to open documents
                         if (!isAlreadyOpen) {
                           setOpenDocuments(prev => [...prev, newDocObj]);
                         } else {
-                          // Deselect
                           setOpenDocuments(prev => prev.filter(od => !(getDocId(od.doc) === docId && od.collectionName === selectedCollection)));
                         }
                       } else {
-                        // Close all others
                         if (isAlreadyOpen) {
                           setOpenDocuments(prev => prev.filter(od => getDocId(od.doc) === docId && od.collectionName === selectedCollection));
                         } else {
@@ -820,44 +846,39 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                         }
                       }
                     }}
-                    className="flex-grow text-left p-3 text-sm"
+                    style={{ flexGrow: 1, textAlign: 'left', padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    title={String(doc._id?.$oid || doc._id)}
                   >
-                    <p className="font-mono text-slate-800 dark:text-slate-200 truncate" title={String(doc._id?.$oid || doc._id)}>{String(doc._id?.$oid || doc._id)}</p>
+                    {String(doc._id?.$oid || doc._id)}
                   </button>
-                  <div className="flex items-center gap-1 mr-2">
-                    {/* Delete button */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginRight: 6 }}>
                     <button
-                      onClick={() => {
-                        setDeleteTargetDoc(doc);
-                        setIsDeleteDialogOpen(true);
-                      }}
-                      className="p-2 rounded-full transition-colors text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 focus:outline-none focus:ring-2 focus:ring-red-400 opacity-0 group-hover:opacity-100"
+                      onClick={() => { setDeleteTargetDoc(doc); setIsDeleteDialogOpen(true); }}
+                      style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex' }}
                       title="Delete document"
                       aria-label="Delete document"
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                     >
-                      <TrashIcon className="w-5 h-5" />
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
                     </button>
-                    {/* Copy as new document button */}
                     <button
-                      onClick={() => {
-                        const { _id, ...rest } = doc;
-                        setCreateDocInitial(rest);
-                        setIsCreateDialogOpen(true);
-                      }}
-                      className="p-2 rounded-full transition-colors text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-400 opacity-0 group-hover:opacity-100"
+                      onClick={() => { const { _id, ...rest } = doc; setCreateDocInitial(rest); setIsCreateDialogOpen(true); }}
+                      style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex' }}
                       title="Copy as new document"
                       aria-label="Copy as new document"
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                     >
-                      <FileCopyIcon className="w-5 h-5" />
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                     </button>
-                    {/* Pin button */}
                     <button
                       onClick={() => handleTogglePin(doc, selectedCollection!)}
-                      className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isPinned ? 'text-blue-500 hover:bg-blue-200/50 dark:hover:bg-blue-900/40' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'} ${!isPinned ? 'opacity-0 group-hover:opacity-100' : ''}`}
+                      style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: 'pointer', color: isPinned ? 'var(--accent)' : 'var(--muted)', display: 'flex' }}
                       title={isPinned ? 'Unpin document' : 'Pin document'}
                       aria-label={isPinned ? 'Unpin document' : 'Pin document'}
                     >
-                      <PinIcon className={`w-5 h-5 ${isPinned ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5"><path d="M9.5 1.5l5 5-1.5 1.5-1-1-3 3v4l-1.5-1.5-3-3-1.5 1.5v-4l3-3-1-1zM1.5 14.5l4-4"/></svg>
                     </button>
                   </div>
                 </li>
@@ -865,12 +886,12 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
             })}
           </ul>
         </div>
-        {/* Pagination Controls */}
-        <div className="flex-shrink-0 p-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage <= 1 || isLoading} className="px-3 py-1 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
+        {/* Pagination */}
+        <div style={{ flexShrink: 0, padding: '8px 12px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage <= 1 || isLoading} className="qa-btn" style={{ fontSize: 12, padding: '4px 10px' }}>
             Previous
           </button>
-          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+          <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span>Page</span>
             <input
               type="text"
@@ -879,12 +900,12 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
               onKeyDown={handlePageInputSubmit}
               onBlur={handlePageInputSubmit}
               disabled={isLoading || totalPages <= 1}
-              className="w-12 text-center bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md text-sm text-slate-900 dark:text-slate-100 disabled:opacity-50"
+              style={{ width: 40, textAlign: 'center', background: 'var(--soft)', border: '1px solid var(--border)', borderRadius: 4, fontSize: 12, color: 'var(--fg)', padding: '2px 4px', fontFamily: 'var(--font-body)' }}
               aria-label="Current page"
             />
             <span>of {totalPages}</span>
           </div>
-          <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages || isLoading} className="px-3 py-1 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
+          <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages || isLoading} className="qa-btn" style={{ fontSize: 12, padding: '4px 10px' }}>
             Next
           </button>
         </div>
@@ -904,6 +925,7 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
           getDocId(openDoc.doc)
         );
 
+        setDiscardConfirmDocId(null);
         setOpenDocuments(prev => prev.map(od => od.id === openDocId ? { ...od, doc: refreshed, editMode: false } : od));
 
         // Sync pinned document if present
@@ -921,50 +943,58 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   };
 
   const handleEditCancel = (openDocId: string) => {
+    const od = openDocuments.find(d => d.id === openDocId);
+    if (od && editorRefs.current[openDocId]) {
+      const currentVal = editorRefs.current[openDocId]!.getCurrentValue();
+      const original = JSON.stringify(od.doc, null, 2);
+      if (currentVal !== original) {
+        setDiscardConfirmDocId(openDocId);
+        return;
+      }
+    }
     setOpenDocuments(prev => prev.map(od => od.id === openDocId ? { ...od, editMode: false } : od));
   };
 
-  // Only cover the editor area (right 60% for 2/4 xl:3/5), open/collapse vertically
+  const confirmDiscard = (openDocId: string) => {
+    setDiscardConfirmDocId(null);
+    setOpenDocuments(prev => prev.map(od => od.id === openDocId ? { ...od, editMode: false } : od));
+  };
+
   const PinnedDrawer = () => {
     const drawerHeight = isPinnedDrawerOpen ? '100%' : '48px';
-    // Clamp min/max height for card
     const minCardHeight = 120;
     const maxCardHeight = 600;
     return (
       <div
-        className="fixed bottom-0 right-0 z-30 transition-all duration-300 ease-in-out"
-        style={{ width: '60vw', maxWidth: '100vw', minWidth: '320px', height: drawerHeight, pointerEvents: 'auto' }}
+        style={{ position: 'fixed', bottom: 0, right: 0, zIndex: 30, width: '60vw', maxWidth: '100vw', minWidth: 320, height: drawerHeight, pointerEvents: 'auto', transition: 'height 0.3s ease-in-out' }}
         aria-hidden={!isPinnedDrawerOpen && pinnedDocuments.length === 0}
       >
-        <div className="h-full flex flex-col bg-white dark:bg-slate-800 border-l-2 border-blue-500 shadow-[0_0_20px_rgba(0,0,0,0.08)] dark:shadow-[0_0_30px_rgba(0,0,0,0.25)]">
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--panel)', borderLeft: '2px solid var(--accent)', boxShadow: '0 0 20px rgba(0,0,0,0.1)' }}>
           <button
             onClick={() => setIsPinnedDrawerOpen(!isPinnedDrawerOpen)}
-            className="flex items-center justify-between p-3 text-left border-b border-slate-200 dark:border-slate-700 w-full"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px', minHeight: 48, background: 'none', border: 'none', cursor: 'pointer', width: '100%', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-body)' }}
             aria-expanded={isPinnedDrawerOpen}
-            style={{ minHeight: '48px' }}
           >
-            <div className="flex items-center gap-3">
-              <PinIcon className="w-5 h-5 text-blue-500" />
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                Pinned Documents ({pinnedDocuments.length})
-              </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.5"><path d="M9.5 1.5l5 5-1.5 1.5-1-1-3 3v4l-1.5-1.5-3-3-1.5 1.5v-4l3-3-1-1zM1.5 14.5l4-4"/></svg>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>Pinned Documents ({pinnedDocuments.length})</span>
             </div>
-            <div className="flex items-center gap-4">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {pinnedDocuments.length > 0 && (
                 <button
                   onClick={e => { e.stopPropagation(); handleClearAllPins(); }}
-                  className="flex items-center gap-2 px-3 py-1.5 border border-red-300 dark:border-red-500/50 text-xs font-medium rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', border: '1px solid color-mix(in oklch, #c94250 40%, var(--border))', borderRadius: 6, fontSize: 12, color: 'var(--status-err)', background: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
                   title="Clear all pinned documents"
                 >
-                  <TrashIcon className="w-4 h-4" /> Clear All
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
+                  Clear All
                 </button>
               )}
-              <ChevronDownIcon className={`w-6 h-6 text-slate-500 dark:text-slate-400 transition-transform duration-300 ${isPinnedDrawerOpen ? 'rotate-180' : ''}`} />
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.5" style={{ transform: isPinnedDrawerOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}><path d="M3 6l5 5 5-5"/></svg>
             </div>
           </button>
-          {/* Card size drag handles (universal for all cards) */}
           {isPinnedDrawerOpen && pinnedDocuments.length > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 select-none" style={{ minHeight: '32px', height: '32px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', background: 'var(--soft)', borderBottom: '1px solid var(--border)', minHeight: 32, userSelect: 'none' }}>
               <div
                 tabIndex={0}
                 aria-label="Drag to resize pinned document cards"
@@ -989,62 +1019,47 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                     window.addEventListener('mouseup', onUp);
                   }
                 }}
-                style={{
-                  width: 44,
-                  height: 24,
-                  minWidth: 44,
-                  minHeight: 24,
-                  maxWidth: 44,
-                  maxHeight: 24,
-                  position: 'relative',
-                  background: 'transparent',
-                  border: '1px dashed #60a5fa',
-                  borderRadius: 6,
-                  display: 'inline-block',
-                  marginLeft: 0,
-                  marginRight: 0,
-                  cursor: 'nwse-resize',
-                  userSelect: 'none',
-                  boxSizing: 'border-box',
-                }}
+                style={{ width: 44, height: 24, position: 'relative', background: 'transparent', border: '1px dashed var(--accent)', borderRadius: 6, display: 'inline-block', cursor: 'nwse-resize', userSelect: 'none', boxSizing: 'border-box' }}
               >
                 <div style={{ position: 'absolute', right: 0, bottom: 0, width: 20, height: 20, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', pointerEvents: 'none' }}>
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="6" y="16" width="8" height="2" rx="1" fill="#60a5fa" /><rect x="12" y="10" width="2" height="8" rx="1" fill="#60a5fa" /></svg>
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><rect x="6" y="16" width="8" height="2" rx="1" fill="var(--accent)" /><rect x="12" y="10" width="2" height="8" rx="1" fill="var(--accent)" /></svg>
                 </div>
               </div>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium" style={{ marginLeft: 4 }}>{pinnedCardWidth}×{pinnedCardHeight}px</span>
+              <span style={{ fontSize: 11.5, color: 'var(--muted)', marginLeft: 4 }}>{pinnedCardWidth}×{pinnedCardHeight}px</span>
             </div>
           )}
-          <div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-900" style={{ display: isPinnedDrawerOpen ? 'block' : 'none' }}>
+          <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', display: isPinnedDrawerOpen ? 'block' : 'none' }}>
             {pinnedDocuments.length > 0 ? (
-              <div className="p-4 flex flex-wrap gap-4">
+              <div style={{ padding: 16, display: 'flex', flexWrap: 'wrap', gap: 16 }}>
                 {pinnedDocuments.map(({ doc, collectionName }) => (
                   <div
                     key={getDocId(doc)}
-                    className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-fade-in-fast"
-                    style={{ height: pinnedCardHeight, width: pinnedCardWidth, minHeight: minCardHeight, maxHeight: maxCardHeight, minWidth: minCardWidth, maxWidth: maxCardWidth, flex: '0 0 auto' }}
+                    className="qa-card"
+                    style={{ height: pinnedCardHeight, width: pinnedCardWidth, minHeight: minCardHeight, maxHeight: maxCardHeight, minWidth: minCardWidth, maxWidth: maxCardWidth, flex: '0 0 auto', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
                   >
-                    <header className="p-3 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center flex-shrink-0">
+                    <header style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                       <div>
-                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{collectionName}</p>
-                        <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate" title={getDocId(doc)}>{getDocId(doc)}</p>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', margin: 0 }}>{collectionName}</p>
+                        <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }} title={getDocId(doc)}>{getDocId(doc)}</p>
                       </div>
                       <button
                         onClick={() => handleTogglePin(doc, collectionName)}
-                        className="p-1.5 rounded-full text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                        style={{ padding: 4, borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex' }}
                         title="Unpin document"
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                       >
-                        <XIcon className="w-4 h-4" />
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3l10 10M13 3L3 13"/></svg>
                       </button>
                     </header>
-                    <div className="p-3 flex-grow overflow-y-auto">
+                    <div style={{ padding: 12, flexGrow: 1, overflowY: 'auto' }}>
                       <JsonDisplay data={doc} onObjectIdClick={(objId, keyCtx, openNewTab, openToSide) => handleObjectIdClick(null, objId, keyCtx, openNewTab, openToSide)} />
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13 }}>
                 Pin documents to compare them here.
               </div>
             )}
@@ -1091,209 +1106,207 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
     }
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
-      <div className="flex flex-col h-screen relative">
+  const pageContent = (
+    <>
+    <div style={{ display: 'flex', flexDirection: 'column', height: embedded ? '100%' : '100vh', position: 'relative', background: 'var(--bg)', fontFamily: 'var(--font-body)' }}>
 
         {/* Loading Overlay */}
         {isLoadingDbsForAccount && (
-          <div className="absolute inset-0 z-50 bg-black/20 dark:bg-black/40 backdrop-blur-sm flex items-center justify-center">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl px-6 py-4 flex items-center gap-3 border border-slate-200 dark:border-slate-700">
-              <SpinnerIcon className="w-5 h-5 animate-spin text-blue-500" />
-              <span className="text-slate-700 dark:text-slate-200 font-medium">Switching account...</span>
+          <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.2)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ background: 'var(--panel)', borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,0.12)', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border)' }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.5" style={{ animation: 'qp-spin 0.8s linear infinite' }}>
+                <circle cx="8" cy="8" r="6" strokeOpacity="0.3"/><path d="M8 2a6 6 0 0 1 6 6"/>
+              </svg>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)' }}>Switching account...</span>
             </div>
           </div>
         )}
 
-        {/* Header */}
-        <header className="flex-shrink-0 bg-white dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-4">
-                <MongoIcon className="w-9 h-9 text-blue-500" />
+        {/* Header — hidden in embedded mode (AppTopBar handles breadcrumb) */}
+        {!embedded && <header style={{ flexShrink: 0, background: 'var(--panel)', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <MongoIcon className="w-9 h-9" style={{ color: 'var(--accent)' }} />
                 <div>
-                  <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Data Explorer</h1>
-                  <div className="flex items-center gap-2 font-mono text-xs text-blue-600 dark:text-blue-400">
-                    <div className="relative" ref={accountSwitcherRef}>
+                  <h1 style={{ fontSize: 17, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>Data Explorer</h1>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                    <div style={{ position: 'relative' }} ref={accountSwitcherRef}>
                       <button
                         onClick={() => setIsAccountSwitcherOpen(!isAccountSwitcherOpen)}
                         disabled={availableAccounts.length <= 1}
-                        className="flex items-center gap-1 font-bold px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 disabled:cursor-default disabled:hover:bg-transparent"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: availableAccounts.length <= 1 ? 'default' : 'pointer', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}
                         title="Switch account"
                       >
                         {currentAccount.name}
-                        {availableAccounts.length > 1 && <ChevronDownIcon className={`w-3 h-3 transition-transform ${isAccountSwitcherOpen ? 'rotate-180' : ''}`} />}
+                        {availableAccounts.length > 1 && <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: isAccountSwitcherOpen ? 'rotate(180deg)' : 'none' }}><path d="M3 6l5 5 5-5"/></svg>}
                       </button>
                       {isAccountSwitcherOpen && (
-                        <div className="absolute top-full mt-2 w-60 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 animate-fade-in-fast">
-                          <div className="p-2">
-                            {availableAccounts.map(acc => (
-                              <button
-                                key={acc.id}
-                                onClick={() => handleAccountSwitch(acc)}
-                                className={`w-full text-left px-3 py-2 text-sm rounded-md ${acc.id === currentAccount.id ? 'font-bold bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-                              >
-                                {acc.name}
-                              </button>
-                            ))}
-                          </div>
+                        <div style={{ position: 'absolute', top: '100%', marginTop: 6, width: 240, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 20, padding: 6 }}>
+                          {availableAccounts.map(acc => (
+                            <button
+                              key={acc.id}
+                              onClick={() => handleAccountSwitch(acc)}
+                              style={{ width: '100%', textAlign: 'left', padding: '7px 10px', fontSize: 13, borderRadius: 6, border: 'none', cursor: 'pointer', background: acc.id === currentAccount.id ? 'var(--accent-soft)' : 'none', color: acc.id === currentAccount.id ? 'var(--accent)' : 'var(--fg)', fontWeight: acc.id === currentAccount.id ? 600 : 400 }}
+                            >
+                              {acc.name}
+                            </button>
+                          ))}
                         </div>
                       )}
                     </div>
-                    <span>/</span>
-                    <div className="relative" ref={dbSwitcherRef}>
+                    <span style={{ color: 'var(--muted)' }}>/</span>
+                    <div style={{ position: 'relative' }} ref={dbSwitcherRef}>
                       <button
                         onClick={() => setIsDbSwitcherOpen(!isDbSwitcherOpen)}
                         disabled={currentAccountDbs.length <= 1 || isLoadingDbsForAccount}
-                        className="flex items-center gap-1 font-bold px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 disabled:cursor-default disabled:hover:bg-transparent"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: currentAccountDbs.length <= 1 ? 'default' : 'pointer', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}
                         title="Switch database"
                       >
                         {isLoadingDbsForAccount ? 'Loading...' : (currentDb?.name || 'Select Database')}
-                        {!isLoadingDbsForAccount && currentAccountDbs.length > 1 && <ChevronDownIcon className={`w-3 h-3 transition-transform ${isDbSwitcherOpen ? 'rotate-180' : ''}`} />}
+                        {!isLoadingDbsForAccount && currentAccountDbs.length > 1 && <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: isDbSwitcherOpen ? 'rotate(180deg)' : 'none' }}><path d="M3 6l5 5 5-5"/></svg>}
                       </button>
                       {isDbSwitcherOpen && (
-                        <div className="absolute top-full mt-2 w-60 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 animate-fade-in-fast">
-                          <div className="p-2">
-                            {currentAccountDbs.map(db => (
-                              <button
-                                key={db.name}
-                                onClick={() => handleDbSwitch(db)}
-                                className={`w-full text-left px-3 py-2 text-sm rounded-md ${db.name === currentDb?.name ? 'font-bold bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-                              >
-                                {db.name}
-                              </button>
-                            ))}
-                          </div>
+                        <div style={{ position: 'absolute', top: '100%', marginTop: 6, width: 240, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 20, padding: 6 }}>
+                          {currentAccountDbs.map(db => (
+                            <button
+                              key={db.name}
+                              onClick={() => handleDbSwitch(db)}
+                              style={{ width: '100%', textAlign: 'left', padding: '7px 10px', fontSize: 13, borderRadius: 6, border: 'none', cursor: 'pointer', background: db.name === currentDb?.name ? 'var(--accent-soft)' : 'none', color: db.name === currentDb?.name ? 'var(--accent)' : 'var(--fg)', fontWeight: db.name === currentDb?.name ? 600 : 400 }}
+                            >
+                              {db.name}
+                            </button>
+                          ))}
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={toggleTheme}
-                  className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                  aria-label="Toggle theme"
-                  title="Toggle light/dark mode"
-                >
-                  {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
-                </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
                   onClick={handleClearDocCache}
                   disabled={cacheClearStatus !== 'idle'}
-                  className="h-9 w-9 flex items-center justify-center border border-slate-300 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="qa-btn"
+                  style={{ width: 36, height: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   title="Clear the server cache for linked document lookups"
                   aria-label="Clear cache"
                 >
-                  {cacheClearStatus === 'loading' && <SpinnerIcon className="w-5 h-5 animate-spin" />}
-                  {cacheClearStatus === 'success' && <CheckIcon className="w-5 h-5 text-green-500" />}
-                  {cacheClearStatus === 'error' && <XIcon className="w-5 h-5 text-red-500" />}
-                  {cacheClearStatus === 'idle' && <CachedIcon className="w-5 h-5" />}
+                  {cacheClearStatus === 'loading' && <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ animation: 'qp-spin 0.8s linear infinite' }}><circle cx="8" cy="8" r="6" strokeOpacity="0.3"/><path d="M8 2a6 6 0 0 1 6 6"/></svg>}
+                  {cacheClearStatus === 'success' && <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.5"><path d="M3 8l3.5 3.5L13 5"/></svg>}
+                  {cacheClearStatus === 'error' && <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--status-err)" strokeWidth="1.5"><path d="M3 3l10 10M13 3L3 13"/></svg>}
+                  {cacheClearStatus === 'idle' && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>}
                 </button>
                 <button
                   onClick={onNavigateBack}
-                  className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  className="qa-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
                   title="Return to the query generator"
                 >
-                  <ArrowLeftIcon className="w-4 h-4" />
-                  <span>Back to Query Generator</span>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10 3L5 8l5 5"/></svg>
+                  Back to Query Generator
                 </button>
               </div>
             </div>
           </div>
-        </header>
+        </header>}
 
         {/* Main Content Area */}
-        <main className="flex-grow overflow-hidden block w-full h-full relative">
-          <PanelGroup orientation="horizontal" id="querypal-panel-layout" className="w-full h-full relative">
-            {/* Column 1: Collections */}
-            <Panel defaultSize={20} minSize={10}>
-              <div className="h-full bg-slate-100 dark:bg-slate-800 overflow-y-auto">
-                <div className="p-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Collections</h2>
-                    <div className="flex items-center gap-1 p-0.5 bg-slate-200 dark:bg-slate-700 rounded-md">
-                      <button
-                        onClick={() => handleSortCollections('name')}
-                        className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors ${collectionSortKey === 'name' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
-                        title={`Sort by name (${collectionSortKey === 'name' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
-                      >
-                        Name {renderSortArrow('name')}
-                      </button>
-                      <button
-                        onClick={() => handleSortCollections('count')}
-                        className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors ${collectionSortKey === 'count' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
-                        title={`Sort by count (${collectionSortKey === 'count' && collectionSortOrder === 'asc' ? 'descending' : 'ascending'})`}
-                      >
-                        Count {renderSortArrow('count')}
-                      </button>
-                    </div>
+        <main style={{ flexGrow: 1, overflow: 'hidden', display: 'block', width: '100%', height: '100%', position: 'relative' }}>
+          <PanelGroup orientation="horizontal" id={embedded ? 'querypal-panel-layout-embedded' : 'querypal-panel-layout'} style={{ width: '100%', height: '100%', position: 'relative' }}>
+            {/* Column 1: Collections — hidden in embedded mode (sidebar handles this) */}
+            {!embedded && <Panel defaultSize={20} minSize={10}>
+              <div style={{ height: '100%', background: 'var(--soft)', overflowY: 'auto' }}>
+                <div style={{ padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', margin: 0 }}>Collections</h2>
+                    <select
+                      value={collectionSort}
+                      onChange={(e) => setCollectionSort(e.target.value as typeof collectionSort)}
+                      title="Sort collections"
+                      style={{ fontSize: 11.5, fontFamily: 'var(--font-body)', color: 'var(--muted)', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 5, padding: '2px 6px', cursor: 'pointer', outline: 'none' }}
+                    >
+                      <option value="name_asc">A → Z</option>
+                      <option value="name_desc">Z → A</option>
+                      <option value="count_desc">Most docs</option>
+                      <option value="count_asc">Fewest docs</option>
+                    </select>
                   </div>
-                  <div className="space-y-2">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {isLoadingDbsForAccount ? (
-                      <div className="text-center p-4 text-slate-500 dark:text-slate-400">Loading collections...</div>
+                      <div style={{ textAlign: 'center', padding: 16, color: 'var(--muted)', fontSize: 13 }}>Loading collections...</div>
                     ) : sortedCollections.length > 0 ? (
                       sortedCollections.map(col => (
                         <button
                           key={col.name}
                           onClick={() => handleCollectionClick(col.name)}
-                          className={`w-full text-left p-3 rounded-md text-sm font-medium transition-colors ${selectedCollection === col.name ? 'bg-blue-500 text-white shadow-md' : 'bg-white dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`}
+                          style={{ width: '100%', textAlign: 'left', padding: '9px 11px', borderRadius: 7, fontSize: 13, fontWeight: 500, border: 'none', cursor: 'pointer', background: selectedCollection === col.name ? 'var(--accent)' : 'var(--panel)', color: selectedCollection === col.name ? 'white' : 'var(--fg)' }}
+                          onMouseEnter={(e) => { if (selectedCollection !== col.name) (e.currentTarget as HTMLElement).style.background = 'var(--accent-soft)'; }}
+                          onMouseLeave={(e) => { if (selectedCollection !== col.name) (e.currentTarget as HTMLElement).style.background = 'var(--panel)'; }}
                         >
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold">{col.name}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${selectedCollection === col.name ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-600'}`}>{col.count.toLocaleString()}</span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{col.name}</span>
+                            <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 10, background: selectedCollection === col.name ? 'rgba(255,255,255,0.2)' : 'var(--soft)', flexShrink: 0, marginLeft: 6 }}>{col.count.toLocaleString()}</span>
                           </div>
                         </button>
                       ))
                     ) : (
-                      <div className="text-center p-4 text-slate-500 dark:text-slate-400">No collections found.</div>
+                      <div style={{ textAlign: 'center', padding: 16, color: 'var(--muted)', fontSize: 13 }}>No collections found.</div>
                     )}
                   </div>
                 </div>
               </div>
-            </Panel>
+            </Panel>}
 
-            <PanelResizeHandle className="w-1 bg-slate-200 dark:bg-slate-700 hover:bg-blue-400 dark:hover:bg-blue-500 transition-colors cursor-col-resize z-10 flex-shrink-0" />
+            {!embedded && <PanelResizeHandle style={{ width: 1, background: 'var(--border)', cursor: 'col-resize', flexShrink: 0, zIndex: 10 }} />}
 
             {/* Column 2: Documents */}
-            <Panel defaultSize={20} minSize={15}>
-              <div className="h-full bg-white dark:bg-slate-800/50 flex flex-col">
-                <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-                  <div className="flex justify-between items-center mb-2">
-                    <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">
-                      Documents {totalDocuments > 0 && `(${totalDocuments.toLocaleString()})`}
+            <Panel defaultSize={embedded ? 28 : 20} minSize={15}>
+              <div style={{ height: '100%', background: 'var(--panel)', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', margin: 0 }}>
+                      Documents {totalDocuments > 0 && <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({totalDocuments.toLocaleString()})</span>}
                     </h2>
-                    <div className="flex items-center gap-2">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <button
                         onClick={handleOpenCreateDialog}
                         disabled={!selectedCollection || isLoading || isFetchingSchema}
-                        className={`p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 ${isCreateDialogOpen ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : ''}`}
+                        style={{ padding: 5, borderRadius: 5, background: isCreateDialogOpen ? 'var(--accent-soft)' : 'none', border: 'none', cursor: !selectedCollection ? 'not-allowed' : 'pointer', color: isCreateDialogOpen ? 'var(--accent)' : 'var(--muted)', display: 'flex', opacity: !selectedCollection ? 0.5 : 1 }}
                         title="Create new document"
                         aria-label="Create new document"
+                        onMouseEnter={(e) => { if (selectedCollection) (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
+                        onMouseLeave={(e) => { if (!isCreateDialogOpen) (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                       >
-                        <NoteAddIcon className={`w-5 h-5 ${isCreateDialogOpen ? 'fill-current' : 'stroke-current'} transition-colors`} />
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
                       </button>
                       <button
                         onClick={handleRefresh}
                         disabled={!selectedCollection || isLoading || isFetchingSchema}
-                        className="p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: !selectedCollection ? 'not-allowed' : 'pointer', color: 'var(--muted)', display: 'flex', opacity: !selectedCollection ? 0.5 : 1 }}
                         title="Refresh documents and schema"
+                        onMouseEnter={(e) => { if (selectedCollection) (e.currentTarget as HTMLElement).style.color = 'var(--fg)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                       >
-                        <ClearAllIcon className={`w-4 h-4 ${(isLoading || isFetchingSchema) ? 'animate-pulse' : ''}`} />
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ animation: (isLoading || isFetchingSchema) ? 'qp-spin 1s linear infinite' : 'none' }}><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
                       </button>
                     </div>
                   </div>
-                  <div className="space-y-2">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
                     {filters.map((f) => (
-                      <div key={f.id} className="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg relative">
+                      <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, background: 'var(--soft)', border: '1px solid var(--border)', borderRadius: 8, position: 'relative', flexShrink: 0 }}>
                         {filters.length > 1 && (
-                          <button onClick={() => removeFilter(f.id)} className="absolute -top-2 -right-2 p-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-full text-slate-400 hover:text-red-500 hover:border-red-500 shadow-sm z-10 transition-colors">
-                            <XIcon className="w-3 h-3" />
+                          <button
+                            onClick={() => removeFilter(f.id)}
+                            style={{ position: 'absolute', top: -8, right: -8, padding: 3, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '50%', color: 'var(--muted)', display: 'flex', cursor: 'pointer', zIndex: 10 }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--status-err)'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
                           </button>
                         )}
-                        <div className="flex gap-2">
-                          <div className="flex-[2_2_0%] relative">
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <div style={{ flex: '2 2 0%', position: 'relative' }}>
                             {!f.isCustom ? (
                               <>
                                 <select
@@ -1304,11 +1317,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                     } else {
                                       const newKey = e.target.value;
                                       const isDate = newKey.toLowerCase().includes('date') || newKey.toLowerCase().includes('time');
-                                      updateFilter(f.id, { key: newKey, type: isDate ? 'date' : 'string' });
+                                      updateFilter(f.id, { key: newKey, type: isDate ? 'date' : 'string', operator: 'equals' });
                                     }
                                   }}
                                   disabled={!selectedCollection || isFetchingSchema}
-                                  className="w-full text-sm appearance-none cursor-pointer p-2 pr-8 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                                  style={{ width: '100%', fontSize: 12, appearance: 'none', cursor: 'pointer', padding: '6px 26px 6px 8px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--fg)', fontFamily: 'var(--font-body)' }}
                                   title="Select a field to filter by"
                                 >
                                   <option value="all">All Fields</option>
@@ -1316,10 +1329,10 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                   <option disabled>──────────</option>
                                   <option value="__custom__">Type custom field...</option>
                                 </select>
-                                <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+                                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="2" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><path d="M3 6l5 5 5-5"/></svg>
                               </>
                             ) : (
-                              <div className="flex items-center relative">
+                              <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
                                 <input
                                   type="text"
                                   value={f.key}
@@ -1330,73 +1343,77 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                                   }}
                                   disabled={!selectedCollection || isFetchingSchema}
                                   placeholder="e.g. internal_info.internal_id"
-                                  className="w-full text-sm p-2 pr-8 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                                  style={{ width: '100%', fontSize: 12, padding: '6px 26px 6px 8px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--fg)', fontFamily: 'var(--font-body)' }}
                                   autoFocus
                                 />
                                 <button
                                   onClick={() => updateFilter(f.id, { isCustom: false, key: 'all' })}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors bg-slate-200 dark:bg-slate-600"
+                                  style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', padding: 2, borderRadius: '50%', background: 'var(--soft)', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex' }}
                                   title="Back to dropdown"
                                 >
-                                  <XIcon className="w-3 h-3" />
+                                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
                                 </button>
                               </div>
                             )}
                           </div>
-                          {f.key !== 'all' && (
-                            <div className="flex-1 relative">
-                              <select
-                                value={f.operator || 'equals'}
-                                onChange={(e) => updateFilter(f.id, { operator: e.target.value })}
-                                disabled={!selectedCollection || isFetchingSchema}
-                                className="w-full text-sm appearance-none cursor-pointer p-2 pr-8 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
-                              >
-                                <option value="equals">Equals</option>
-                                <option value="not_equals">Does Not Equal</option>
+                          {/* Operator always visible: "All Fields" gets contains-only; specific fields get full list */}
+                          <div style={{ flex: '1 1 0%', position: 'relative' }}>
+                            <select
+                              value={f.operator || (f.key === 'all' ? 'contains' : 'equals')}
+                              onChange={(e) => updateFilter(f.id, { operator: e.target.value })}
+                              disabled={!selectedCollection || isFetchingSchema}
+                              style={{ width: '100%', fontSize: 12, appearance: 'none', cursor: 'pointer', padding: '6px 26px 6px 8px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--fg)', fontFamily: 'var(--font-body)' }}
+                            >
+                              {f.key === 'all' ? (
                                 <option value="contains">Contains</option>
-                                <option value="greater_than">Greater Than (&gt;)</option>
-                                <option value="less_than">Less Than (&lt;)</option>
-                                <option value="exists">Exists</option>
-                                <option value="not_exists">Does Not Exist</option>
-                              </select>
-                              <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
-                            </div>
-                          )}
+                              ) : (
+                                <>
+                                  <option value="equals">Equals</option>
+                                  <option value="not_equals">Not Equals</option>
+                                  <option value="contains">Contains</option>
+                                  <option value="greater_than">{'>'} Greater</option>
+                                  <option value="less_than">{'<'} Less</option>
+                                  <option value="exists">Exists</option>
+                                  <option value="not_exists">Not Exists</option>
+                                </>
+                              )}
+                            </select>
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="2" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><path d="M3 6l5 5 5-5"/></svg>
+                          </div>
                         </div>
                         {(!f.operator || (f.operator !== 'exists' && f.operator !== 'not_exists')) && (
-                          <div className="relative">
+                          <div style={{ position: 'relative' }}>
                             <input
                               type={f.type === 'date' ? 'datetime-local' : 'text'}
                               placeholder={isFetchingSchema ? 'Loading schema...' : 'Filter value...'}
                               value={f.value}
                               onChange={(e) => updateFilter(f.id, { value: e.target.value })}
                               disabled={!selectedCollection || isFetchingSchema}
-                              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50"
+                              style={{ width: '100%', paddingLeft: 30, paddingRight: 8, paddingTop: 6, paddingBottom: 6, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-body)', boxSizing: 'border-box' }}
                             />
-                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                           </div>
                         )}
                       </div>
                     ))}
-                    <div className="flex gap-2">
+                    <div style={{ display: 'flex', gap: 6 }}>
                       <button
                         onClick={addFilter}
                         disabled={!selectedCollection || isFetchingSchema}
-                        className="flex-1 flex justify-center items-center gap-1 p-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="qa-btn"
+                        style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: 12 }}
                       >
-                        <span>+ Add Filter</span>
+                        + Add Filter
                       </button>
                       <button
                         onClick={() => {
                           if (!selectedCollection) return;
-
                           const validFilters = debouncedFilters.map(f => ({
                             key: f.key,
                             value: getCoercedFilterValue(f.value),
                             operator: f.operator || 'equals',
                             type: f.type || 'string'
                           }));
-
                           getDocumentsQueryCode(selectedCollection, currentResource, undefined, validFilters)
                             .then((queryCodeStr) => {
                               navigator.clipboard.writeText(queryCodeStr).then(() => {
@@ -1410,44 +1427,58 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                             });
                         }}
                         disabled={!selectedCollection || isFetchingSchema}
-                        className="flex justify-center items-center gap-2 p-2 px-3 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="qa-btn"
+                        style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 5, fontSize: 12 }}
                         title="Export current filter criteria as Python script (MongoDB PyMongo)"
                       >
-                        {copiedQuery ? <CheckIcon className="w-4 h-4 text-green-500" /> : <FileCopyIcon className="w-4 h-4" />}
-                        <span>Export</span>
+                        {copiedQuery
+                          ? <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.5"><path d="M3 8l3.5 3.5L13 5"/></svg>
+                          : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                        }
+                        Export
                       </button>
                     </div>
                   </div>
                 </div>
-                <div className="flex-grow overflow-hidden">
+                <div style={{ flexGrow: 1, overflow: 'hidden' }}>
                   {renderDocumentList()}
                 </div>
               </div>
             </Panel>
 
-            <PanelResizeHandle className="w-1 bg-slate-200 dark:bg-slate-700 hover:bg-blue-400 dark:hover:bg-blue-500 transition-colors cursor-col-resize z-10 flex-shrink-0" />
+            <PanelResizeHandle style={{ width: 1, background: 'var(--border)', cursor: 'col-resize', flexShrink: 0, zIndex: 10 }} />
 
-            {/* Column 3: Document Editor */}
-            <Panel defaultSize={60} minSize={30}>
-              <div className="h-full bg-slate-100 dark:bg-slate-900/40 overflow-x-auto overflow-y-hidden flex flex-row relative">
+            {/* Column 3: Document View */}
+            <Panel defaultSize={embedded ? 72 : 60} minSize={30}>
+              <div style={{ height: '100%', background: 'var(--bg)', overflowX: 'auto', overflowY: 'hidden', display: 'flex', flexDirection: 'row', position: 'relative' }}>
                 {openDocuments.length === 0 ? (
-                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-slate-400">
-                    <p>Select a document to open it here.</p>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--muted)' }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" style={{ opacity: 0.35 }}>
+                      <rect x="3" y="3" width="18" height="18" rx="3"/>
+                      <path d="M7 8h10M7 12h7M7 16h5"/>
+                    </svg>
+                    <span style={{ fontSize: 12.5, fontFamily: 'var(--font-body)' }}>Select a document to view it here</span>
                   </div>
                 ) : (
                   openDocuments.map((openDoc, index) => (
                     <div
                       key={openDoc.id}
-                      className={`h-full ${openDocuments.length === 1 ? 'w-full' : 'flex-shrink-0'} flex flex-col border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 shadow-sm first:border-l-0 relative group/panel`}
                       style={{
-                        width: openDocuments.length === 1 ? undefined : (docWidths[openDoc.id] || 600),
-                        minWidth: openDocuments.length === 1 ? undefined : 400
+                        height: '100%',
+                        width: openDocuments.length === 1 ? '100%' : (docWidths[openDoc.id] || 600),
+                        minWidth: openDocuments.length === 1 ? undefined : 400,
+                        flexShrink: openDocuments.length === 1 ? undefined : 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderLeft: index === 0 ? 'none' : '1px solid var(--border)',
+                        background: 'var(--panel)',
+                        position: 'relative',
                       }}
                     >
+                      {/* Drag-resize handle for side-by-side docs */}
                       {openDocuments.length > 1 && (
                         <div
-                          className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 dark:hover:bg-blue-500 z-20 transition-colors opacity-0 group-hover/panel:opacity-100"
-                          style={{ right: -1 }}
+                          style={{ position: 'absolute', right: -1, top: 0, bottom: 0, width: 4, cursor: 'col-resize', zIndex: 20 }}
                           onMouseDown={(e) => {
                             e.preventDefault();
                             const startX = e.clientX;
@@ -1463,201 +1494,270 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                             window.addEventListener('mousemove', onMouseMove);
                             window.addEventListener('mouseup', onMouseUp);
                           }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--accent)'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                         />
                       )}
-                      <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-                        <header className="flex flex-wrap justify-between items-center gap-3 pb-2 border-b border-transparent">
-                          <div className="flex items-center gap-3 min-w-[200px] flex-1">
-                            <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 truncate" title={openDoc.collectionName}>{openDoc.collectionName}</h2>
-                            <span className="font-mono text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 truncate flex-shrink-0 shadow-sm" style={{maxWidth: '160px'}} title={getDocId(openDoc.doc)}>
-                              {getDocId(openDoc.doc)}
-                            </span>
-                          </div>
-                          
-                          <div className="flex items-center gap-1 flex-shrink-0 ml-auto bg-slate-50/50 dark:bg-slate-800/30 p-1 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
-                              <button
-                                onClick={() => handleTogglePin(openDoc.doc, openDoc.collectionName)}
-                                className={`p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${isDocumentPinned(openDoc.doc) ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300'}`}
-                                title={isDocumentPinned(openDoc.doc) ? 'Unpin document' : 'Pin document'}
-                              >
-                                <PinIcon className={`w-4 h-4 ${isDocumentPinned(openDoc.doc) ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  setIsLoading(true);
+
+                      {/* Header bar */}
+                      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', height: 44, borderBottom: '1px solid var(--border)', background: 'var(--panel)' }}>
+                        {/* Title: collection + id */}
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, maxWidth: '40%' }} title={openDoc.collectionName}>
+                            {openDoc.collectionName}
+                          </span>
+                          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="var(--border)" strokeWidth="2" style={{ flexShrink: 0 }}><path d="M6 3l5 5-5 5"/></svg>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={getDocId(openDoc.doc)}>
+                            {getDocId(openDoc.doc)}
+                          </span>
+                        </div>
+
+                        {/* Toolbar */}
+                        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {/* Pin */}
+                          <button
+                            onClick={() => handleTogglePin(openDoc.doc, openDoc.collectionName)}
+                            title={isDocumentPinned(openDoc.doc) ? 'Unpin document' : 'Pin document'}
+                            style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', background: isDocumentPinned(openDoc.doc) ? 'var(--accent-soft)' : 'transparent', color: isDocumentPinned(openDoc.doc) ? 'var(--accent)' : 'var(--muted)' }}
+                            onMouseEnter={(e) => { if (!isDocumentPinned(openDoc.doc)) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                            onMouseLeave={(e) => { if (!isDocumentPinned(openDoc.doc)) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill={isDocumentPinned(openDoc.doc) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5"><path d="M9.5 1.5l5 5-1.5 1.5-1-1-3 3v4l-1.5-1.5-3-3-1.5 1.5v-4l3-3-1-1zM1.5 14.5l4-4"/></svg>
+                          </button>
+
+                          {/* Refresh */}
+                          <button
+                            onClick={async () => {
+                              setIsLoading(true);
+                              try {
+                                const refreshed = await getSingleDocument(
+                                  currentResource.accountId,
+                                  currentResource.databaseName,
+                                  openDoc.collectionName,
+                                  getDocId(openDoc.doc)
+                                );
+                                if (openDoc.editMode && editorRefs.current[openDoc.id]) {
+                                  const editedValue = editorRefs.current[openDoc.id]!.getCurrentValue();
+                                  let isDifferent = false;
                                   try {
-                                    const refreshed = await getSingleDocument(
-                                      currentResource.accountId,
-                                      currentResource.databaseName,
-                                      openDoc.collectionName,
-                                      getDocId(openDoc.doc)
-                                    );
-
-                                    if (openDoc.editMode && editorRefs.current[openDoc.id]) {
-                                      const editedValue = editorRefs.current[openDoc.id]!.getCurrentValue();
-                                      let isDifferent = false;
-
-                                      try {
-                                        const parsedEdited = JSON.parse(editedValue);
-                                        const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
-                                        const editedWithoutIgnored = omit(parsedEdited, ignoredKeys);
-                                        const refreshedWithoutIgnored = omit(refreshed, ignoredKeys);
-                                        isDifferent = !isEqual(editedWithoutIgnored, refreshedWithoutIgnored);
-                                      } catch (e) {
-                                        const freshString = JSON.stringify(refreshed, null, 2);
-                                        isDifferent = editedValue !== freshString;
-                                      }
-
-                                      if (isDifferent) {
-                                        setDiffCurrentEditedText(editedValue);
-                                        setDiffIncomingDocument(refreshed);
-                                        setDiffTargetDocId(openDoc.id);
-                                        setIsDiffOverwriteDialogOpen(true);
-                                        setIsLoading(false);
-                                        return;
-                                      }
-                                    }
-
-                                    setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, doc: refreshed } : od));
-                                    setPinnedDocuments(prev => prev.map(p =>
-                                      getDocId(p.doc) === getDocId(openDoc.doc) ? { ...p, doc: refreshed } : p
-                                    ));
-                                    if (openDoc.editMode && editorRefs.current[openDoc.id]) {
-                                      editorRefs.current[openDoc.id]!.setCurrentValue(JSON.stringify(refreshed, null, 2));
-                                    }
+                                    const parsedEdited = JSON.parse(editedValue);
+                                    const ignoredKeys = ['_id', 'datetime_creation', 'datetime_last_modified'];
+                                    const editedWithoutIgnored = omit(parsedEdited, ignoredKeys);
+                                    const refreshedWithoutIgnored = omit(refreshed, ignoredKeys);
+                                    isDifferent = !isEqual(editedWithoutIgnored, refreshedWithoutIgnored);
                                   } catch (e) {
-                                  } finally {
-                                    setIsLoading(false);
+                                    const freshString = JSON.stringify(refreshed, null, 2);
+                                    isDifferent = editedValue !== freshString;
                                   }
-                                }}
-                                className="p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                                title="Refresh document"
+                                  if (isDifferent) {
+                                    setDiffCurrentEditedText(editedValue);
+                                    setDiffIncomingDocument(refreshed);
+                                    setDiffTargetDocId(openDoc.id);
+                                    setIsDiffOverwriteDialogOpen(true);
+                                    setIsLoading(false);
+                                    return;
+                                  }
+                                }
+                                setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, doc: refreshed } : od));
+                                setPinnedDocuments(prev => prev.map(p =>
+                                  getDocId(p.doc) === getDocId(openDoc.doc) ? { ...p, doc: refreshed } : p
+                                ));
+                                if (openDoc.editMode && editorRefs.current[openDoc.id]) {
+                                  editorRefs.current[openDoc.id]!.setCurrentValue(JSON.stringify(refreshed, null, 2));
+                                }
+                              } catch (e) {
+                              } finally {
+                                setIsLoading(false);
+                              }
+                            }}
+                            title="Refresh document"
+                            disabled={isLoading}
+                            style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                            onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; } }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+                          </button>
+
+                          {!openDoc.editMode && (
+                            <>
+                              {/* Edit */}
+                              <button
+                                onClick={() => setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, editMode: true } : od))}
                                 disabled={isLoading}
+                                title="Edit document"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                                onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; } }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                               >
-                                <RefreshIcon className="w-4 h-4" />
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                               </button>
-                              {!openDoc.editMode && (
-                                <>
-                                  <button
-                                    className={`p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${openDoc.editMode ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/50' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300'}`}
-                                    onClick={() => setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, editMode: true } : od))}
-                                    disabled={isLoading}
-                                    title="Edit document"
-                                  >
-                                    <EditIcon className={`w-4 h-4 ${openDoc.editMode ? 'fill-current' : 'stroke-current'} transition-colors`} />
-                                  </button>
-                                  <button
-                                    className="p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                                    onClick={() => {
-                                      const { _id, ...rest } = openDoc.doc;
-                                      setCreateDocInitial(rest);
-                                      setIsCreateDialogOpen(true);
-                                    }}
-                                    disabled={isLoading}
-                                    title="Insert copy as new document"
-                                  >
-                                    <FileCopyIcon className="w-4 h-4 stroke-current transition-colors" />
-                                  </button>
-                                  <button
-                                    className="p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40"
-                                    onClick={() => {
-                                      setDeleteTargetDoc(openDoc.doc);
-                                      setIsDeleteDialogOpen(true);
-                                    }}
-                                    disabled={isLoading}
-                                    title="Delete document"
-                                  >
-                                    <TrashIcon className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    className="p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                                    onClick={() => setHistoryTargetDoc({ docId: getDocId(openDoc.doc), collectionName: openDoc.collectionName })}
-                                    disabled={isLoading}
-                                    title="View document history"
-                                  >
-                                    <HistoryIcon className="w-4 h-4" />
-                                  </button>
-                                </>
-                              )}
-                              {openDoc.editMode && (
-                                <button
-                                  className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                                  onClick={() => handleEditCancel(openDoc.id)}
-                                  disabled={isLoading}
-                                  title="Cancel edit"
-                                >
-                                  <XIcon className="w-4 h-4" />
-                                </button>
-                              )}
+                              {/* Duplicate */}
+                              <button
+                                onClick={() => { const { _id, ...rest } = openDoc.doc; setCreateDocInitial(rest); setIsCreateDialogOpen(true); }}
+                                disabled={isLoading}
+                                title="Insert copy as new document"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                                onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; } }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                              </button>
+                              {/* History */}
+                              <button
+                                onClick={() => setHistoryTargetDoc({ docId: getDocId(openDoc.doc), collectionName: openDoc.collectionName })}
+                                disabled={isLoading}
+                                title="View document history"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                                onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--fg)'; } }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                              </button>
+                              {/* Delete */}
+                              <button
+                                onClick={() => { setDeleteTargetDoc(openDoc.doc); setIsDeleteDialogOpen(true); }}
+                                disabled={isLoading}
+                                title="Delete document"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                                onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'color-mix(in oklch, var(--status-err) 8%, var(--bg))'; (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; } }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
+                              </button>
+                            </>
+                          )}
 
-                            <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                          {openDoc.editMode && (
+                            /* Cancel edit */
+                            <button
+                              onClick={() => handleEditCancel(openDoc.id)}
+                              disabled={isLoading}
+                              title="Cancel edit"
+                              style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--fg)'; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3l10 10M13 3L3 13"/></svg>
+                            </button>
+                          )}
 
-                            {openDocuments.length > 1 && (
-                              <div className="flex items-center bg-slate-200/50 dark:bg-slate-700/50 rounded-lg p-0.5 mx-1">
-                                <button
-                                  onClick={() => handleMoveDocument(openDoc.id, 'left')}
-                                  disabled={index === 0}
-                                  className="p-1 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 disabled:hover:text-slate-500 transition-colors bg-transparent rounded-md hover:bg-white dark:hover:bg-slate-800"
-                                  title="Move Left"
-                                >
-                                  <ArrowLeftIcon className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleMoveDocument(openDoc.id, 'right')}
-                                  disabled={index === openDocuments.length - 1}
-                                  className="p-1 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 disabled:hover:text-slate-500 transition-colors bg-transparent rounded-md hover:bg-white dark:hover:bg-slate-800"
-                                  title="Move Right"
-                                >
-                                  <ArrowRightIcon className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )}
-                            <button onClick={() => setOpenDocuments(prev => prev.filter(od => od.id !== openDoc.id))} className="flex-shrink-0 p-1.5 bg-slate-200/50 dark:bg-slate-700/50 text-slate-500 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors border border-transparent hover:border-red-200" title="Close tab"><XIcon className="w-4 h-4" /></button>
-                          </div>
-                        </header>
+                          {/* Divider */}
+                          <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 3px' }} />
 
-                        {/* Breadcrumbs */}
-                        {openDoc.breadcrumbs.length > 0 && (
-                          <div className="flex items-center flex-wrap gap-1 text-xs text-slate-500 dark:text-slate-400 p-2 bg-slate-100 dark:bg-slate-800/50 rounded-md">
-                            {openDoc.breadcrumbs.map((crumb, i) => (
-                              <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
-                                <button onClick={() => handleBreadcrumbClick(openDoc.id, i)} className="hover:underline hover:text-blue-500 dark:hover:text-blue-400 truncate max-w-[15ch]">
-                                  <span className="font-semibold">{crumb.collectionName}</span>
-                                  <span className="font-mono"> / {getDocId(crumb.document)}</span>
-                                </button>
-                                <ChevronRightIcon className="w-3 h-3 text-slate-400 dark:text-slate-500 flex-shrink-0" />
-                              </React.Fragment>
-                            ))}
-                            <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[15ch]">
-                              {openDoc.collectionName} / <span className="font-mono">{getDocId(openDoc.doc)}</span>
-                            </span>
+                          {/* Move left/right (multi-doc) */}
+                          {openDocuments.length > 1 && (
+                            <>
+                              <button
+                                onClick={() => handleMoveDocument(openDoc.id, 'left')}
+                                disabled={index === 0}
+                                title="Move left"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: index === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: index === 0 ? 0.3 : 1 }}
+                                onMouseEnter={(e) => { if (index !== 0) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 3L5 8l5 5"/></svg>
+                              </button>
+                              <button
+                                onClick={() => handleMoveDocument(openDoc.id, 'right')}
+                                disabled={index === openDocuments.length - 1}
+                                title="Move right"
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: index === openDocuments.length - 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: index === openDocuments.length - 1 ? 0.3 : 1 }}
+                                onMouseEnter={(e) => { if (index !== openDocuments.length - 1) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 3l5 5-5 5"/></svg>
+                              </button>
+                            </>
+                          )}
+
+                          {/* Close — disabled while editing */}
+                          <button
+                            onClick={() => setOpenDocuments(prev => prev.filter(od => od.id !== openDoc.id))}
+                            title={openDoc.editMode ? 'Exit edit mode before closing' : 'Close'}
+                            disabled={openDoc.editMode}
+                            style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: openDoc.editMode ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'var(--soft)', color: 'var(--muted)', opacity: openDoc.editMode ? 0.35 : 1 }}
+                            onMouseEnter={(e) => { if (!openDoc.editMode) { (e.currentTarget as HTMLElement).style.background = 'color-mix(in oklch, var(--status-err) 10%, var(--bg))'; (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; } }}
+                            onMouseLeave={(e) => { if (!openDoc.editMode) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; } }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Breadcrumb trail (linked-doc navigation) */}
+                      {openDoc.breadcrumbs.length > 0 && (
+                        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 3, padding: '5px 14px', background: 'var(--soft)', borderBottom: '1px solid var(--border)', fontSize: 11.5, color: 'var(--muted)' }}>
+                          {openDoc.breadcrumbs.map((crumb, i) => (
+                            <React.Fragment key={`${i}-${getDocId(crumb.document)}`}>
+                              <button
+                                onClick={() => handleBreadcrumbClick(openDoc.id, i)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontFamily: 'var(--font-body)', fontSize: 11.5, padding: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '14ch' }}
+                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                              >
+                                <span style={{ fontWeight: 600 }}>{crumb.collectionName}</span>
+                                <span style={{ fontFamily: 'var(--font-mono)', marginLeft: 3 }}>/ {getDocId(crumb.document)}</span>
+                              </button>
+                              <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0, opacity: 0.4 }}><path d="M6 3l5 5-5 5"/></svg>
+                            </React.Fragment>
+                          ))}
+                          <span style={{ fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '14ch' }}>
+                            {openDoc.collectionName}<span style={{ fontFamily: 'var(--font-mono)', fontWeight: 400, marginLeft: 3 }}>/ {getDocId(openDoc.doc)}</span>
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Document content */}
+                      <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12, opacity: isLoading ? 0.45 : 1 }}>
+                        {!openDoc.editMode && (
+                          <div style={{ background: 'var(--soft)', flex: 1, borderRadius: 8, padding: '12px 14px', fontSize: 11.5, overflowX: 'auto', fontFamily: 'var(--font-mono)', lineHeight: 1.7, border: '1px solid var(--border)' }}>
+                            <JsonDisplay data={openDoc.doc} onObjectIdClick={(objId, keyCtx, openNewTab, openToSide) => handleObjectIdClick(openDoc.id, objId, keyCtx, openNewTab, openToSide)} />
                           </div>
                         )}
-
-                        {/* Content */}
-                        <div className={`space-y-4 flex-1 flex flex-col ${isLoading ? 'opacity-50' : 'animate-fade-in-fast'}`}>
-                          {!openDoc.editMode && (
-                            <div className="bg-slate-50 flex-1 dark:bg-slate-900 rounded p-3 text-xs overflow-x-auto text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-inner">
-                              <JsonDisplay data={openDoc.doc} onObjectIdClick={(objId, keyCtx, openNewTab, openToSide) => handleObjectIdClick(openDoc.id, objId, keyCtx, openNewTab, openToSide)} />
-                            </div>
-                          )}
-                          {openDoc.editMode && (
-                            <DocumentEditView
-                              ref={(el) => {
-                                if (el) editorRefs.current[openDoc.id] = el;
-                                else delete editorRefs.current[openDoc.id];
-                              }}
-                              accountId={currentResource.accountId}
-                              databaseName={currentResource.databaseName}
-                              document={openDoc.doc}
-                              collection={openDoc.collectionName}
-                              docId={getDocId(openDoc.doc)}
-                              loading={isLoading}
-                              onCancel={() => handleEditCancel(openDoc.id)}
-                              onSave={() => handleEditSave(openDoc.id)}
-                            />
-                          )}
-                        </div>
+                        {openDoc.editMode && discardConfirmDocId === openDoc.id && (
+                          <div style={{
+                            padding: '10px 14px', borderRadius: 8, flexShrink: 0,
+                            background: 'color-mix(in oklch, var(--status-err) 9%, var(--panel))',
+                            border: '1px solid color-mix(in oklch, var(--status-err) 28%, var(--border))',
+                            display: 'flex', alignItems: 'center', gap: 10,
+                          }}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--status-err)" strokeWidth="1.5" style={{ flexShrink: 0 }}>
+                              <path d="M8 1L15 14H1L8 1z"/><path d="M8 6v4M8 11.5v.5"/>
+                            </svg>
+                            <span style={{ flex: 1, fontSize: 12.5, color: 'var(--status-err)', fontFamily: 'var(--font-body)' }}>
+                              You have unsaved changes. Discard them?
+                            </span>
+                            <button
+                              onClick={() => setDiscardConfirmDocId(null)}
+                              style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 6, border: '1px solid color-mix(in oklch, var(--status-err) 28%, var(--border))', background: 'var(--panel)', color: 'var(--fg)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+                            >
+                              Keep editing
+                            </button>
+                            <button
+                              onClick={() => confirmDiscard(openDoc.id)}
+                              style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--status-err)', background: 'var(--status-err)', color: '#fff', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+                            >
+                              Discard
+                            </button>
+                          </div>
+                        )}
+                        {openDoc.editMode && (
+                          <DocumentEditView
+                            ref={(el) => {
+                              if (el) editorRefs.current[openDoc.id] = el;
+                              else delete editorRefs.current[openDoc.id];
+                            }}
+                            accountId={currentResource.accountId}
+                            databaseName={currentResource.databaseName}
+                            document={openDoc.doc}
+                            collection={openDoc.collectionName}
+                            docId={getDocId(openDoc.doc)}
+                            loading={isLoading}
+                            onCancel={() => handleEditCancel(openDoc.id)}
+                            onSave={() => handleEditSave(openDoc.id)}
+                          />
+                        )}
                       </div>
                     </div>
                   ))
@@ -1717,21 +1817,14 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
         }}
       />
       <style>{`
-          @keyframes fade-in-fast { 
-            from { opacity: 0; } 
-            to { opacity: 1; } 
-          }
-          .animate-fade-in-fast { 
-            animation: fade-in-fast 0.3s ease-out forwards; 
-          }
-          @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.1); opacity: 0.7; }
-          }
-          .animate-pulse { 
-            animation: pulse 1s infinite; 
-          }
+        @keyframes qp-spin { to { transform: rotate(360deg); } }
       `}</style>
+    </>
+  );
+
+  return embedded ? pageContent : (
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--fg)', fontFamily: 'var(--font-body)' }}>
+      {pageContent}
     </div>
   );
 };

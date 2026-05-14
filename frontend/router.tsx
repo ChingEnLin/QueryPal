@@ -1,7 +1,9 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
+import HubPage from './pages/HubPage';
 import QueryGeneratorPageWrapper from './pages/QueryGeneratorPageWrapper';
 import DataExplorerPageWrapper from './pages/DataExplorerPageWrapper';
+import AnalyticsPageWrapper from './pages/AnalyticsPageWrapper';
 import NotFoundPage from './pages/NotFoundPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import AuditPage from './pages/AuditPage';
@@ -9,17 +11,33 @@ import AuditPage from './pages/AuditPage';
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: <Navigate to="/query-generator" replace />,
+    element: <Navigate to="/hub" replace />,
   },
   {
     path: "/login",
     element: <LoginPage />,
   },
   {
+    path: "/hub",
+    element: (
+      <ProtectedRoute>
+        <HubPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: "/audit",
     element: (
       <ProtectedRoute>
         <AuditPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/analytics",
+    element: (
+      <ProtectedRoute>
+        <AnalyticsPageWrapper />
       </ProtectedRoute>
     ),
   },

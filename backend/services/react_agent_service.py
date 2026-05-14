@@ -21,7 +21,6 @@ if not logger.handlers:
 from services.gemini_service import extract_python_code
 from services.mongo_service import execute_mongo_query, transform_mongo_result
 
-
 WRITE_METHODS = {
     "insert_one",
     "insert_many",
