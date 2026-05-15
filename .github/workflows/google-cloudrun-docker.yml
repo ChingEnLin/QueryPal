@@ -1,6 +1,8 @@
-# This workflow builds and pushes Docker containers to Google Artifact Registry
-# and deploys both backend and frontend on Cloud Run when a commit is pushed to the "production"
-# branch.
+# Build and deploy QueryPal to Cloud Run.
+# Runs on pushes to the production branch.
+#
+# Infrastructure changes (VPC connector, Secret Manager, IAM) are managed by
+# Terraform in the terraform/ directory and must be applied before first deploy.
 
 name: 'Build and Deploy QueryPal to Cloud Run'
 
@@ -16,6 +18,10 @@ env:
   BACKEND_SERVICE: 'querypal-backend'
   FRONTEND_SERVICE: 'querypal-frontend'
   WORKLOAD_IDENTITY_PROVIDER: 'projects/874216619692/locations/global/workloadIdentityPools/github/providers/querypal'
+  # Cloud Run service account created by Terraform (terraform/iam.tf).
+  CLOUD_RUN_SA: 'querypal-cloudrun-sa@gen-lang-client-0698668474.iam.gserviceaccount.com'
+  # VPC connector created by Terraform (terraform/network.tf).
+  VPC_CONNECTOR: 'querypal-vpc-connector'
 
 jobs:
   deploy:
@@ -29,24 +35,21 @@ jobs:
       - name: 'Checkout'
         uses: 'actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332' # actions/checkout@v4
 
-      # Configure Workload Identity Federation and generate an access token.
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@f112390a2df9932162083945e46d439060d66ec2' # google-github-actions/auth@v2
         with:
           workload_identity_provider: '${{ env.WORKLOAD_IDENTITY_PROVIDER }}'
-          service_account: 'github-actions@gen-lang-client-0698668474.iam.gserviceaccount.com'
+          service_account: 'github-actions@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
 
-      # Set up Cloud SDK
       - name: 'Set up Cloud SDK'
         uses: 'google-github-actions/setup-gcloud@98ddc00a17442e89a24bbf282954a3b65ce6d200' # google-github-actions/setup-gcloud@v2
 
-      # Configure Docker to use gcloud as a credential helper
       - name: 'Configure Docker for GCR'
-        run: |-
-          gcloud auth configure-docker --quiet
+        run: gcloud auth configure-docker --quiet
 
-      # Build and Push Backend Container
+      # ── Backend ──────────────────────────────────────────────────────────────
+
       - name: 'Build and Push Backend Container'
         run: |-
           cd backend
@@ -54,7 +57,6 @@ jobs:
           docker build --tag "${DOCKER_TAG}" --platform linux/amd64 .
           docker push "${DOCKER_TAG}"
 
-      # Deploy Backend to Cloud Run
       - id: 'deploy-backend'
         name: 'Deploy Backend to Cloud Run'
         uses: 'google-github-actions/deploy-cloudrun@33553064113a37d688aa6937bacbdc481580be17' # google-github-actions/deploy-cloudrun@v2
@@ -62,34 +64,42 @@ jobs:
           service: '${{ env.BACKEND_SERVICE }}'
           region: '${{ env.REGION }}'
           image: 'gcr.io/${{ env.PROJECT_ID }}/${{ env.BACKEND_SERVICE }}:${{ github.sha }}'
+          # Non-secret runtime configuration only.
           env_vars: |
             ENVIRONMENT=production
-            AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}
-            AZURE_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}
-            AZURE_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}
             ARM_SCOPE=https://management.azure.com/.default
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-            DB_USER=${{ secrets.DB_USER }}
-            DB_PASS=${{ secrets.DB_PASS }}
             DB_NAME=querypal
-            DB_UNIX_SOCKET=/cloudsql/gen-lang-client-0698668474:europe-west1:querypal-db
+            DB_UNIX_SOCKET=/cloudsql/${{ env.PROJECT_ID }}:${{ env.REGION }}:querypal-db
+          # Sensitive values are read directly from Secret Manager at runtime.
+          # Secret must exist before first deploy (created by terraform/secrets.tf).
+          secrets: |
+            AZURE_TENANT_ID=querypal-azure-tenant-id:latest
+            AZURE_CLIENT_ID=querypal-azure-client-id:latest
+            AZURE_CLIENT_SECRET=querypal-azure-client-secret:latest
+            GEMINI_API_KEY=querypal-gemini-api-key:latest
+            DB_USER=querypal-db-user:latest
+            DB_PASS=querypal-db-pass:latest
           flags: |
             --port=8000
-            --add-cloudsql-instances=gen-lang-client-0698668474:europe-west1:querypal-db
+            --service-account=${{ env.CLOUD_RUN_SA }}
+            --add-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:querypal-db
+            --vpc-connector=${{ env.VPC_CONNECTOR }}
+            --vpc-egress=private-ranges-only
+            --ingress=internal
             --allow-unauthenticated
 
-      # Build and Push Frontend Container
+      # ── Frontend ─────────────────────────────────────────────────────────────
+
       - name: 'Build and Push Frontend Container'
         run: |-
           cd frontend
           DOCKER_TAG="gcr.io/${{ env.PROJECT_ID }}/${{ env.FRONTEND_SERVICE }}:${{ github.sha }}"
           docker build --tag "${DOCKER_TAG}" --platform linux/amd64 \
-            --build-arg VITE_API_BASE_URL=${{ steps.deploy-backend.outputs.url }} \
+            --build-arg VITE_API_BASE_URL=/api \
             --build-arg VITE_AZURE_REDIRECT_URI=https://querypal.virtonomy.io \
             .
           docker push "${DOCKER_TAG}"
 
-      # Deploy Frontend to Cloud Run
       - id: 'deploy-frontend'
         name: 'Deploy Frontend to Cloud Run'
         uses: 'google-github-actions/deploy-cloudrun@33553064113a37d688aa6937bacbdc481580be17' # google-github-actions/deploy-cloudrun@v2
@@ -97,12 +107,21 @@ jobs:
           service: '${{ env.FRONTEND_SERVICE }}'
           region: '${{ env.REGION }}'
           image: 'gcr.io/${{ env.PROJECT_ID }}/${{ env.FRONTEND_SERVICE }}:${{ github.sha }}'
+          # BACKEND_URL is the internal Cloud Run URL; nginx uses it at runtime to
+          # proxy /api/* requests to the backend (which is not publicly reachable).
+          env_vars: |
+            BACKEND_URL=${{ steps.deploy-backend.outputs.url }}
           flags: |
             --port=4000
+            --service-account=${{ env.CLOUD_RUN_SA }}
+            --vpc-connector=${{ env.VPC_CONNECTOR }}
+            --vpc-egress=all-traffic
+            --ingress=all
             --allow-unauthenticated
 
-      # Show output URLs
+      # ── Summary ───────────────────────────────────────────────────────────────
+
       - name: 'Show deployment URLs'
         run: |-
-          echo "Backend URL: ${{ steps.deploy-backend.outputs.url }}"
           echo "Frontend URL: ${{ steps.deploy-frontend.outputs.url }}"
+          echo "Backend URL:  ${{ steps.deploy-backend.outputs.url }} (internal only)"

@@ -1,0 +1,12 @@
+# Copy this file to terraform.tfvars and adjust values for your environment.
+# terraform.tfvars is gitignored — never commit secret values.
+
+project_id              = "gen-lang-client-0698668474"
+region                  = "europe-west1"
+vpc_network             = "default"
+vpc_connector_name      = "querypal-vpc-connector"
+vpc_connector_cidr      = "10.8.0.0/28"
+cloud_sql_instance_name = "querypal-db"
+db_name                 = "querypal"
+cloud_run_sa_name       = "querypal-cloudrun-sa"
+github_actions_sa_email = "github-actions@gen-lang-client-0698668474.iam.gserviceaccount.com"
