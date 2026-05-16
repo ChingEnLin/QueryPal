@@ -27,14 +27,6 @@ resource "google_project_iam_member" "cloudrun_vpc_user" {
   member  = "serviceAccount:${google_service_account.cloudrun_sa.email}"
 }
 
-# Allow the github-actions SA to read secrets so it can populate them during
-# first-time bootstrap (optional — remove if you populate secrets manually).
-resource "google_project_iam_member" "github_actions_secret_accessor" {
-  project = var.project_id
-  role    = "roles/secretmanager.secretAccessor"
-  member  = "serviceAccount:${var.github_actions_sa_email}"
-}
-
 # Allow GitHub Actions SA to act as the Cloud Run SA when deploying services
 # (required to set --service-account on Cloud Run deployments).
 resource "google_service_account_iam_member" "github_actions_act_as_cloudrun_sa" {
