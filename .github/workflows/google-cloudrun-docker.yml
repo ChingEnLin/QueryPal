@@ -18,9 +18,10 @@ env:
   BACKEND_SERVICE: 'querypal-backend'
   FRONTEND_SERVICE: 'querypal-frontend'
   WORKLOAD_IDENTITY_PROVIDER: 'projects/874216619692/locations/global/workloadIdentityPools/github/providers/querypal'
-  # Cloud Run service account created by Terraform (terraform/iam.tf).
-  CLOUD_RUN_SA: 'querypal-cloudrun-sa@gen-lang-client-0698668474.iam.gserviceaccount.com'
-  # VPC connector created by Terraform (terraform/network.tf).
+  # Short name of the Cloud Run SA and VPC connector created by Terraform.
+  # The full SA email is constructed inline in flags using ${{ env.PROJECT_ID }}
+  # because GitHub Actions does not interpolate env vars inside the env: block.
+  CLOUD_RUN_SA_NAME: 'querypal-cloudrun-sa'
   VPC_CONNECTOR: 'querypal-vpc-connector'
 
 jobs:
@@ -81,7 +82,7 @@ jobs:
             DB_PASS=querypal-db-pass:latest
           flags: |
             --port=8000
-            --service-account=${{ env.CLOUD_RUN_SA }}
+            --service-account=${{ env.CLOUD_RUN_SA_NAME }}@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
             --add-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:querypal-db
             --vpc-connector=${{ env.VPC_CONNECTOR }}
             --vpc-egress=private-ranges-only
@@ -94,6 +95,9 @@ jobs:
         run: |-
           cd frontend
           DOCKER_TAG="gcr.io/${{ env.PROJECT_ID }}/${{ env.FRONTEND_SERVICE }}:${{ github.sha }}"
+          # VITE_API_BASE_URL=/api tells the React app to send all API calls to
+          # the /api/* path on its own origin instead of a full backend URL.
+          # Nginx then proxies those requests to the internal backend service.
           docker build --tag "${DOCKER_TAG}" --platform linux/amd64 \
             --build-arg VITE_API_BASE_URL=/api \
             --build-arg VITE_AZURE_REDIRECT_URI=https://querypal.virtonomy.io \
@@ -113,7 +117,7 @@ jobs:
             BACKEND_URL=${{ steps.deploy-backend.outputs.url }}
           flags: |
             --port=4000
-            --service-account=${{ env.CLOUD_RUN_SA }}
+            --service-account=${{ env.CLOUD_RUN_SA_NAME }}@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
             --vpc-connector=${{ env.VPC_CONNECTOR }}
             --vpc-egress=all-traffic
             --ingress=all
