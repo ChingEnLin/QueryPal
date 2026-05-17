@@ -162,8 +162,14 @@ async def run_audit(req: AuditRequest, authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid token format")
 
     user_token = authorization.replace("Bearer ", "")
-    access_token = exchange_token_obo(user_token)
-    connection_string = get_connection_string(req.account_id, access_token)
+    try:
+        access_token = exchange_token_obo(user_token)
+        connection_string = get_connection_string(req.account_id, access_token)
+    except Exception as exc:
+        logger.exception(
+            "argus auth/connection-string failed account=%s", req.account_id
+        )
+        raise HTTPException(status_code=502, detail=f"Azure auth failed: {exc}")
 
     connection = CosmosConnection.from_connection_string(
         connection_string=connection_string,

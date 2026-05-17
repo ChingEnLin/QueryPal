@@ -34,6 +34,7 @@ const AnalyticsPageWrapper: React.FC = () => {
       <AnalyticsPage
         accountId={conn?.accountId}
         databaseName={conn?.databaseName}
+        collections={conn?.collections}
       />
     </AppLayout>
   );
