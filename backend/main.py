@@ -2,7 +2,7 @@ import os
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import query, azure, system, user_queries, data_documents, audit
+from routes import query, azure, system, user_queries, data_documents, audit, argus
 
 app = FastAPI()
 
@@ -56,6 +56,7 @@ app.include_router(system.router, prefix="/system", tags=["System"])
 app.include_router(user_queries.router, prefix="/user", tags=["User Queries"])
 app.include_router(data_documents.router, prefix="/data", tags=["Data Documents"])
 app.include_router(audit.router, prefix="/audit", tags=["Audit"])
+app.include_router(argus.router, prefix="/argus", tags=["Argus"])
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
