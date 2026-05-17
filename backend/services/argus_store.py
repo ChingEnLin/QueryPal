@@ -57,6 +57,17 @@ def _apply_querypal_columns(dsn: str) -> None:
         cur.execute(
             "ALTER TABLE argus_reports " "ADD COLUMN IF NOT EXISTS created_by TEXT"
         )
+        # Arm A (post-hoc rating) audit trail — who labelled a finding and when.
+        # The label itself lives in upstream argus_findings.user_label; these two
+        # columns are QueryPal-specific so we don't fork upstream schema.sql.
+        cur.execute(
+            "ALTER TABLE argus_findings "
+            "ADD COLUMN IF NOT EXISTS rated_by TEXT"
+        )
+        cur.execute(
+            "ALTER TABLE argus_findings "
+            "ADD COLUMN IF NOT EXISTS rated_at TIMESTAMPTZ"
+        )
         # Per-user saved custom profiles (Tier 4). Per-user scoping only — no
         # team sharing in v1. Reference to argus_reports is intentionally absent;
         # deleting a profile must not break reproducibility of past reports.
@@ -109,6 +120,59 @@ def set_report_created_by(report_id: str, email: str) -> None:
             )
     except Exception:
         logger.exception("failed to set created_by on report %s", report_id)
+
+
+def set_finding_rating(
+    *,
+    report_id: str,
+    finding_id: str,
+    label: str,
+    rated_by: str,
+) -> bool:
+    """Persist a human reviewer's verdict on a finding (Arm A — post-hoc rating).
+
+    Writes both the upstream ``argus_findings.user_label`` column (via the
+    store, which also patches ``raw_report`` JSONB) and the QueryPal-only
+    ``rated_by`` / ``rated_at`` audit columns. Returns ``True`` when the
+    finding was found and updated, ``False`` when no such finding exists
+    under that report (e.g. typo, deleted, or wrong report).
+    """
+    if label not in ("tp", "fp"):
+        raise ValueError(f"invalid label {label!r}; expected 'tp' or 'fp'")
+    store = get_report_store()
+    if store is None:
+        return False
+    from uuid import UUID
+
+    ok = store.update_user_label(
+        report_id=UUID(report_id),
+        finding_id=UUID(finding_id),
+        label=label,  # type: ignore[arg-type]
+    )
+    if not ok:
+        return False
+    dsn = _build_dsn()
+    if dsn is None:
+        # update_user_label succeeded, but we have no separate DSN to record
+        # the audit trail — surface as success since the verdict is stored.
+        return True
+    try:
+        with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE argus_findings
+                SET rated_by = %s, rated_at = NOW()
+                WHERE id = %s AND report_id = %s
+                """,
+                (rated_by, finding_id, report_id),
+            )
+    except Exception:
+        logger.exception(
+            "failed to record rating audit trail for finding %s on report %s",
+            finding_id,
+            report_id,
+        )
+    return True
 
 
 def fetch_report_created_by(report_id: str) -> Optional[str]:

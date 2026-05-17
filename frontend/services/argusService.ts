@@ -5,6 +5,7 @@ export type ArgusProfile = 'fast' | 'balanced' | 'thorough';
 export type ArgusSeverity = 'critical' | 'warning' | 'info';
 export type ArgusDiff = 'new' | 'regressed' | 'existing' | 'resolved';
 export type ArgusJobStatus = 'queued' | 'running' | 'done' | 'error';
+export type ArgusUserLabel = 'tp' | 'fp';
 
 export interface ArgusFinding {
   id: string;
@@ -19,6 +20,8 @@ export interface ArgusFinding {
   affected_pct: number;
   diff: ArgusDiff;
   trace: string;
+  // Arm A — most recent human verdict for this finding, when present.
+  user_label?: ArgusUserLabel | null;
 }
 
 export interface ArgusReport {
@@ -246,6 +249,35 @@ export const deleteSavedProfile = async (profileId: string): Promise<void> => {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.detail || `Failed to delete profile (${response.status})`);
   }
+};
+
+export interface RateArgusFindingArgs {
+  reportId: string;
+  findingId: string;
+  label: ArgusUserLabel;
+}
+
+export const rateArgusFinding = async (
+  args: RateArgusFindingArgs,
+): Promise<{ user_label: ArgusUserLabel; rated_by: string }> => {
+  if (!USE_MSAL_AUTH) throw new Error('Sign in to rate findings.');
+  const token = await getToken();
+  const response = await fetch(
+    `${API_BASE_URL}/argus/findings/${encodeURIComponent(args.reportId)}/${encodeURIComponent(args.findingId)}/rate`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ label: args.label }),
+    },
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to rate finding (${response.status})`);
+  }
+  return response.json();
 };
 
 export const getArgusJob = async (jobId: string): Promise<ArgusJob> => {

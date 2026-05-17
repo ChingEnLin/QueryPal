@@ -20,6 +20,7 @@ import {
 } from '../services/argusService';
 import { ArgusTrendsPanel } from '../components/ArgusTrendsPanel';
 import { useNotifications } from '../contexts/NotificationsContext';
+import { FindingRatingButtons } from '../components/FindingRatingButtons';
 
 const DEFAULT_MAX_ITER = 20;
 const DEFAULT_SAMPLE_SIZE = 200;
@@ -625,6 +626,19 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
   }, [accountId, databaseName, collection]);
 
   useEffect(() => { refreshHistory(); }, [refreshHistory]);
+
+  // Arm A — mirror the persisted verdict into local report state so the
+  // rating buttons stay in their post-click state when the user re-selects
+  // the same finding without a full refetch.
+  const handleRateFinding = useCallback((findingId: string, label: 'tp' | 'fp') => {
+    setReport((prev) => {
+      if (!prev) return prev;
+      const updated = prev.findings.map((f) =>
+        f.id === findingId ? { ...f, user_label: label } : f,
+      );
+      return { ...prev, findings: updated };
+    });
+  }, []);
 
   const loadHistoricalReport = useCallback(async (reportId: string) => {
     setError(null);
@@ -1300,6 +1314,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
           historyLoading={historyLoading}
           openingReportId={openingReportId}
           onSelectHistorical={loadHistoricalReport}
+          onRateFinding={handleRateFinding}
         />
       ) : report ? (
         <EmptyState title="No findings" body="QueryArgus completed without flagging any data-quality issues in this collection." />
@@ -1407,7 +1422,8 @@ const ReportBody: React.FC<{
   historyLoading: boolean;
   openingReportId: string | null;
   onSelectHistorical: (reportId: string) => void;
-}> = ({ report, findings, sel, selId, onSelect, activeTab, onTabChange, history, historyLoading, openingReportId, onSelectHistorical }) => {
+  onRateFinding: (findingId: string, label: 'tp' | 'fp') => void;
+}> = ({ report, findings, sel, selId, onSelect, activeTab, onTabChange, history, historyLoading, openingReportId, onSelectHistorical, onRateFinding }) => {
   const { counts } = report;
   const score = report.quality_score ?? 0;
   const scoreBand = score >= 80 ? 'Good' : score >= 60 ? 'Moderate' : 'Poor';
@@ -1627,6 +1643,23 @@ const ReportBody: React.FC<{
                 {sel.affected_pct.toFixed(1)}%
               </span>{' '}of collection
             </span>
+          </div>
+          {/* Arm A — post-hoc rating. Verdict drives the next-run planner via
+              HistoricalContext.user_verdicts. */}
+          <div style={{
+            marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border)',
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+              color: 'var(--muted)', fontFamily: 'var(--font-body)' }}>
+              Your verdict
+            </span>
+            <FindingRatingButtons
+              reportId={report.report_id}
+              findingId={sel.id}
+              value={sel.user_label ?? null}
+              onChange={(label) => onRateFinding(sel.id, label)}
+            />
           </div>
         </div>
 
