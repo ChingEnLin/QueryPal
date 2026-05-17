@@ -33,6 +33,7 @@ from services.argus_store import (
     fetch_report_created_by,
     fetch_run_summaries,
     get_report_store,
+    set_finding_rating,
     set_report_created_by,
 )
 from services.azure_auth import exchange_token_obo, extract_email_from_token
@@ -171,6 +172,9 @@ def _serialize_finding(
         "affected_pct": round(finding.affected_pct * 100, 1),
         "diff": diff,
         "trace": _finding_trace(report, finding),
+        # Arm A — surface the current verdict so the UI can render the
+        # rating buttons in the correct state. None when unrated.
+        "user_label": finding.user_label,
     }
 
 
@@ -595,3 +599,79 @@ async def delete_saved_profile(profile_id: str, authorization: str = Header(...)
     if not ok:
         raise HTTPException(status_code=404, detail="Profile not found")
     return JSONResponse(content={"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# Arm A — post-hoc finding rating
+# ---------------------------------------------------------------------------
+
+
+class FindingRating(BaseModel):
+    label: Literal["tp", "fp"]
+
+
+@router.post("/findings/{report_id}/{finding_id}/rate")
+async def rate_finding(
+    report_id: str,
+    finding_id: str,
+    payload: FindingRating,
+    authorization: str = Header(...),
+):
+    """Record a human verdict (TP / FP) on a single persisted finding.
+
+    The verdict is scoped by the caller's Cosmos-account access (same OBO check
+    as ``get_report``); cross-tenant attempts return 404 to avoid leaking
+    existence. The label is also written into ``raw_report`` JSONB so the next
+    ``GET /argus/reports/{id}`` reflects it without an extra join.
+    """
+    email = _require_caller_email(authorization)
+    user_token = authorization.replace("Bearer ", "")
+    store = get_report_store()
+    if store is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    try:
+        report_uuid = uuid.UUID(report_id)
+        finding_uuid = uuid.UUID(finding_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Fan out report fetch and access-check; need both before touching storage.
+    report_task = asyncio.create_task(run_in_threadpool(store.get, report_uuid))
+
+    async def _resolve_access() -> list[str]:
+        try:
+            access_token = await run_in_threadpool(exchange_token_obo, user_token)
+        except Exception as exc:
+            logger.exception("argus rate_finding auth failed")
+            raise HTTPException(status_code=502, detail=f"Azure auth failed: {exc}")
+        return await run_in_threadpool(_accessible_account_ids, access_token)
+
+    accessible_task = asyncio.create_task(_resolve_access())
+
+    report = await report_task
+    if report is None:
+        accessible_task.cancel()
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    accessible = await accessible_task
+    if report.cosmos_account not in accessible:
+        # 404, not 403 — symmetric with get_report's existence-leak guard.
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    ok = await run_in_threadpool(
+        set_finding_rating,
+        report_id=str(report_uuid),
+        finding_id=str(finding_uuid),
+        label=payload.label,
+        rated_by=email,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    return JSONResponse(
+        content={
+            "report_id": str(report_uuid),
+            "finding_id": str(finding_uuid),
+            "user_label": payload.label,
+            "rated_by": email,
+        }
+    )
