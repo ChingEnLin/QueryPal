@@ -10,9 +10,9 @@ resource "google_sql_database_instance" "querypal_db" {
     tier = "db-f1-micro"
 
     backup_configuration {
-      enabled                        = true
-      start_time                     = "02:00"
-      point_in_time_recovery_enabled = true
+      enabled                        = false
+      start_time                     = "03:00"
+      point_in_time_recovery_enabled = false
       transaction_log_retention_days = 7
     }
 
