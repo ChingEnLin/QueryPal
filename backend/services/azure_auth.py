@@ -1,3 +1,5 @@
+import base64
+import json
 from os import environ as env
 import msal
 from typing import Optional
@@ -33,3 +35,26 @@ def exchange_token_obo(user_token: str) -> str:
     if "access_token" not in result:
         raise Exception(f"OBO token exchange failed: {result}")
     return result["access_token"]
+
+
+def extract_email_from_token(jwt: str) -> Optional[str]:
+    """Decode the JWT payload to pull the caller's email.
+
+    No signature check — Azure already validated this token during the OBO
+    exchange the caller just performed. We only need to read claims.
+    """
+    try:
+        parts = jwt.split(".")
+        if len(parts) < 2:
+            return None
+        payload_b64 = parts[1]
+        # JWT base64url, no padding
+        padding = "=" * (-len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64 + padding))
+        for key in ("preferred_username", "email", "upn", "unique_name"):
+            value = payload.get(key)
+            if value:
+                return str(value)
+    except Exception:
+        return None
+    return None

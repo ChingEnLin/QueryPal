@@ -4,6 +4,7 @@ import { msalInstance, loginRequest } from '../authConfig';
 export type ArgusProfile = 'fast' | 'balanced' | 'thorough';
 export type ArgusSeverity = 'critical' | 'warning' | 'info';
 export type ArgusDiff = 'new' | 'regressed' | 'existing' | 'resolved';
+export type ArgusJobStatus = 'queued' | 'running' | 'done' | 'error';
 
 export interface ArgusFinding {
   id: string;
@@ -37,10 +38,23 @@ export interface ArgusReport {
   counts: { critical: number; warning: number; info: number; dismissed: number };
   diff: { new: number; resolved: number; regressed: number };
   findings: ArgusFinding[];
+  created_by: string | null;
   history: unknown | null;
 }
 
-export interface RunArgusAuditArgs {
+export interface ArgusJob {
+  job_id: string;
+  status: ArgusJobStatus;
+  started_at: string;
+  finished_at: string | null;
+  collection: string;
+  database: string;
+  profile: ArgusProfile;
+  report: ArgusReport | null;
+  error: string | null;
+}
+
+export interface StartArgusAuditArgs {
   accountId: string;
   database: string;
   collection: string;
@@ -58,7 +72,9 @@ const getToken = async (): Promise<string> => {
   return response.accessToken;
 };
 
-export const runArgusAudit = async (args: RunArgusAuditArgs): Promise<ArgusReport> => {
+export const startArgusAudit = async (
+  args: StartArgusAuditArgs,
+): Promise<{ job_id: string; status: ArgusJobStatus }> => {
   if (!USE_MSAL_AUTH) {
     throw new Error('QueryArgus runs require Azure authentication. Enable MSAL in app.config.ts.');
   }
@@ -80,6 +96,74 @@ export const runArgusAudit = async (args: RunArgusAuditArgs): Promise<ArgusRepor
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.detail || `Argus run failed (${response.status})`);
+  }
+  return response.json();
+};
+
+export interface ArgusRunSummary {
+  report_id: string;
+  collection: string;
+  database: string;
+  cosmos_account: string;
+  run_at: string | null;
+  quality_score: number | null;
+  run_eval_verdict: string | null;
+  total_tokens: number;
+  created_by: string | null;
+  findings_count: number;
+}
+
+export interface ListArgusRunsArgs {
+  accountId?: string;
+  database?: string;
+  collection?: string;
+  limit?: number;
+}
+
+export const listArgusRuns = async (
+  args: ListArgusRunsArgs = {},
+): Promise<ArgusRunSummary[]> => {
+  if (!USE_MSAL_AUTH) return [];
+  const token = await getToken();
+  const params = new URLSearchParams();
+  if (args.accountId) params.set('account_id', args.accountId);
+  if (args.database) params.set('database', args.database);
+  if (args.collection) params.set('collection', args.collection);
+  if (args.limit != null) params.set('limit', String(args.limit));
+  const qs = params.toString();
+  const response = await fetch(
+    `${API_BASE_URL}/argus/runs${qs ? `?${qs}` : ''}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to list runs (${response.status})`);
+  }
+  const data = await response.json();
+  return data.runs ?? [];
+};
+
+export const getArgusReport = async (reportId: string): Promise<ArgusReport> => {
+  if (!USE_MSAL_AUTH) throw new Error('Sign in to load reports.');
+  const token = await getToken();
+  const response = await fetch(
+    `${API_BASE_URL}/argus/reports/${encodeURIComponent(reportId)}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch report (${response.status})`);
+  }
+  return response.json();
+};
+
+export const getArgusJob = async (jobId: string): Promise<ArgusJob> => {
+  const response = await fetch(`${API_BASE_URL}/argus/runs/${encodeURIComponent(jobId)}`, {
+    method: 'GET',
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch job (${response.status})`);
   }
   return response.json();
 };

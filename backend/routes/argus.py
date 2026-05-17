@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Any, Literal
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -19,13 +22,23 @@ from queryargus.models.config import (
 from queryargus.models.connection import CosmosConnection
 from queryargus.models.finding import Finding
 from queryargus.models.report import AuditReport
-from services.azure_auth import exchange_token_obo
-from services.azure_cosmos_resources import get_connection_string
+from services.argus_store import (
+    fetch_report_created_by,
+    fetch_run_summaries,
+    get_report_store,
+    set_report_created_by,
+)
+from services.azure_auth import exchange_token_obo, extract_email_from_token
+from services.azure_cosmos_resources import (
+    get_connection_string,
+    list_cosmos_resources,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 Profile = Literal["fast", "balanced", "thorough"]
+JobStatus = Literal["queued", "running", "done", "error"]
 
 _PROFILES = {
     "fast": PROFILE_FAST,
@@ -33,13 +46,15 @@ _PROFILES = {
     "thorough": PROFILE_THOROUGH,
 }
 
-# Maps QueryArgus's 4-level severity to the design's 3-level UI bucket.
 _SEVERITY_UI = {
     "critical": "critical",
     "high": "warning",
     "medium": "info",
     "low": "info",
 }
+
+_JOBS: dict[str, dict[str, Any]] = {}
+_MAX_JOBS = 50
 
 
 class AuditRequest(BaseModel):
@@ -57,12 +72,6 @@ def _summary(description: str) -> str:
 
 
 def _finding_trace(report: AuditReport, finding: Finding) -> str:
-    """Slice run_trace down to actions that touched this finding's field.
-
-    Heuristic: include any action whose action_input mentions the field path,
-    plus the write_finding action that produced this finding (if present).
-    Lines are formatted as ``iter N · action`` followed by the reasoning.
-    """
     field = finding.field
     lines: list[str] = []
     for i, action in enumerate(report.run_trace, start=1):
@@ -75,6 +84,46 @@ def _finding_trace(report: AuditReport, finding: Finding) -> str:
         if is_write:
             lines.append("finding gate: PASS")
     return "\n".join(lines)
+
+
+def _compute_diff(
+    current: AuditReport, previous: Optional[AuditReport]
+) -> tuple[set[tuple[str, str]], set[str], dict[str, int]]:
+    """Return (new_keys, regressed_fields, counts) by comparing against ``previous``.
+
+    When ``previous`` is None we fall back to the report's own diff fields (zero
+    when no prior run existed at agent runtime).
+    """
+    if previous is None:
+        new_keys = {(f.field, f.category) for f in current.new_findings}
+        regressed = set(current.regressed_fields)
+        counts = {
+            "new": len(current.new_findings),
+            "resolved": len(current.resolved_findings),
+            "regressed": len(current.regressed_fields),
+        }
+        return new_keys, regressed, counts
+
+    severity_order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+    prev_by_key = {(f.field, f.category): f for f in previous.findings}
+    curr_by_key = {(f.field, f.category): f for f in current.findings}
+    new_keys = set(curr_by_key) - set(prev_by_key)
+    resolved = set(prev_by_key) - set(curr_by_key)
+    regressed: set[str] = set()
+    for key, f in curr_by_key.items():
+        prev = prev_by_key.get(key)
+        if prev is None:
+            continue
+        if severity_order.get(f.severity.value, 0) > severity_order.get(
+            prev.severity.value, 0
+        ):
+            regressed.add(f.field)
+    counts = {
+        "new": len(new_keys),
+        "resolved": len(resolved),
+        "regressed": len(regressed),
+    }
+    return new_keys, regressed, counts
 
 
 def _serialize_finding(
@@ -113,10 +162,10 @@ def _serialize_report(
     *,
     model: str,
     profile: Profile,
+    previous: Optional[AuditReport] = None,
+    created_by: Optional[str] = None,
 ) -> dict[str, Any]:
-    new_keys = {(f.field, f.category) for f in report.new_findings}
-    regressed = set(report.regressed_fields)
-
+    new_keys, regressed, diff_counts = _compute_diff(report, previous)
     findings = [
         _serialize_finding(f, report, new_keys, regressed) for f in report.findings
     ]
@@ -146,14 +195,132 @@ def _serialize_report(
         "profile": profile,
         "quality_score": quality,
         "counts": counts,
-        "diff": {
-            "new": len(report.new_findings),
-            "resolved": len(report.resolved_findings),
-            "regressed": len(report.regressed_fields),
-        },
+        "diff": diff_counts,
         "findings": findings,
-        "history": None,  # populated once ReportStore is wired
+        "created_by": created_by,
+        "history": None,
     }
+
+
+def _evict_old_jobs() -> None:
+    if len(_JOBS) <= _MAX_JOBS:
+        return
+    terminal = [
+        (jid, j) for jid, j in _JOBS.items() if j["status"] in ("done", "error")
+    ]
+    terminal.sort(key=lambda kv: kv[1].get("finished_at") or kv[1]["started_at"])
+    for jid, _ in terminal[: len(_JOBS) - _MAX_JOBS]:
+        _JOBS.pop(jid, None)
+
+
+def _accessible_account_ids(access_token: str) -> list[str]:
+    """Cosmos accounts (full ARM resource IDs) visible to the caller."""
+    try:
+        resources = list_cosmos_resources(access_token)
+    except Exception:
+        logger.exception("failed to list cosmos resources for caller")
+        return []
+    return [r["id"] for r in resources if r.get("id")]
+
+
+async def _execute_job(
+    job_id: str, req: AuditRequest, user_token: str, caller_email: Optional[str]
+) -> None:
+    job = _JOBS[job_id]
+    job["status"] = "running"
+    try:
+        access_token = await run_in_threadpool(exchange_token_obo, user_token)
+        connection_string = await run_in_threadpool(
+            get_connection_string, req.account_id, access_token
+        )
+    except Exception as exc:
+        logger.exception(
+            "argus auth/connection-string failed account=%s", req.account_id
+        )
+        job["status"] = "error"
+        job["error"] = f"Azure auth failed: {exc}"
+        job["finished_at"] = datetime.now(timezone.utc).isoformat()
+        return
+
+    store = get_report_store()
+    try:
+        connection = CosmosConnection.from_connection_string(
+            connection_string=connection_string,
+            cosmos_account=req.account_id,
+            database=req.database,
+        )
+        config = ArgusConfig(
+            max_iterations=req.max_iterations,
+            evaluation=_PROFILES[req.profile],
+        )
+        llm = GeminiClient(model=config.llm_model)
+        agent = ArgusAgent.from_config(config=config, llm=llm)
+
+        history = None
+        previous: Optional[AuditReport] = None
+        if store is not None:
+            try:
+                history = await run_in_threadpool(
+                    store.load_history,
+                    collection=req.collection,
+                    database=req.database,
+                    limit=5,
+                )
+                previous = await run_in_threadpool(
+                    store.get_previous,
+                    collection=req.collection,
+                    database=req.database,
+                )
+            except Exception:
+                logger.exception(
+                    "failed to load history for collection=%s", req.collection
+                )
+
+        logger.info(
+            "argus run start job=%s collection=%s profile=%s",
+            job_id,
+            req.collection,
+            req.profile,
+        )
+        report = await run_in_threadpool(
+            agent.run, connection, req.collection, history=history
+        )
+    except Exception as exc:
+        logger.exception(
+            "argus run failed job=%s collection=%s", job_id, req.collection
+        )
+        job["status"] = "error"
+        job["error"] = str(exc)
+        job["finished_at"] = datetime.now(timezone.utc).isoformat()
+        return
+
+    logger.info(
+        "argus run done job=%s collection=%s findings=%d duration=%.2fs",
+        job_id,
+        req.collection,
+        len(report.findings),
+        report.duration_seconds,
+    )
+
+    if store is not None:
+        try:
+            await run_in_threadpool(store.save, report)
+            if caller_email:
+                await run_in_threadpool(
+                    set_report_created_by, str(report.id), caller_email
+                )
+        except Exception:
+            logger.exception("failed to persist argus report id=%s", report.id)
+
+    job["status"] = "done"
+    job["report"] = _serialize_report(
+        report,
+        model=config.llm_model,
+        profile=req.profile,
+        previous=previous,
+        created_by=caller_email,
+    )
+    job["finished_at"] = datetime.now(timezone.utc).isoformat()
 
 
 @router.post("/run")
@@ -162,45 +329,122 @@ async def run_audit(req: AuditRequest, authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid token format")
 
     user_token = authorization.replace("Bearer ", "")
+    caller_email = extract_email_from_token(user_token)
+    job_id = uuid.uuid4().hex
+    _JOBS[job_id] = {
+        "status": "queued",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "finished_at": None,
+        "report": None,
+        "error": None,
+        "collection": req.collection,
+        "database": req.database,
+        "profile": req.profile,
+        "created_by": caller_email,
+    }
+    _evict_old_jobs()
+    asyncio.create_task(_execute_job(job_id, req, user_token, caller_email))
+    return JSONResponse(
+        status_code=202,
+        content={"job_id": job_id, "status": "queued"},
+    )
+
+
+@router.get("/runs/{job_id}")
+async def get_run(job_id: str):
+    job = _JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return JSONResponse(
+        content={
+            "job_id": job_id,
+            "status": job["status"],
+            "started_at": job["started_at"],
+            "finished_at": job["finished_at"],
+            "collection": job["collection"],
+            "database": job["database"],
+            "profile": job["profile"],
+            "report": job["report"],
+            "error": job["error"],
+        }
+    )
+
+
+@router.get("/runs")
+async def list_runs(
+    authorization: str = Header(...),
+    account_id: Optional[str] = Query(default=None),
+    database: Optional[str] = Query(default=None),
+    collection: Optional[str] = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    user_token = authorization.replace("Bearer ", "")
     try:
-        access_token = exchange_token_obo(user_token)
-        connection_string = get_connection_string(req.account_id, access_token)
+        access_token = await run_in_threadpool(exchange_token_obo, user_token)
     except Exception as exc:
-        logger.exception(
-            "argus auth/connection-string failed account=%s", req.account_id
-        )
+        logger.exception("argus list_runs auth failed")
         raise HTTPException(status_code=502, detail=f"Azure auth failed: {exc}")
 
-    connection = CosmosConnection.from_connection_string(
-        connection_string=connection_string,
-        cosmos_account=req.account_id,
-        database=req.database,
+    accessible = await run_in_threadpool(_accessible_account_ids, access_token)
+    if account_id is not None:
+        accessible = [a for a in accessible if a == account_id]
+    if not accessible:
+        return JSONResponse(content={"runs": []})
+    rows = await run_in_threadpool(
+        fetch_run_summaries,
+        cosmos_accounts=accessible,
+        database=database,
+        collection=collection,
+        limit=limit,
     )
-    config = ArgusConfig(
-        max_iterations=req.max_iterations,
-        evaluation=_PROFILES[req.profile],
-    )
-    llm = GeminiClient(model=config.llm_model)
-    agent = ArgusAgent.with_defaults(config=config, llm=llm)
+    return JSONResponse(content={"runs": rows})
 
-    logger.info(
-        "argus run start collection=%s database=%s profile=%s",
-        req.collection,
-        req.database,
-        req.profile,
-    )
+
+@router.get("/reports/{report_id}")
+async def get_report(report_id: str, authorization: str = Header(...)):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    user_token = authorization.replace("Bearer ", "")
+    store = get_report_store()
+    if store is None:
+        raise HTTPException(status_code=404, detail="Report not found")
     try:
-        report = await run_in_threadpool(agent.run, connection, req.collection)
-    except Exception as exc:
-        logger.exception("argus run failed collection=%s", req.collection)
-        return JSONResponse(status_code=500, content={"detail": str(exc)})
+        report_uuid = uuid.UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Report not found")
 
-    logger.info(
-        "argus run done collection=%s findings=%d duration=%.2fs",
-        req.collection,
-        len(report.findings),
-        report.duration_seconds,
+    report = await run_in_threadpool(store.get, report_uuid)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    try:
+        access_token = await run_in_threadpool(exchange_token_obo, user_token)
+    except Exception as exc:
+        logger.exception("argus get_report auth failed")
+        raise HTTPException(status_code=502, detail=f"Azure auth failed: {exc}")
+
+    accessible = await run_in_threadpool(_accessible_account_ids, access_token)
+    if report.cosmos_account not in accessible:
+        # 404, not 403 — don't leak existence of reports the caller cannot see
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    previous = await run_in_threadpool(
+        store.get_previous,
+        collection=report.collection,
+        database=report.database,
+        before=report.run_at,
     )
+    created_by = await run_in_threadpool(fetch_report_created_by, str(report.id))
+    # Resolved profile/model are not persisted yet — fall back to the report's
+    # own model field and an unknown profile marker until Phase 2 lands.
     return JSONResponse(
-        content=_serialize_report(report, model=config.llm_model, profile=req.profile)
+        content=_serialize_report(
+            report,
+            model="gemini-2.5-flash",
+            profile="balanced",
+            previous=previous,
+            created_by=created_by,
+        )
     )

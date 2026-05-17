@@ -1,10 +1,21 @@
 import os
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import query, azure, system, user_queries, data_documents, audit, argus
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from services.argus_store import get_report_store
+
+    get_report_store()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Configure CORS origins based on environment
 # Check for production indicators

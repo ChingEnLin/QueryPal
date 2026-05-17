@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import AppLayout from '../components/AppLayout';
 import AnalyticsPage from './AnalyticsPage';
 import { CollectionSummary, DbInfo, CosmosDBAccount } from '../types';
+import { getDatabasesForAccount } from '../services/dbService';
 
 interface SessionConnection {
   accountId?: string;
@@ -19,8 +20,44 @@ const readSessionConnection = (): SessionConnection | null => {
   } catch { return null; }
 };
 
+const writeSessionConnection = (conn: SessionConnection) => {
+  sessionStorage.setItem('qp_connection', JSON.stringify(conn));
+};
+
 const AnalyticsPageWrapper: React.FC = () => {
-  const conn = readSessionConnection();
+  const [conn, setConn] = useState<SessionConnection | null>(() => readSessionConnection());
+
+  const handleSwitchDatabase = useCallback((db: DbInfo) => {
+    if (!conn) return;
+    const next: SessionConnection = {
+      ...conn,
+      databaseName: db.name,
+      collections: db.collections,
+    };
+    writeSessionConnection(next);
+    setConn(next);
+  }, [conn]);
+
+  const handleSwitchAccount = useCallback(async (account: CosmosDBAccount) => {
+    if (!conn || account.id === conn.accountId) return;
+    try {
+      const databases = await getDatabasesForAccount(account.id);
+      if (!databases.length) return;
+      const firstDb = databases[0];
+      const next: SessionConnection = {
+        accountId: account.id,
+        accountName: account.name,
+        databaseName: firstDb.name,
+        collections: firstDb.collections,
+        availableAccounts: conn.availableAccounts,
+        availableDbs: databases,
+      };
+      writeSessionConnection(next);
+      setConn(next);
+    } catch (e) {
+      console.error('Failed to switch account:', e);
+    }
+  }, [conn]);
 
   return (
     <AppLayout
@@ -30,6 +67,8 @@ const AnalyticsPageWrapper: React.FC = () => {
       collections={conn?.collections}
       availableAccounts={conn?.availableAccounts}
       availableDbs={conn?.availableDbs}
+      onSwitchDatabase={handleSwitchDatabase}
+      onSwitchAccount={handleSwitchAccount}
     >
       <AnalyticsPage
         accountId={conn?.accountId}

@@ -1,13 +1,163 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CollectionSummary } from '../types';
 import {
   ArgusDiff,
   ArgusFinding,
+  ArgusJobStatus,
   ArgusProfile,
   ArgusReport,
+  ArgusRunSummary,
   ArgusSeverity,
-  runArgusAudit,
+  getArgusJob,
+  getArgusReport,
+  listArgusRuns,
+  startArgusAudit,
 } from '../services/argusService';
+
+const JOB_STORAGE_KEY = 'qp_argus_jobs';
+
+type JobMap = Record<string, string>;
+
+const readJobMap = (): JobMap => {
+  try { return JSON.parse(sessionStorage.getItem(JOB_STORAGE_KEY) ?? '{}'); }
+  catch { return {}; }
+};
+
+const writeJobMap = (map: JobMap) => {
+  sessionStorage.setItem(JOB_STORAGE_KEY, JSON.stringify(map));
+};
+
+const jobKey = (accountId: string, database: string, collection: string) =>
+  `${accountId}::${database}::${collection}`;
+
+const PROFILE_INFO: Record<ArgusProfile, { tagline: string; speed: string; cost: string; body: string }> = {
+  fast: {
+    tagline: 'Quick scan — rule-based checks only.',
+    speed: '~20–40s',
+    cost: 'lowest',
+    body: 'Looks for missing fields, type mismatches, and obvious anomalies using fixed rules. No second-pass review, so findings reflect the agent\'s initial judgment. Best for a quick health check or smoke test before a deeper run.',
+  },
+  balanced: {
+    tagline: 'Recommended — rules + a self-review pass.',
+    speed: '~40–90s',
+    cost: 'moderate',
+    body: 'Runs the same rule checks, then has the agent re-examine each finding and weigh them against the overall picture before reporting. Catches more real issues and filters out noise. The best default for most collections.',
+  },
+  thorough: {
+    tagline: 'Deepest review — uses a separate judge model.',
+    speed: '~2–4 min',
+    cost: 'highest',
+    body: 'Adds a second, independent AI model that audits the run end-to-end and grades each finding. Slowest and priciest, but the most defensible results — use before sharing a report externally or making schema changes.',
+  },
+};
+
+interface InfoPopoverProps {
+  title: string;
+  children: React.ReactNode;
+  align?: 'left' | 'right';
+}
+
+const InfoPopover: React.FC<InfoPopoverProps> = ({ title, children, align = 'left' }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <span ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
+        aria-label={`About ${title}`}
+        title={title}
+        style={{
+          width: 14, height: 14, borderRadius: '50%',
+          border: '1px solid var(--border)', background: 'var(--soft)',
+          color: 'var(--muted)', cursor: 'pointer', padding: 0,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 9, fontFamily: 'var(--font-body)', lineHeight: 1, fontWeight: 600,
+        }}
+      >?</button>
+      {open && (
+        <div
+          role="dialog"
+          style={{
+            position: 'absolute', top: 'calc(100% + 6px)',
+            [align === 'right' ? 'right' : 'left']: 0,
+            zIndex: 200, width: 280,
+            background: 'var(--panel)', border: '1px solid var(--border)',
+            borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+            padding: '10px 12px', fontFamily: 'var(--font-body)',
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', marginBottom: 4 }}>{title}</div>
+          <div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--muted)' }}>{children}</div>
+        </div>
+      )}
+    </span>
+  );
+};
+
+const ProfileChip: React.FC<{
+  p: ArgusProfile;
+  active: boolean;
+  onSelect: () => void;
+}> = ({ p, active, onSelect }) => {
+  const [hover, setHover] = useState(false);
+  const info = PROFILE_INFO[p];
+  return (
+    <span style={{ position: 'relative' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <span
+        onClick={onSelect}
+        style={{
+          display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11.5,
+          background: active ? 'var(--panel)' : 'transparent',
+          boxShadow: active ? '0 0 0 1px var(--border)' : 'none',
+          color: active ? 'var(--fg)' : 'var(--muted)',
+          cursor: 'pointer', fontFamily: 'var(--font-body)',
+          textTransform: 'capitalize',
+        }}
+      >{p}</span>
+      {hover && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', left: '50%',
+          transform: 'translateX(-50%)', zIndex: 200, width: 240,
+          background: 'var(--panel)', border: '1px solid var(--border)',
+          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+          padding: '8px 10px', fontFamily: 'var(--font-body)',
+          pointerEvents: 'none',
+        }}>
+          <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--fg)', marginBottom: 3, textTransform: 'capitalize' }}>
+            {p} · {info.tagline}
+          </div>
+          <div style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--muted)', marginBottom: 5 }}>
+            {info.body}
+          </div>
+          <div style={{ fontSize: 10.5, color: 'var(--muted)', display: 'flex', gap: 10 }}>
+            <span><span style={{ color: 'var(--fg)' }}>{info.speed}</span> typical</span>
+            <span>·</span>
+            <span><span style={{ color: 'var(--fg)' }}>{info.cost}</span> cost</span>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+};
 
 interface AnalyticsPageProps {
   accountId?: string;
@@ -82,9 +232,52 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
   const [collection, setCollection] = useState<string>(collections?.[0]?.name ?? '');
   const [profile, setProfile] = useState<ArgusProfile>('fast');
   const [report, setReport] = useState<ArgusReport | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [jobStatus, setJobStatus] = useState<ArgusJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'findings' | 'history'>('findings');
+  const [history, setHistory] = useState<ArgusRunSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const pollRef = useRef<number | null>(null);
+
+  const refreshHistory = useCallback(async () => {
+    if (!accountId || !databaseName || !collection) {
+      setHistory([]);
+      return;
+    }
+    setHistoryLoading(true);
+    try {
+      const rows = await listArgusRuns({
+        accountId,
+        database: databaseName,
+        collection,
+        limit: 20,
+      });
+      setHistory(rows);
+    } catch (e) {
+      // History fetch failures shouldn't block the run flow.
+      console.warn('listArgusRuns failed', e);
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [accountId, databaseName, collection]);
+
+  useEffect(() => { refreshHistory(); }, [refreshHistory]);
+
+  const loadHistoricalReport = useCallback(async (reportId: string) => {
+    setError(null);
+    try {
+      const r = await getArgusReport(reportId);
+      setReport(r);
+      setSelId(r.findings[0]?.id ?? null);
+      setActiveTab('findings');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  const loading = jobStatus === 'queued' || jobStatus === 'running';
 
   const findings = report?.findings ?? [];
   const sel: ArgusFinding | null = useMemo(() => {
@@ -92,25 +285,87 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
     return findings.find((f) => f.id === selId) ?? findings[0];
   }, [findings, selId]);
 
+  const clearPoll = () => {
+    if (pollRef.current != null) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const clearStoredJob = useCallback((aid: string, db: string, col: string) => {
+    const map = readJobMap();
+    delete map[jobKey(aid, db, col)];
+    writeJobMap(map);
+  }, []);
+
+  const pollJob = useCallback(async (id: string, aid: string, db: string, col: string) => {
+    try {
+      const job = await getArgusJob(id);
+      setJobStatus(job.status);
+      if (job.status === 'done' && job.report) {
+        setReport(job.report);
+        setSelId(job.report.findings[0]?.id ?? null);
+        clearPoll();
+        clearStoredJob(aid, db, col);
+        refreshHistory();
+      } else if (job.status === 'error') {
+        setError(job.error || 'Audit failed.');
+        clearPoll();
+        clearStoredJob(aid, db, col);
+      }
+    } catch (e) {
+      // 404 means the job was evicted (backend restarted, etc.) — drop it.
+      setError(e instanceof Error ? e.message : String(e));
+      clearPoll();
+      clearStoredJob(aid, db, col);
+    }
+  }, [clearStoredJob, refreshHistory]);
+
+  // Resume an in-flight poll when the page mounts or the collection changes.
+  useEffect(() => {
+    clearPoll();
+    setReport(null);
+    setError(null);
+    setJobStatus(null);
+    setSelId(null);
+    setActiveTab('findings');
+    if (!accountId || !databaseName || !collection) return;
+    const stored = readJobMap()[jobKey(accountId, databaseName, collection)];
+    if (!stored) return;
+    setJobStatus('running');
+    pollJob(stored, accountId, databaseName, collection);
+    pollRef.current = window.setInterval(
+      () => pollJob(stored, accountId, databaseName, collection),
+      3000,
+    );
+    return clearPoll;
+  }, [accountId, databaseName, collection, pollJob]);
+
   const runAudit = async () => {
     if (!accountId || !databaseName || !collection) return;
-    setLoading(true);
+    clearPoll();
     setError(null);
     setReport(null);
     setSelId(null);
+    setJobStatus('queued');
     try {
-      const r = await runArgusAudit({
+      const { job_id } = await startArgusAudit({
         accountId,
         database: databaseName,
         collection,
         profile,
       });
-      setReport(r);
-      setSelId(r.findings[0]?.id ?? null);
+      const map = readJobMap();
+      map[jobKey(accountId, databaseName, collection)] = job_id;
+      writeJobMap(map);
+      pollJob(job_id, accountId, databaseName, collection);
+      pollRef.current = window.setInterval(
+        () => pollJob(job_id, accountId, databaseName, collection),
+        3000,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
+      setJobStatus('error');
     }
   };
 
@@ -128,6 +383,20 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
           }}>A</div>
           <span style={{ fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)' }}>QueryArgus</span>
           <span style={tagStyle}>data quality</span>
+          <InfoPopover title="What is QueryArgus?">
+            <p style={{ margin: '0 0 6px' }}>
+              QueryArgus is an automated reviewer that inspects a collection and flags data-quality issues
+              — missing fields, inconsistent types, duplicate keys, suspicious values, and more.
+            </p>
+            <p style={{ margin: '0 0 6px' }}>
+              It works like a careful analyst: it samples documents, asks itself questions, runs follow-up
+              queries to confirm hunches, and writes a short report with evidence for every finding.
+            </p>
+            <p style={{ margin: 0 }}>
+              Use it before a migration, when onboarding a new collection, or whenever a dashboard
+              starts looking wrong. No changes are made to your data.
+            </p>
+          </InfoPopover>
         </div>
         <span style={{ color: 'var(--border)' }}>·</span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)' }}>
@@ -151,22 +420,24 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Profile</span>
+          <InfoPopover title="Profiles" align="right">
+            <p style={{ margin: '0 0 6px' }}>
+              Profiles control how carefully QueryArgus checks itself — they trade speed and cost for
+              confidence in the report.
+            </p>
+            <ul style={{ margin: 0, paddingLeft: 16 }}>
+              <li style={{ marginBottom: 4 }}><strong style={{ color: 'var(--fg)' }}>Fast</strong> — rules only, no AI review of findings.</li>
+              <li style={{ marginBottom: 4 }}><strong style={{ color: 'var(--fg)' }}>Balanced</strong> — adds a self-review pass. Recommended.</li>
+              <li><strong style={{ color: 'var(--fg)' }}>Thorough</strong> — adds an independent judge model.</li>
+            </ul>
+            <p style={{ margin: '6px 0 0', fontSize: 11 }}>Hover any profile chip for full details.</p>
+          </InfoPopover>
           <div style={{
             display: 'flex', background: 'var(--soft)', borderRadius: 6,
             border: '1px solid var(--border)', padding: 2, gap: 1,
           }}>
             {(['fast', 'balanced', 'thorough'] as ArgusProfile[]).map((p) => (
-              <span
-                key={p}
-                onClick={() => setProfile(p)}
-                style={{
-                  padding: '2px 8px', borderRadius: 4, fontSize: 11.5,
-                  background: p === profile ? 'var(--panel)' : 'transparent',
-                  boxShadow: p === profile ? '0 0 0 1px var(--border)' : 'none',
-                  color: p === profile ? 'var(--fg)' : 'var(--muted)',
-                  cursor: 'pointer', fontFamily: 'var(--font-body)',
-                }}
-              >{p}</span>
+              <ProfileChip key={p} p={p} active={p === profile} onSelect={() => setProfile(p)} />
             ))}
           </div>
           <button
@@ -212,6 +483,12 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
           <span>{report.iterations} iterations · {report.total_tokens.toLocaleString()} tokens</span>
           <span>·</span>
           <span>{report.model} · {report.profile}</span>
+          {report.created_by && (
+            <>
+              <span>·</span>
+              <span>Ran by <span style={{ color: 'var(--fg)' }}>{report.created_by}</span></span>
+            </>
+          )}
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
             {report.diff.new > 0 && (
               <span style={{ color: '#1d6cf2', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -252,13 +529,22 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
           title="No database connected"
           body="Connect to a Cosmos DB from Workspace or Explorer first, then return here to run an audit."
         />
+      ) : !report && !loading && history.length > 0 ? (
+        <PreRunHistory
+          history={history}
+          historyLoading={historyLoading}
+          onSelect={loadHistoricalReport}
+        />
       ) : !report && !loading ? (
         <EmptyState
           title="Run an audit"
           body={`QueryArgus will sample ${collection || 'a collection'} and report data-quality findings. Pick a profile and press Run.`}
         />
       ) : loading && !report ? (
-        <EmptyState title="Running audit…" body="The ReAct agent is sampling, querying, and writing findings. This usually takes 20–90 seconds depending on profile." />
+        <EmptyState
+          title={jobStatus === 'queued' ? 'Queued…' : 'Running audit…'}
+          body="The ReAct agent is sampling, querying, and writing findings. Safe to navigate away — results will be waiting when you return to this collection."
+        />
       ) : report && sel ? (
         <ReportBody
           report={report}
@@ -266,6 +552,11 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
           sel={sel}
           selId={selId ?? findings[0]?.id ?? null}
           onSelect={setSelId}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          history={history}
+          historyLoading={historyLoading}
+          onSelectHistorical={loadHistoricalReport}
         />
       ) : report ? (
         <EmptyState title="No findings" body="QueryArgus completed without flagging any data-quality issues in this collection." />
@@ -298,7 +589,12 @@ const ReportBody: React.FC<{
   sel: ArgusFinding;
   selId: string | null;
   onSelect: (id: string) => void;
-}> = ({ report, findings, sel, selId, onSelect }) => {
+  activeTab: 'findings' | 'history';
+  onTabChange: (tab: 'findings' | 'history') => void;
+  history: ArgusRunSummary[];
+  historyLoading: boolean;
+  onSelectHistorical: (reportId: string) => void;
+}> = ({ report, findings, sel, selId, onSelect, activeTab, onTabChange, history, historyLoading, onSelectHistorical }) => {
   const { counts } = report;
   const score = report.quality_score ?? 0;
 
@@ -334,25 +630,39 @@ const ReportBody: React.FC<{
           </div>
         </div>
 
-        {/* Tab bar (history deferred) */}
+        {/* Tab bar */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg)', flexShrink: 0 }}>
-          <div style={{
-            padding: '8px 16px', fontSize: 12.5, color: 'var(--fg)',
-            borderBottom: '2px solid var(--accent)', fontWeight: 500,
-            fontFamily: 'var(--font-body)',
-          }}>
-            Findings · {findings.length}
-          </div>
-          <div style={{
-            padding: '8px 16px', fontSize: 12.5, color: 'var(--muted)',
-            borderBottom: '2px solid transparent', cursor: 'not-allowed',
-            fontFamily: 'var(--font-body)',
-          }} title="Run history requires ReportStore persistence (not yet wired).">
-            Run history
-          </div>
+          {(['findings', 'history'] as const).map(tab => {
+            const active = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => onTabChange(tab)}
+                style={{
+                  padding: '8px 16px', fontSize: 12.5,
+                  color: active ? 'var(--fg)' : 'var(--muted)',
+                  borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+                  fontWeight: active ? 500 : 400,
+                  fontFamily: 'var(--font-body)',
+                  background: 'none', border: 'none', borderRadius: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                {tab === 'findings' ? `Findings · ${findings.length}` : `Run history · ${history.length}`}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Findings list */}
+        {/* Tab body */}
+        {activeTab === 'history' ? (
+          <HistoryList
+            history={history}
+            historyLoading={historyLoading}
+            currentReportId={report.report_id}
+            onSelect={onSelectHistorical}
+          />
+        ) : (
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {findings.map((f) => {
             const isSel = f.id === (selId ?? findings[0]?.id);
@@ -398,6 +708,7 @@ const ReportBody: React.FC<{
             );
           })}
         </div>
+        )}
       </div>
 
       {/* RIGHT — detail */}
@@ -475,5 +786,95 @@ const ReportBody: React.FC<{
     </div>
   );
 };
+
+const localPart = (email: string | null) =>
+  email ? email.split('@')[0] : 'unknown';
+
+const HistoryList: React.FC<{
+  history: ArgusRunSummary[];
+  historyLoading: boolean;
+  currentReportId?: string;
+  onSelect: (reportId: string) => void;
+}> = ({ history, historyLoading, currentReportId, onSelect }) => {
+  if (historyLoading && history.length === 0) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 12.5, fontFamily: 'var(--font-body)' }}>
+        Loading run history…
+      </div>
+    );
+  }
+  if (history.length === 0) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 12.5, fontFamily: 'var(--font-body)' }}>
+        No prior runs for this collection yet.
+      </div>
+    );
+  }
+  return (
+    <div style={{ flex: 1, overflowY: 'auto' }}>
+      {history.map((row) => {
+        const isCurrent = row.report_id === currentReportId;
+        const score = row.quality_score;
+        const scoreColor = score == null
+          ? 'var(--muted)'
+          : score >= 80 ? '#3a8c5f' : score >= 60 ? '#c98d42' : '#c94250';
+        return (
+          <div
+            key={row.report_id}
+            onClick={() => onSelect(row.report_id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '10px 16px', borderBottom: '1px solid var(--border)',
+              cursor: 'pointer',
+              background: isCurrent ? 'var(--accent-soft)' : 'transparent',
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            <div style={{
+              width: 32, textAlign: 'center', fontFamily: 'var(--font-display)',
+              fontSize: 18, fontWeight: 500, color: scoreColor, flexShrink: 0,
+            }}>
+              {score ?? '—'}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--fg)' }}>
+                {row.run_at ? new Date(row.run_at).toLocaleString() : '—'}
+                {isCurrent && (
+                  <span style={{ ...tagStyle, marginLeft: 8, fontSize: 10 }}>current</span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>{localPart(row.created_by)}</span>
+                {' · '}{row.findings_count} findings
+                {' · '}{row.total_tokens.toLocaleString()} tokens
+                {row.run_eval_verdict && <> · <span>{row.run_eval_verdict}</span></>}
+              </div>
+            </div>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--muted)', flexShrink: 0 }}>
+              <path d="M6 4l4 4-4 4" />
+            </svg>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const PreRunHistory: React.FC<{
+  history: ArgusRunSummary[];
+  historyLoading: boolean;
+  onSelect: (reportId: string) => void;
+}> = ({ history, historyLoading, onSelect }) => (
+  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{
+      padding: '12px 18px 8px', fontSize: 11,
+      color: 'var(--muted)', fontFamily: 'var(--font-body)',
+      borderBottom: '1px solid var(--border)',
+    }}>
+      Prior runs for this collection — pick one to load, or press Run to start a fresh audit.
+    </div>
+    <HistoryList history={history} historyLoading={historyLoading} onSelect={onSelect} />
+  </div>
+);
 
 export default AnalyticsPage;
