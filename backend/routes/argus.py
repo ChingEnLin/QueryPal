@@ -360,6 +360,12 @@ async def _execute_job(
         report.duration_seconds,
     )
 
+    # Apply diff against prior run before persisting so raw_report carries
+    # previous_run_id/new_findings/resolved_findings. Upstream's CLI does this
+    # in cli/main.py; the agent itself does not.
+    if previous is not None:
+        report = report.diff_against(previous)
+
     if store is not None:
         try:
             await run_in_threadpool(store.save, report)
@@ -473,28 +479,46 @@ async def get_report(report_id: str, authorization: str = Header(...)):
     except ValueError:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    report = await run_in_threadpool(store.get, report_uuid)
+    async def _resolve_access() -> list[str]:
+        try:
+            access_token = await run_in_threadpool(exchange_token_obo, user_token)
+        except Exception as exc:
+            logger.exception("argus get_report auth failed")
+            raise HTTPException(status_code=502, detail=f"Azure auth failed: {exc}")
+        return await run_in_threadpool(_accessible_account_ids, access_token)
+
+    # Fan out the independent I/O: report lookup, created_by lookup, and the
+    # auth + ARM resource list all run concurrently. Previous-report lookup
+    # depends on `report` so it kicks off as soon as that returns.
+    report_task = asyncio.create_task(run_in_threadpool(store.get, report_uuid))
+    created_by_task = asyncio.create_task(
+        run_in_threadpool(fetch_report_created_by, str(report_uuid))
+    )
+    accessible_task = asyncio.create_task(_resolve_access())
+
+    report = await report_task
     if report is None:
+        created_by_task.cancel()
+        accessible_task.cancel()
         raise HTTPException(status_code=404, detail="Report not found")
 
-    try:
-        access_token = await run_in_threadpool(exchange_token_obo, user_token)
-    except Exception as exc:
-        logger.exception("argus get_report auth failed")
-        raise HTTPException(status_code=502, detail=f"Azure auth failed: {exc}")
+    previous_task = asyncio.create_task(
+        run_in_threadpool(
+            store.get_previous,
+            collection=report.collection,
+            database=report.database,
+            before=report.run_at,
+        )
+    )
 
-    accessible = await run_in_threadpool(_accessible_account_ids, access_token)
+    accessible = await accessible_task
     if report.cosmos_account not in accessible:
+        previous_task.cancel()
+        created_by_task.cancel()
         # 404, not 403 — don't leak existence of reports the caller cannot see
         raise HTTPException(status_code=404, detail="Report not found")
 
-    previous = await run_in_threadpool(
-        store.get_previous,
-        collection=report.collection,
-        database=report.database,
-        before=report.run_at,
-    )
-    created_by = await run_in_threadpool(fetch_report_created_by, str(report.id))
+    previous, created_by = await asyncio.gather(previous_task, created_by_task)
     # Resolved profile/model are not persisted yet — fall back to the report's
     # own model field and an unknown profile marker until Phase 2 lands.
     return JSONResponse(

@@ -154,12 +154,26 @@ def fetch_run_summaries(
         clauses.append("r.collection = %s")
         args.append(collection)
     where = " AND ".join(clauses)
+    # Severity buckets follow the same mapping as routes/argus.py _SEVERITY_UI:
+    # critical -> critical, high -> warning, medium|low -> info.
     sql = f"""
         SELECT r.id, r.collection, r.database, r.cosmos_account, r.run_at,
                r.overall_quality_score, r.run_eval_verdict,
                r.total_input_tokens, r.total_output_tokens, r.created_by,
-               (SELECT COUNT(*) FROM argus_findings f WHERE f.report_id = r.id) AS findings_count
+               COALESCE(fc.total, 0)    AS findings_count,
+               COALESCE(fc.critical, 0) AS critical_count,
+               COALESCE(fc.warning, 0)  AS warning_count,
+               COALESCE(fc.info, 0)     AS info_count
         FROM argus_reports r
+        LEFT JOIN (
+            SELECT report_id,
+                   COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE severity = 'critical') AS critical,
+                   COUNT(*) FILTER (WHERE severity = 'high')     AS warning,
+                   COUNT(*) FILTER (WHERE severity IN ('medium','low')) AS info
+            FROM argus_findings
+            GROUP BY report_id
+        ) fc ON fc.report_id = r.id
         WHERE {where}
         ORDER BY r.run_at DESC
         LIMIT %s
@@ -184,6 +198,11 @@ def fetch_run_summaries(
             "total_tokens": int(row[7] or 0) + int(row[8] or 0),
             "created_by": row[9],
             "findings_count": int(row[10] or 0),
+            "counts": {
+                "critical": int(row[11] or 0),
+                "warning": int(row[12] or 0),
+                "info": int(row[13] or 0),
+            },
         }
         for row in rows
     ]

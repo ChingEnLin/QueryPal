@@ -18,6 +18,7 @@ import {
   listSavedProfiles,
   startArgusAudit,
 } from '../services/argusService';
+import { ArgusTrendsPanel } from '../components/ArgusTrendsPanel';
 
 const DEFAULT_MAX_ITER = 20;
 const DEFAULT_SAMPLE_SIZE = 200;
@@ -166,6 +167,7 @@ const InfoPopover: React.FC<InfoPopoverProps> = ({ title, children, align = 'lef
             background: 'var(--panel)', border: '1px solid var(--border)',
             borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
             padding: '10px 12px', fontFamily: 'var(--font-body)',
+            textTransform: 'none', letterSpacing: 'normal',
           }}
         >
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', marginBottom: 4 }}>{title}</div>
@@ -414,7 +416,7 @@ const ScoreArc: React.FC<{ score: number }> = ({ score }) => {
       <text x="60" y="58" textAnchor="middle" fontSize="22" fontWeight="500" fontFamily="var(--font-display)" fill="var(--fg)">{score}</text>
       <text x="60" y="72" textAnchor="middle" fontSize="10" fill="var(--muted)" fontFamily="var(--font-body)">/ 100</text>
       <text x="60" y="88" textAnchor="middle" fontSize="9" fill={col} fontFamily="var(--font-body)">
-        {score >= 80 ? 'GOOD' : score >= 60 ? 'MODERATE' : 'POOR'}
+        {score >= 80 ? 'Good' : score >= 60 ? 'Moderate' : 'Poor'}
       </text>
     </svg>
   );
@@ -442,9 +444,10 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
   const [jobStatus, setJobStatus] = useState<ArgusJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'findings' | 'history'>('findings');
+  const [activeTab, setActiveTab] = useState<'findings' | 'history' | 'trends'>('findings');
   const [history, setHistory] = useState<ArgusRunSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [openingReportId, setOpeningReportId] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
 
   // Tier 2 — Customize this run
@@ -591,6 +594,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
 
   const loadHistoricalReport = useCallback(async (reportId: string) => {
     setError(null);
+    setOpeningReportId(reportId);
     try {
       const r = await getArgusReport(reportId);
       setReport(r);
@@ -598,6 +602,8 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
       setActiveTab('findings');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOpeningReportId(null);
     }
   }, []);
 
@@ -745,9 +751,11 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
               border: '1px solid var(--border)', cursor: 'pointer',
             }}
           >
-            {collections!.map((c) => (
-              <option key={c.name} value={c.name}>{c.name}</option>
-            ))}
+            {[...collections!]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((c) => (
+                <option key={c.name} value={c.name}>{c.name}</option>
+              ))}
           </select>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -1141,7 +1149,24 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
               <span>Ran by <span style={{ color: 'var(--fg)' }}>{report.created_by}</span></span>
             </>
           )}
-          <span style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span style={{ fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              vs prior run
+            </span>
+            <InfoPopover title="What the diff badges mean" align="right">
+              <p style={{ margin: '0 0 6px' }}>Compared against the previous persisted run on the same collection:</p>
+              <ul style={{ margin: 0, paddingLeft: 16 }}>
+                <li style={{ marginBottom: 3 }}><strong style={{ color: '#1d6cf2' }}>New</strong> — first time this field+category combination has been flagged.</li>
+                <li style={{ marginBottom: 3 }}><strong style={{ color: '#c98d42' }}>Regressed</strong> — the same field is flagged at a higher severity than before.</li>
+                <li><strong style={{ color: 'var(--accent)' }}>Resolved</strong> — present in the prior run but no longer flagged.</li>
+              </ul>
+              <p style={{ margin: '6px 0 0', fontSize: 11 }}>
+                If this is the first run for the collection, everything counts as new.
+              </p>
+            </InfoPopover>
+            {report.diff.new === 0 && report.diff.resolved === 0 && report.diff.regressed === 0 && (
+              <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>no changes</span>
+            )}
             {report.diff.new > 0 && (
               <span style={{ color: '#1d6cf2', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 5, height: 5, borderRadius: 99, background: 'currentColor' }} />
@@ -1185,6 +1210,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
         <PreRunHistory
           history={history}
           historyLoading={historyLoading}
+          openingReportId={openingReportId}
           onSelect={loadHistoricalReport}
         />
       ) : !report && !loading ? (
@@ -1208,6 +1234,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
           onTabChange={setActiveTab}
           history={history}
           historyLoading={historyLoading}
+          openingReportId={openingReportId}
           onSelectHistorical={loadHistoricalReport}
         />
       ) : report ? (
@@ -1296,23 +1323,51 @@ const EmptyState: React.FC<{ title: string; body: string }> = ({ title, body }) 
   </div>
 );
 
+const COUNT_HELP: Record<string, string> = {
+  Critical: 'Severe data-quality issues that almost certainly need action — broken constraints, large-scale corruption, or unsafe values.',
+  Warning: 'Real issues worth reviewing but not necessarily urgent — drift, partial inconsistencies, or noisy fields.',
+  Info: 'Observations and minor anomalies. Useful for context, rarely actionable on their own.',
+  Dismissed: 'Findings the evaluator rejected (low confidence, weak evidence, or filtered by the rejected-finding policy). Kept here for transparency.',
+};
+
 const ReportBody: React.FC<{
   report: ArgusReport;
   findings: ArgusFinding[];
   sel: ArgusFinding;
   selId: string | null;
   onSelect: (id: string) => void;
-  activeTab: 'findings' | 'history';
-  onTabChange: (tab: 'findings' | 'history') => void;
+  activeTab: 'findings' | 'history' | 'trends';
+  onTabChange: (tab: 'findings' | 'history' | 'trends') => void;
   history: ArgusRunSummary[];
   historyLoading: boolean;
+  openingReportId: string | null;
   onSelectHistorical: (reportId: string) => void;
-}> = ({ report, findings, sel, selId, onSelect, activeTab, onTabChange, history, historyLoading, onSelectHistorical }) => {
+}> = ({ report, findings, sel, selId, onSelect, activeTab, onTabChange, history, historyLoading, openingReportId, onSelectHistorical }) => {
   const { counts } = report;
   const score = report.quality_score ?? 0;
+  const scoreBand = score >= 80 ? 'Good' : score >= 60 ? 'Moderate' : 'Poor';
+  const scoreBandColor = score >= 80 ? '#3a8c5f' : score >= 60 ? '#c98d42' : '#c94250';
 
   return (
-    <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 400px', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 400px', minHeight: 0, position: 'relative' }}>
+      {openingReportId && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 50,
+          background: 'rgba(255,255,255,0.55)',
+          backdropFilter: 'blur(1px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: 8, color: 'var(--muted)', fontSize: 12.5,
+          fontFamily: 'var(--font-body)', pointerEvents: 'all',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="8" cy="8" r="6" opacity="0.3" />
+            <path d="M14 8a6 6 0 0 0-6-6">
+              <animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.9s" repeatCount="indefinite" />
+            </path>
+          </svg>
+          Loading report…
+        </div>
+      )}
       {/* LEFT — score + findings */}
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid var(--border)' }}>
         {/* Score row */}
@@ -1320,7 +1375,38 @@ const ReportBody: React.FC<{
           display: 'flex', alignItems: 'center', gap: 0,
           padding: '14px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0,
         }}>
-          <ScoreArc score={score} />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <ScoreArc score={score} />
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--font-body)',
+            }}>
+              <span>Audit confidence</span>
+              <InfoPopover title="How audit confidence works">
+                <p style={{ margin: '0 0 6px' }}>
+                  The score (0–100) is produced by the <strong>run evaluator</strong> — a sanity check
+                  on the audit itself, not the data. It does not deduct points per finding.
+                </p>
+                <p style={{ margin: '0 0 6px' }}>
+                  The evaluator runs a set of rules; each triggered rule contributes a verdict:
+                  <strong> pass = 1.0</strong>, <strong>warn = 0.5</strong>, <strong>fail = 0.0</strong>.
+                  The final score is the <strong>worst</strong> rule's score × 100.
+                </p>
+                <p style={{ margin: '0 0 6px' }}>Typical bands:</p>
+                <ul style={{ margin: '0 0 6px', paddingLeft: 16 }}>
+                  <li><strong style={{ color: '#3a8c5f' }}>≥ 80 Good</strong> — no rules tripped; trust the report.</li>
+                  <li><strong style={{ color: '#c98d42' }}>60–79 Moderate</strong> — a warn rule fired (e.g. zero findings on a large sample).</li>
+                  <li><strong style={{ color: '#c94250' }}>&lt; 60 Poor</strong> — the audit ended too early or covered too few fields. Re-run with more iterations.</li>
+                </ul>
+                <p style={{ margin: 0, fontSize: 11 }}>
+                  The score does <em>not</em> reflect how clean your data is — a perfect-score run can still surface critical findings.
+                </p>
+              </InfoPopover>
+            </div>
+            <span style={{ fontSize: 10, color: scoreBandColor, fontFamily: 'var(--font-body)' }}>
+              {scoreBand} audit
+            </span>
+          </div>
           <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, paddingLeft: 18 }}>
             {([
               ['Critical', counts.critical, '#c94250', '#fdf0f1'],
@@ -1336,7 +1422,11 @@ const ReportBody: React.FC<{
                 <span style={{
                   fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em',
                   color: 'var(--muted)', fontFamily: 'var(--font-body)',
-                }}>{l}</span>
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}>
+                  {l}
+                  <InfoPopover title={l}>{COUNT_HELP[l]}</InfoPopover>
+                </span>
                 <span style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: c, lineHeight: 1 }}>{v}</span>
               </div>
             ))}
@@ -1345,8 +1435,12 @@ const ReportBody: React.FC<{
 
         {/* Tab bar */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg)', flexShrink: 0 }}>
-          {(['findings', 'history'] as const).map(tab => {
+          {(['findings', 'history', 'trends'] as const).map(tab => {
             const active = activeTab === tab;
+            const label =
+              tab === 'findings' ? `Findings · ${findings.length}`
+              : tab === 'history' ? `Run history · ${history.length}`
+              : `Trends · ${history.length}`;
             return (
               <button
                 key={tab}
@@ -1361,7 +1455,7 @@ const ReportBody: React.FC<{
                   cursor: 'pointer',
                 }}
               >
-                {tab === 'findings' ? `Findings · ${findings.length}` : `Run history · ${history.length}`}
+                {label}
               </button>
             );
           })}
@@ -1373,7 +1467,14 @@ const ReportBody: React.FC<{
             history={history}
             historyLoading={historyLoading}
             currentReportId={report.report_id}
+            openingReportId={openingReportId}
             onSelect={onSelectHistorical}
+          />
+        ) : activeTab === 'trends' ? (
+          <ArgusTrendsPanel
+            history={history}
+            currentReportId={report.report_id}
+            onSelectRun={onSelectHistorical}
           />
         ) : (
         <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -1471,6 +1572,11 @@ const ReportBody: React.FC<{
                 <path d="M2 4h12M2 8h8M2 12h5" />
               </svg>
               Evidence query
+              <InfoPopover title="Evidence query">
+                The MongoDB query the agent ran to confirm this finding. Paste it into Mongo
+                shell or the Data Explorer to reproduce the result yourself — every claim in the
+                report is backed by one of these.
+              </InfoPopover>
             </div>
             <pre style={{
               margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.65,
@@ -1486,6 +1592,11 @@ const ReportBody: React.FC<{
                 <path d="M3 8l3 3 7-7" />
               </svg>
               ReAct trace
+              <InfoPopover title="ReAct trace">
+                The agent's step-by-step reasoning that led to this finding — each line is one
+                think-and-check round. Useful for spotting false positives or understanding why a
+                field was flagged the way it was.
+              </InfoPopover>
             </div>
             <pre style={{
               margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.7,
@@ -1503,12 +1614,35 @@ const ReportBody: React.FC<{
 const localPart = (email: string | null) =>
   email ? email.split('@')[0] : 'unknown';
 
+const SeverityChip: React.FC<{
+  value: number;
+  color: string;
+  bg: string;
+  label: string;
+}> = ({ value, color, bg, label }) => (
+  <span
+    title={`${value} ${label}`}
+    style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      minWidth: 22, height: 20, padding: '0 5px',
+      borderRadius: 4, fontFamily: 'var(--font-mono)', fontSize: 11.5,
+      color: value > 0 ? color : 'var(--muted)',
+      background: value > 0 ? bg : 'transparent',
+      border: `1px solid ${value > 0 ? 'transparent' : 'var(--border)'}`,
+      opacity: value > 0 ? 1 : 0.55,
+    }}
+  >
+    {value}
+  </span>
+);
+
 const HistoryList: React.FC<{
   history: ArgusRunSummary[];
   historyLoading: boolean;
   currentReportId?: string;
+  openingReportId?: string | null;
   onSelect: (reportId: string) => void;
-}> = ({ history, historyLoading, currentReportId, onSelect }) => {
+}> = ({ history, historyLoading, currentReportId, openingReportId, onSelect }) => {
   if (historyLoading && history.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 12.5, fontFamily: 'var(--font-body)' }}>
@@ -1527,45 +1661,91 @@ const HistoryList: React.FC<{
     <div style={{ flex: 1, overflowY: 'auto' }}>
       {history.map((row) => {
         const isCurrent = row.report_id === currentReportId;
+        const isOpening = row.report_id === openingReportId;
         const score = row.quality_score;
         const scoreColor = score == null
           ? 'var(--muted)'
           : score >= 80 ? '#3a8c5f' : score >= 60 ? '#c98d42' : '#c94250';
+        const counts = row.counts;
         return (
           <div
             key={row.report_id}
-            onClick={() => onSelect(row.report_id)}
+            onClick={() => { if (!openingReportId) onSelect(row.report_id); }}
             style={{
               display: 'flex', alignItems: 'center', gap: 12,
               padding: '10px 16px', borderBottom: '1px solid var(--border)',
-              cursor: 'pointer',
-              background: isCurrent ? 'var(--accent-soft)' : 'transparent',
+              cursor: openingReportId ? 'wait' : 'pointer',
+              background: isOpening
+                ? 'var(--accent-soft)'
+                : isCurrent ? 'var(--accent-soft)' : 'transparent',
+              opacity: openingReportId && !isOpening ? 0.55 : 1,
               fontFamily: 'var(--font-body)',
+              transition: 'background 0.12s, opacity 0.12s',
             }}
           >
-            <div style={{
-              width: 32, textAlign: 'center', fontFamily: 'var(--font-display)',
-              fontSize: 18, fontWeight: 500, color: scoreColor, flexShrink: 0,
-            }}>
-              {score ?? '—'}
-            </div>
+            {/* PRIMARY — data-quality signal (severity strip) */}
+            {counts ? (
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, minWidth: 96 }}
+                title={`${counts.critical} critical · ${counts.warning} warning · ${counts.info} info`}
+              >
+                <SeverityChip color="#c94250" bg="#fdf0f1" value={counts.critical} label="critical" />
+                <SeverityChip color="#c98d42" bg="#fdf6ed" value={counts.warning} label="warning" />
+                <SeverityChip color="var(--muted)" bg="var(--soft)" value={counts.info} label="info" />
+              </div>
+            ) : (
+              <div style={{
+                minWidth: 96, fontFamily: 'var(--font-mono)', fontSize: 12,
+                color: 'var(--muted)', flexShrink: 0,
+              }}>
+                {row.findings_count} findings
+              </div>
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12.5, color: 'var(--fg)' }}>
                 {row.run_at ? new Date(row.run_at).toLocaleString() : '—'}
                 {isCurrent && (
                   <span style={{ ...tagStyle, marginLeft: 8, fontSize: 10 }}>current</span>
                 )}
+                {isOpening && (
+                  <span style={{ ...tagStyle, marginLeft: 8, fontSize: 10, color: 'var(--accent)', borderColor: 'var(--accent)' }}>
+                    loading…
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                 <span style={{ fontFamily: 'var(--font-mono)' }}>{localPart(row.created_by)}</span>
-                {' · '}{row.findings_count} findings
                 {' · '}{row.total_tokens.toLocaleString()} tokens
                 {row.run_eval_verdict && <> · <span>{row.run_eval_verdict}</span></>}
               </div>
             </div>
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--muted)', flexShrink: 0 }}>
-              <path d="M6 4l4 4-4 4" />
-            </svg>
+            {/* SECONDARY — audit confidence (not data quality) */}
+            <div
+              title="Audit confidence — how reliable this audit was, not how clean the data is"
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
+                gap: 1, flexShrink: 0, marginRight: 6,
+              }}
+            >
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 12, color: scoreColor, lineHeight: 1,
+              }}>
+                {score ?? '—'}
+              </span>
+              <span style={{ fontSize: 9, color: 'var(--muted)' }}>confidence</span>
+            </div>
+            {isOpening ? (
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.5" style={{ flexShrink: 0 }}>
+                <circle cx="8" cy="8" r="6" opacity="0.3" />
+                <path d="M14 8a6 6 0 0 0-6-6">
+                  <animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.9s" repeatCount="indefinite" />
+                </path>
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--muted)', flexShrink: 0 }}>
+                <path d="M6 4l4 4-4 4" />
+              </svg>
+            )}
           </div>
         );
       })}
@@ -1576,8 +1756,9 @@ const HistoryList: React.FC<{
 const PreRunHistory: React.FC<{
   history: ArgusRunSummary[];
   historyLoading: boolean;
+  openingReportId: string | null;
   onSelect: (reportId: string) => void;
-}> = ({ history, historyLoading, onSelect }) => (
+}> = ({ history, historyLoading, openingReportId, onSelect }) => (
   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
     <div style={{
       padding: '12px 18px 8px', fontSize: 11,
@@ -1586,7 +1767,12 @@ const PreRunHistory: React.FC<{
     }}>
       Prior runs for this collection — pick one to load, or press Run to start a fresh audit.
     </div>
-    <HistoryList history={history} historyLoading={historyLoading} onSelect={onSelect} />
+    <HistoryList
+      history={history}
+      historyLoading={historyLoading}
+      openingReportId={openingReportId}
+      onSelect={onSelect}
+    />
   </div>
 );
 

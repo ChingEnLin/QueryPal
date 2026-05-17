@@ -147,6 +147,7 @@ export interface ArgusRunSummary {
   total_tokens: number;
   created_by: string | null;
   findings_count: number;
+  counts?: { critical: number; warning: number; info: number };
 }
 
 export interface ListArgusRunsArgs {
