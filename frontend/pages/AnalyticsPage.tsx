@@ -4,15 +4,81 @@ import {
   ArgusDiff,
   ArgusFinding,
   ArgusJobStatus,
+  ArgusMinSeverity,
   ArgusProfile,
   ArgusReport,
   ArgusRunSummary,
   ArgusSeverity,
+  SavedArgusProfile,
+  createSavedProfile,
+  deleteSavedProfile,
   getArgusJob,
   getArgusReport,
   listArgusRuns,
+  listSavedProfiles,
   startArgusAudit,
 } from '../services/argusService';
+
+const DEFAULT_MAX_ITER = 20;
+const DEFAULT_SAMPLE_SIZE = 200;
+const DEFAULT_MIN_SEVERITY: ArgusMinSeverity = 'low';
+const MIN_SEVERITIES: ArgusMinSeverity[] = ['low', 'medium', 'high', 'critical'];
+
+type EvalStrategy = 'none' | 'rules' | 'self' | 'judge' | 'composite';
+type JudgeProvider = 'gemini' | 'openai' | 'anthropic';
+type RejectedPolicy = 'drop' | 'log_only' | 'demote_severity';
+type RunFailPolicy = 'continue' | 'warn_only' | 'abort';
+
+interface EvalState {
+  action_evaluator: EvalStrategy;
+  finding_evaluator: EvalStrategy;
+  run_evaluator: EvalStrategy;
+  judge_provider: JudgeProvider | null;
+  judge_model: string | null;
+  action_pass_threshold: number;
+  finding_pass_threshold: number;
+  run_pass_threshold: number;
+  rejected_finding_policy: RejectedPolicy;
+  run_fail_policy: RunFailPolicy;
+}
+
+// Baselines must match backend `PROFILE_*` in queryargus/models/config.py.
+const PROFILE_BASELINES: Record<ArgusProfile, EvalState> = {
+  fast: {
+    action_evaluator: 'rules', finding_evaluator: 'rules', run_evaluator: 'rules',
+    judge_provider: null, judge_model: null,
+    action_pass_threshold: 0.6, finding_pass_threshold: 0.7, run_pass_threshold: 0.5,
+    rejected_finding_policy: 'log_only', run_fail_policy: 'continue',
+  },
+  balanced: {
+    action_evaluator: 'rules', finding_evaluator: 'composite', run_evaluator: 'self',
+    judge_provider: null, judge_model: null,
+    action_pass_threshold: 0.6, finding_pass_threshold: 0.7, run_pass_threshold: 0.5,
+    rejected_finding_policy: 'log_only', run_fail_policy: 'continue',
+  },
+  thorough: {
+    action_evaluator: 'rules', finding_evaluator: 'composite', run_evaluator: 'judge',
+    judge_provider: 'openai', judge_model: 'gpt-4o',
+    action_pass_threshold: 0.6, finding_pass_threshold: 0.7, run_pass_threshold: 0.5,
+    rejected_finding_policy: 'log_only', run_fail_policy: 'continue',
+  },
+};
+
+const EVAL_STRATEGIES: EvalStrategy[] = ['none', 'rules', 'self', 'judge', 'composite'];
+const JUDGE_PROVIDERS: JudgeProvider[] = ['gemini', 'openai', 'anthropic'];
+const REJECTED_POLICIES: RejectedPolicy[] = ['drop', 'log_only', 'demote_severity'];
+const RUN_FAIL_POLICIES: RunFailPolicy[] = ['continue', 'warn_only', 'abort'];
+
+const diffEvalState = (
+  current: EvalState,
+  baseline: EvalState,
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  (Object.keys(baseline) as Array<keyof EvalState>).forEach((k) => {
+    if (current[k] !== baseline[k]) out[k] = current[k];
+  });
+  return out;
+};
 
 const JOB_STORAGE_KEY = 'qp_argus_jobs';
 
@@ -159,6 +225,147 @@ const ProfileChip: React.FC<{
   );
 };
 
+const SavedProfileChip: React.FC<{
+  profile: SavedArgusProfile;
+  active: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+}> = ({ profile, active, onSelect, onDelete }) => {
+  const [hover, setHover] = useState(false);
+  return (
+    <span
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '2px 6px 2px 8px', borderRadius: 4, fontSize: 11.5,
+        background: active ? 'var(--panel)' : 'transparent',
+        boxShadow: active ? '0 0 0 1px var(--border)' : 'none',
+        color: active ? 'var(--fg)' : 'var(--muted)',
+        cursor: 'pointer', fontFamily: 'var(--font-body)',
+      }}
+      title={`Based on ${profile.base_profile}`}
+    >
+      <span onClick={onSelect} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M4 2h6l2 2v10l-4-2-4 2V2z" strokeLinejoin="round" />
+        </svg>
+        {profile.name}
+      </span>
+      {hover && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); if (confirm(`Delete profile "${profile.name}"?`)) onDelete(); }}
+          aria-label="Delete profile"
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--muted)', padding: 0, display: 'inline-flex',
+            alignItems: 'center', justifyContent: 'center', width: 12, height: 12,
+          }}
+        >
+          <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+    </span>
+  );
+};
+
+const OverrideSlider: React.FC<{
+  label: string;
+  help: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  defaultValue: number;
+  onChange: (v: number) => void;
+}> = ({ label, help, min, max, step, value, defaultValue, onChange }) => {
+  const modified = value !== defaultValue;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 240, flex: '0 1 280px' }}>
+      <div style={{
+        fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+        color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6,
+        fontFamily: 'var(--font-body)',
+      }}>
+        <span>{label}</span>
+        <InfoPopover title={label}>{help}</InfoPopover>
+        {modified && (
+          <span style={{
+            marginLeft: 'auto', fontSize: 9, color: 'var(--accent)',
+            background: 'var(--accent-soft)', padding: '0 5px', borderRadius: 8,
+            textTransform: 'none', letterSpacing: 0,
+          }}>modified</span>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input
+          type="range"
+          min={min} max={max} step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          style={{ flex: 1, accentColor: 'var(--accent)' }}
+        />
+        <span style={{
+          fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg)',
+          minWidth: 40, textAlign: 'right',
+        }}>{value}</span>
+      </div>
+      <div style={{ fontSize: 10.5, color: 'var(--muted)', display: 'flex', justifyContent: 'space-between' }}>
+        <span>{min}</span>
+        <span>default {defaultValue}</span>
+        <span>{max}</span>
+      </div>
+    </div>
+  );
+};
+
+const ThresholdInput: React.FC<{
+  label: string;
+  help: string;
+  value: number;
+  defaultValue: number;
+  onChange: (v: number) => void;
+}> = ({ label, help, value, defaultValue, onChange }) => {
+  const modified = value !== defaultValue;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 140 }}>
+      <div style={{
+        fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+        color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6,
+        fontFamily: 'var(--font-body)',
+      }}>
+        <span>{label}</span>
+        <InfoPopover title={label}>{help}</InfoPopover>
+        {modified && (
+          <span style={{
+            fontSize: 9, color: 'var(--accent)', background: 'var(--accent-soft)',
+            padding: '0 5px', borderRadius: 8, textTransform: 'none', letterSpacing: 0,
+          }}>modified</span>
+        )}
+      </div>
+      <input
+        type="number"
+        min={0} max={1} step={0.05}
+        value={value}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isNaN(n)) return;
+          onChange(Math.min(1, Math.max(0, n)));
+        }}
+        style={{
+          padding: '4px 8px', borderRadius: 6, fontSize: 12,
+          background: 'var(--panel)', color: 'var(--fg)',
+          border: '1px solid var(--border)', fontFamily: 'var(--font-mono)',
+          width: 90,
+        }}
+      />
+    </div>
+  );
+};
+
 interface AnalyticsPageProps {
   accountId?: string;
   databaseName?: string;
@@ -239,6 +446,123 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
   const [history, setHistory] = useState<ArgusRunSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const pollRef = useRef<number | null>(null);
+
+  // Tier 2 — Customize this run
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [maxIter, setMaxIter] = useState<number>(DEFAULT_MAX_ITER);
+  const [sampleSize, setSampleSize] = useState<number>(DEFAULT_SAMPLE_SIZE);
+  const [minSeverity, setMinSeverity] = useState<ArgusMinSeverity>(DEFAULT_MIN_SEVERITY);
+  // Tier 3 — Advanced evaluator config (rebased onto profile baseline)
+  const [evalState, setEvalState] = useState<EvalState>(PROFILE_BASELINES.fast);
+  // Reset evaluator state when profile changes so the matrix reflects the new baseline.
+  useEffect(() => { setEvalState(PROFILE_BASELINES[profile]); }, [profile]);
+  const evalBaseline = PROFILE_BASELINES[profile];
+  const evalDiff = useMemo(() => diffEvalState(evalState, evalBaseline), [evalState, evalBaseline]);
+  const evalOverrideCount = Object.keys(evalDiff).length;
+  const overrideCount =
+    (maxIter !== DEFAULT_MAX_ITER ? 1 : 0) +
+    (sampleSize !== DEFAULT_SAMPLE_SIZE ? 1 : 0) +
+    (minSeverity !== DEFAULT_MIN_SEVERITY ? 1 : 0) +
+    evalOverrideCount;
+  const judgeEnabled = evalState.action_evaluator === 'judge' || evalState.action_evaluator === 'composite' ||
+    evalState.finding_evaluator === 'judge' || evalState.finding_evaluator === 'composite' ||
+    evalState.run_evaluator === 'judge' || evalState.run_evaluator === 'composite';
+  const resetOverrides = () => {
+    setMaxIter(DEFAULT_MAX_ITER);
+    setSampleSize(DEFAULT_SAMPLE_SIZE);
+    setMinSeverity(DEFAULT_MIN_SEVERITY);
+    setEvalState(PROFILE_BASELINES[profile]);
+  };
+  const updateEval = <K extends keyof EvalState>(k: K, v: EvalState[K]) =>
+    setEvalState((s) => ({ ...s, [k]: v }));
+
+  // Tier 4 — saved custom profiles
+  const [savedProfiles, setSavedProfiles] = useState<SavedArgusProfile[]>([]);
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
+
+  const refreshProfiles = useCallback(async () => {
+    try {
+      const rows = await listSavedProfiles();
+      setSavedProfiles(rows);
+    } catch (e) {
+      console.warn('listSavedProfiles failed', e);
+    }
+  }, []);
+  useEffect(() => { refreshProfiles(); }, [refreshProfiles]);
+
+  const applySavedProfile = (p: SavedArgusProfile) => {
+    setActiveSavedId(p.id);
+    setProfile(p.base_profile);
+    // setProfile schedules a useEffect that resets evalState to baseline;
+    // queue our overrides for the next tick.
+    setTimeout(() => {
+      const base = PROFILE_BASELINES[p.base_profile];
+      setEvalState({ ...base, ...p.evaluator_overrides } as EvalState);
+      const argus = p.argus_overrides || {};
+      setMaxIter(typeof argus.max_iterations === 'number' ? argus.max_iterations : DEFAULT_MAX_ITER);
+      setSampleSize(typeof argus.sample_size === 'number' ? argus.sample_size : DEFAULT_SAMPLE_SIZE);
+      setMinSeverity((argus.min_severity as ArgusMinSeverity | undefined) ?? DEFAULT_MIN_SEVERITY);
+    }, 0);
+  };
+
+  // Clear the active saved-profile pointer when the user tweaks anything by hand.
+  useEffect(() => {
+    if (!activeSavedId) return;
+    const sp = savedProfiles.find((p) => p.id === activeSavedId);
+    if (!sp) return;
+    const base = PROFILE_BASELINES[sp.base_profile];
+    const expectedEval = { ...base, ...sp.evaluator_overrides };
+    const matchesEval = (Object.keys(base) as Array<keyof EvalState>).every(
+      (k) => (expectedEval as EvalState)[k] === evalState[k],
+    );
+    const argus = sp.argus_overrides || {};
+    const matchesArgus =
+      maxIter === (typeof argus.max_iterations === 'number' ? argus.max_iterations : DEFAULT_MAX_ITER) &&
+      sampleSize === (typeof argus.sample_size === 'number' ? argus.sample_size : DEFAULT_SAMPLE_SIZE) &&
+      minSeverity === ((argus.min_severity as ArgusMinSeverity | undefined) ?? DEFAULT_MIN_SEVERITY) &&
+      sp.base_profile === profile;
+    if (!matchesEval || !matchesArgus) setActiveSavedId(null);
+  }, [evalState, maxIter, sampleSize, minSeverity, profile, activeSavedId, savedProfiles]);
+
+  const handleSaveProfile = async () => {
+    if (!saveName.trim()) { setSaveError('Name is required'); return; }
+    setSaveBusy(true); setSaveError(null);
+    try {
+      const argus: Record<string, unknown> = {};
+      if (maxIter !== DEFAULT_MAX_ITER) argus.max_iterations = maxIter;
+      if (sampleSize !== DEFAULT_SAMPLE_SIZE) argus.sample_size = sampleSize;
+      if (minSeverity !== DEFAULT_MIN_SEVERITY) argus.min_severity = minSeverity;
+      const created = await createSavedProfile({
+        name: saveName.trim(),
+        baseProfile: profile,
+        evaluatorOverrides: evalDiff as never,
+        argusOverrides: argus as never,
+      });
+      setSavedProfiles((s) => [created, ...s]);
+      setActiveSavedId(created.id);
+      setSaveDialogOpen(false);
+      setSaveName('');
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
+  const handleDeleteSaved = async (id: string) => {
+    try {
+      await deleteSavedProfile(id);
+      setSavedProfiles((s) => s.filter((p) => p.id !== id));
+      if (activeSavedId === id) setActiveSavedId(null);
+    } catch (e) {
+      console.warn('deleteSavedProfile failed', e);
+    }
+  };
 
   const refreshHistory = useCallback(async () => {
     if (!accountId || !databaseName || !collection) {
@@ -349,11 +673,19 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
     setSelId(null);
     setJobStatus('queued');
     try {
+      const argusOverrides: Record<string, unknown> = {};
+      if (maxIter !== DEFAULT_MAX_ITER) argusOverrides.max_iterations = maxIter;
+      if (sampleSize !== DEFAULT_SAMPLE_SIZE) argusOverrides.sample_size = sampleSize;
+      if (minSeverity !== DEFAULT_MIN_SEVERITY) argusOverrides.min_severity = minSeverity;
       const { job_id } = await startArgusAudit({
         accountId,
         database: databaseName,
         collection,
         profile,
+        maxIterations: maxIter,
+        argusOverrides: Object.keys(argusOverrides).length ? argusOverrides : undefined,
+        configOverrides: evalOverrideCount > 0 ? (evalDiff as never) : undefined,
+        savedProfileId: activeSavedId ?? undefined,
       });
       const map = readJobMap();
       map[jobKey(accountId, databaseName, collection)] = job_id;
@@ -437,9 +769,54 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
             border: '1px solid var(--border)', padding: 2, gap: 1,
           }}>
             {(['fast', 'balanced', 'thorough'] as ArgusProfile[]).map((p) => (
-              <ProfileChip key={p} p={p} active={p === profile} onSelect={() => setProfile(p)} />
+              <ProfileChip key={p} p={p} active={p === profile && !activeSavedId} onSelect={() => { setProfile(p); setActiveSavedId(null); }} />
             ))}
           </div>
+          {savedProfiles.length > 0 && (
+            <div style={{
+              display: 'flex', background: 'var(--soft)', borderRadius: 6,
+              border: '1px solid var(--border)', padding: 2, gap: 1,
+              maxWidth: 280, overflowX: 'auto',
+            }}>
+              {savedProfiles.map((sp) => (
+                <SavedProfileChip
+                  key={sp.id}
+                  profile={sp}
+                  active={activeSavedId === sp.id}
+                  onSelect={() => applySavedProfile(sp)}
+                  onDelete={() => handleDeleteSaved(sp.id)}
+                />
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setCustomizeOpen(v => !v)}
+            title="Customize this run"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '4px 8px', borderRadius: 6, fontSize: 11.5,
+              background: customizeOpen || overrideCount > 0 ? 'var(--accent-soft)' : 'var(--soft)',
+              color: overrideCount > 0 ? 'var(--accent)' : 'var(--fg)',
+              border: '1px solid var(--border)', cursor: 'pointer',
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M3 5h10M5 8h6M7 11h2" strokeLinecap="round" />
+            </svg>
+            Customize
+            {overrideCount > 0 && (
+              <span style={{
+                background: 'var(--accent)', color: 'var(--bg)',
+                padding: '0 5px', borderRadius: 8, fontSize: 10, fontWeight: 500,
+              }}>+{overrideCount}</span>
+            )}
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"
+              style={{ transform: customizeOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+              <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           <button
             className="qa-btn primary"
             disabled={!hasConnection || !collection || loading}
@@ -467,6 +844,281 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
           </button>
         </div>
       </div>
+
+      {/* Tier 2 — Customize this run */}
+      {customizeOpen && (
+        <div style={{
+          padding: '12px 18px', borderBottom: '1px solid var(--border)',
+          background: 'var(--soft)', flexShrink: 0, fontFamily: 'var(--font-body)',
+          display: 'flex', flexDirection: 'column', gap: 14,
+        }}>
+        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <OverrideSlider
+            label="Max iterations"
+            help="How many think-and-check rounds the agent runs. Higher = more thorough, more cost."
+            min={5} max={50} step={1} value={maxIter}
+            defaultValue={DEFAULT_MAX_ITER}
+            onChange={setMaxIter}
+          />
+          <OverrideSlider
+            label="Sample size"
+            help="How many documents the agent samples per probe. Larger samples catch rarer issues but cost more."
+            min={50} max={1000} step={50} value={sampleSize}
+            defaultValue={DEFAULT_SAMPLE_SIZE}
+            onChange={setSampleSize}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 240 }}>
+            <div style={sectionLabel}>
+              <span>Minimum severity</span>
+              <InfoPopover title="Minimum severity">
+                Drops findings below this level from the report. Use higher floors when you only care
+                about issues worth acting on right now.
+              </InfoPopover>
+            </div>
+            <div style={{
+              display: 'flex', background: 'var(--panel)', borderRadius: 6,
+              border: '1px solid var(--border)', padding: 2, width: 'fit-content',
+            }}>
+              {MIN_SEVERITIES.map((s) => (
+                <span
+                  key={s}
+                  onClick={() => setMinSeverity(s)}
+                  style={{
+                    padding: '3px 10px', borderRadius: 4, fontSize: 11.5,
+                    cursor: 'pointer', textTransform: 'capitalize',
+                    background: minSeverity === s ? 'var(--soft)' : 'transparent',
+                    color: minSeverity === s ? 'var(--fg)' : 'var(--muted)',
+                    boxShadow: minSeverity === s ? '0 0 0 1px var(--border)' : 'none',
+                  }}
+                >{s}</span>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {overrideCount > 0 && (
+              <button
+                type="button"
+                onClick={resetOverrides}
+                style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  color: 'var(--muted)', fontSize: 11.5, fontFamily: 'var(--font-body)',
+                  textDecoration: 'underline',
+                }}
+              >Reset to profile defaults</button>
+            )}
+            {overrideCount > 0 && (
+              <button
+                type="button"
+                onClick={() => { setSaveDialogOpen(true); setSaveError(null); }}
+                className="qa-btn"
+                style={{ fontSize: 11.5 }}
+              >Save as profile…</button>
+            )}
+          </div>
+        </div>
+
+        {/* Tier 3 — Advanced */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen(v => !v)}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--fg)', fontSize: 11.5, fontFamily: 'var(--font-body)',
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0,
+            }}
+          >
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"
+              style={{ transform: advancedOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+              <path d="M6 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Advanced
+            {evalOverrideCount > 0 && (
+              <span style={{
+                background: 'var(--accent)', color: 'var(--bg)',
+                padding: '0 5px', borderRadius: 8, fontSize: 10, fontWeight: 500,
+              }}>+{evalOverrideCount}</span>
+            )}
+            <InfoPopover title="Advanced evaluator controls">
+              Tune QueryArgus's quality gates per-gate. Most users should not need this — the profile
+              presets pick sensible defaults. Overriding here applies to this run only.
+            </InfoPopover>
+          </button>
+
+          {advancedOpen && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Per-gate strategy matrix */}
+              <div>
+                <div style={{ ...sectionLabel, marginBottom: 8 }}>
+                  <span>Evaluator strategy per gate</span>
+                  <InfoPopover title="Evaluator strategy">
+                    Each gate decides whether an action, a finding, or the whole run passes.
+                    <strong> Rules</strong> is fast and deterministic; <strong>self</strong> asks the same model;
+                    <strong> judge</strong> uses an independent model; <strong>composite</strong> combines them.
+                  </InfoPopover>
+                </div>
+                <table style={{ borderCollapse: 'collapse', fontFamily: 'var(--font-body)', fontSize: 11.5 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ padding: '4px 8px', color: 'var(--muted)', fontWeight: 400, textAlign: 'left' }}>Gate</th>
+                      {EVAL_STRATEGIES.map(s => (
+                        <th key={s} style={{ padding: '4px 10px', color: 'var(--muted)', fontWeight: 400, textTransform: 'capitalize' }}>{s}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(['action_evaluator', 'finding_evaluator', 'run_evaluator'] as const).map((gate) => {
+                      const label = gate.replace('_evaluator', '');
+                      const current = evalState[gate];
+                      const baseline = evalBaseline[gate];
+                      const modified = current !== baseline;
+                      return (
+                        <tr key={gate}>
+                          <td style={{ padding: '4px 8px', color: 'var(--fg)', textTransform: 'capitalize' }}>
+                            {label}
+                            {modified && (
+                              <span style={{
+                                marginLeft: 6, fontSize: 9, color: 'var(--accent)',
+                                background: 'var(--accent-soft)', padding: '0 5px', borderRadius: 8,
+                              }}>modified</span>
+                            )}
+                          </td>
+                          {EVAL_STRATEGIES.map(s => {
+                            const isCurrent = current === s;
+                            const isBaseline = baseline === s;
+                            return (
+                              <td key={s} style={{ padding: 2, textAlign: 'center' }}>
+                                <span
+                                  onClick={() => updateEval(gate, s)}
+                                  title={isBaseline ? 'Profile default' : undefined}
+                                  style={{
+                                    display: 'inline-block', padding: '3px 10px', borderRadius: 4,
+                                    cursor: 'pointer', textTransform: 'capitalize',
+                                    background: isCurrent ? 'var(--panel)' : 'transparent',
+                                    color: isCurrent ? 'var(--fg)' : 'var(--muted)',
+                                    boxShadow: isCurrent ? '0 0 0 1px var(--border)' : 'none',
+                                    border: isBaseline && !isCurrent ? '1px dashed var(--border)' : '1px solid transparent',
+                                  }}
+                                >{s}</span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 4 }}>
+                  Dashed cells are the profile default.
+                </div>
+              </div>
+
+              {/* Thresholds */}
+              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+                <ThresholdInput label="Action pass" help="Minimum score (0–1) for an action to pass the action gate."
+                  value={evalState.action_pass_threshold} defaultValue={evalBaseline.action_pass_threshold}
+                  onChange={(v) => updateEval('action_pass_threshold', v)} />
+                <ThresholdInput label="Finding pass" help="Minimum score (0–1) for a finding to be kept."
+                  value={evalState.finding_pass_threshold} defaultValue={evalBaseline.finding_pass_threshold}
+                  onChange={(v) => updateEval('finding_pass_threshold', v)} />
+                <ThresholdInput label="Run pass" help="Minimum score (0–1) for the run to be considered successful."
+                  value={evalState.run_pass_threshold} defaultValue={evalBaseline.run_pass_threshold}
+                  onChange={(v) => updateEval('run_pass_threshold', v)} />
+              </div>
+
+              {/* Judge */}
+              <div style={{
+                display: 'flex', gap: 12, alignItems: 'flex-end',
+                opacity: judgeEnabled ? 1 : 0.5,
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 160 }}>
+                  <div style={sectionLabel}>
+                    <span>Judge provider</span>
+                    <InfoPopover title="Judge model">
+                      The independent model used by the <strong>judge</strong> and <strong>composite</strong> strategies.
+                      Disabled when no gate uses them.
+                    </InfoPopover>
+                  </div>
+                  <select
+                    disabled={!judgeEnabled}
+                    value={evalState.judge_provider ?? ''}
+                    onChange={(e) => updateEval('judge_provider', (e.target.value || null) as JudgeProvider | null)}
+                    style={{
+                      padding: '4px 8px', borderRadius: 6, fontSize: 12,
+                      background: 'var(--panel)', color: 'var(--fg)',
+                      border: '1px solid var(--border)', fontFamily: 'var(--font-body)',
+                    }}
+                  >
+                    <option value="">(none)</option>
+                    {JUDGE_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 220 }}>
+                  <div style={sectionLabel}><span>Judge model</span></div>
+                  <input
+                    type="text"
+                    disabled={!judgeEnabled}
+                    placeholder="e.g. gpt-4o"
+                    value={evalState.judge_model ?? ''}
+                    onChange={(e) => updateEval('judge_model', e.target.value || null)}
+                    style={{
+                      padding: '4px 8px', borderRadius: 6, fontSize: 12,
+                      background: 'var(--panel)', color: 'var(--fg)',
+                      border: '1px solid var(--border)', fontFamily: 'var(--font-mono)',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Policies */}
+              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 220 }}>
+                  <div style={sectionLabel}>
+                    <span>Rejected finding policy</span>
+                    <InfoPopover title="Rejected finding policy">
+                      What to do with findings the evaluator rejects. <strong>drop</strong> hides them,
+                      <strong> log_only</strong> keeps them visible as dismissed,
+                      <strong> demote_severity</strong> downgrades them one notch.
+                    </InfoPopover>
+                  </div>
+                  <select
+                    value={evalState.rejected_finding_policy}
+                    onChange={(e) => updateEval('rejected_finding_policy', e.target.value as RejectedPolicy)}
+                    style={{
+                      padding: '4px 8px', borderRadius: 6, fontSize: 12,
+                      background: 'var(--panel)', color: 'var(--fg)',
+                      border: '1px solid var(--border)', fontFamily: 'var(--font-body)',
+                    }}
+                  >
+                    {REJECTED_POLICIES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 200 }}>
+                  <div style={sectionLabel}>
+                    <span>Run fail policy</span>
+                    <InfoPopover title="Run fail policy">
+                      What happens if the run gate fails. <strong>continue</strong> emits the report anyway,
+                      <strong> warn_only</strong> tags it with a warning, <strong>abort</strong> discards it.
+                    </InfoPopover>
+                  </div>
+                  <select
+                    value={evalState.run_fail_policy}
+                    onChange={(e) => updateEval('run_fail_policy', e.target.value as RunFailPolicy)}
+                    style={{
+                      padding: '4px 8px', borderRadius: 6, fontSize: 12,
+                      background: 'var(--panel)', color: 'var(--fg)',
+                      border: '1px solid var(--border)', fontFamily: 'var(--font-body)',
+                    }}
+                  >
+                    {RUN_FAIL_POLICIES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        </div>
+      )}
 
       {/* Status bar */}
       {report && (
@@ -561,6 +1213,67 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
       ) : report ? (
         <EmptyState title="No findings" body="QueryArgus completed without flagging any data-quality issues in this collection." />
       ) : null}
+
+      {/* Tier 4 — Save profile dialog */}
+      {saveDialogOpen && (
+        <div
+          role="dialog"
+          onClick={() => !saveBusy && setSaveDialogOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+            zIndex: 1000, display: 'grid', placeItems: 'center',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--panel)', borderRadius: 10, padding: 18,
+              width: 360, border: '1px solid var(--border)',
+              fontFamily: 'var(--font-body)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 8 }}>Save as profile</div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12 }}>
+              Save the current overrides on top of <strong style={{ color: 'var(--fg)' }}>{profile}</strong>.
+              Visible only to you.
+            </div>
+            <input
+              type="text"
+              autoFocus
+              placeholder="Profile name"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !saveBusy) handleSaveProfile(); }}
+              style={{
+                width: '100%', padding: '6px 10px', borderRadius: 6,
+                background: 'var(--bg)', color: 'var(--fg)',
+                border: '1px solid var(--border)', fontSize: 12,
+                fontFamily: 'var(--font-body)', marginBottom: 8, boxSizing: 'border-box',
+              }}
+            />
+            {saveError && (
+              <div style={{ fontSize: 11.5, color: '#c94250', marginBottom: 8 }}>{saveError}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setSaveDialogOpen(false)}
+                disabled={saveBusy}
+                className="qa-btn"
+                style={{ fontSize: 12 }}
+              >Cancel</button>
+              <button
+                type="button"
+                onClick={handleSaveProfile}
+                disabled={saveBusy}
+                className="qa-btn primary"
+                style={{ fontSize: 12 }}
+              >{saveBusy ? 'Saving…' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

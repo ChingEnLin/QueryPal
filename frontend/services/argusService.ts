@@ -54,12 +54,45 @@ export interface ArgusJob {
   error: string | null;
 }
 
+export type ArgusMinSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface ArgusOverrides {
+  sample_size?: number;
+  max_iterations?: number;
+  min_severity?: ArgusMinSeverity;
+}
+
+export interface EvaluatorOverrides {
+  action_evaluator?: 'none' | 'rules' | 'self' | 'judge' | 'composite';
+  finding_evaluator?: 'none' | 'rules' | 'self' | 'judge' | 'composite';
+  run_evaluator?: 'none' | 'rules' | 'self' | 'judge' | 'composite';
+  judge_provider?: 'gemini' | 'openai' | 'anthropic' | null;
+  judge_model?: string | null;
+  action_pass_threshold?: number;
+  finding_pass_threshold?: number;
+  run_pass_threshold?: number;
+  rejected_finding_policy?: 'drop' | 'log_only' | 'demote_severity';
+  run_fail_policy?: 'continue' | 'warn_only' | 'abort';
+}
+
 export interface StartArgusAuditArgs {
   accountId: string;
   database: string;
   collection: string;
   profile: ArgusProfile;
   maxIterations?: number;
+  argusOverrides?: ArgusOverrides;
+  configOverrides?: EvaluatorOverrides;
+  savedProfileId?: string;
+}
+
+export interface SavedArgusProfile {
+  id: string;
+  name: string;
+  base_profile: ArgusProfile;
+  evaluator_overrides: EvaluatorOverrides;
+  argus_overrides: ArgusOverrides;
+  created_at?: string | null;
 }
 
 const getToken = async (): Promise<string> => {
@@ -91,6 +124,9 @@ export const startArgusAudit = async (
       collection: args.collection,
       profile: args.profile,
       max_iterations: args.maxIterations ?? 20,
+      ...(args.argusOverrides ? { argus_overrides: args.argusOverrides } : {}),
+      ...(args.configOverrides ? { config_overrides: args.configOverrides } : {}),
+      ...(args.savedProfileId ? { saved_profile_id: args.savedProfileId } : {}),
     }),
   });
   if (!response.ok) {
@@ -155,6 +191,60 @@ export const getArgusReport = async (reportId: string): Promise<ArgusReport> => 
     throw new Error(err.detail || `Failed to fetch report (${response.status})`);
   }
   return response.json();
+};
+
+export const listSavedProfiles = async (): Promise<SavedArgusProfile[]> => {
+  if (!USE_MSAL_AUTH) return [];
+  const token = await getToken();
+  const response = await fetch(`${API_BASE_URL}/argus/profiles`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to list profiles (${response.status})`);
+  }
+  const data = await response.json();
+  return data.profiles ?? [];
+};
+
+export interface CreateSavedProfileArgs {
+  name: string;
+  baseProfile: ArgusProfile;
+  evaluatorOverrides: EvaluatorOverrides;
+  argusOverrides: ArgusOverrides;
+}
+
+export const createSavedProfile = async (
+  args: CreateSavedProfileArgs,
+): Promise<SavedArgusProfile> => {
+  const token = await getToken();
+  const response = await fetch(`${API_BASE_URL}/argus/profiles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      name: args.name,
+      base_profile: args.baseProfile,
+      evaluator_overrides: args.evaluatorOverrides,
+      argus_overrides: args.argusOverrides,
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to save profile (${response.status})`);
+  }
+  return response.json();
+};
+
+export const deleteSavedProfile = async (profileId: string): Promise<void> => {
+  const token = await getToken();
+  const response = await fetch(
+    `${API_BASE_URL}/argus/profiles/${encodeURIComponent(profileId)}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to delete profile (${response.status})`);
+  }
 };
 
 export const getArgusJob = async (jobId: string): Promise<ArgusJob> => {

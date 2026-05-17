@@ -52,11 +52,26 @@ def _build_dsn() -> Optional[str]:
 
 
 def _apply_querypal_columns(dsn: str) -> None:
-    """Additive ALTERs for QueryPal-specific columns on upstream tables."""
+    """Additive ALTERs + QueryPal-only tables that don't belong in upstream DDL."""
     with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
         cur.execute(
             "ALTER TABLE argus_reports " "ADD COLUMN IF NOT EXISTS created_by TEXT"
         )
+        # Per-user saved custom profiles (Tier 4). Per-user scoping only — no
+        # team sharing in v1. Reference to argus_reports is intentionally absent;
+        # deleting a profile must not break reproducibility of past reports.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS argus_profiles (
+                id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_email          TEXT NOT NULL,
+                name                TEXT NOT NULL,
+                base_profile        TEXT NOT NULL,
+                evaluator_overrides JSONB NOT NULL DEFAULT '{}'::jsonb,
+                argus_overrides     JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE (user_email, name)
+            )
+            """)
 
 
 def get_report_store() -> Optional[ReportStore]:

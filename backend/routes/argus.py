@@ -22,6 +22,13 @@ from queryargus.models.config import (
 from queryargus.models.connection import CosmosConnection
 from queryargus.models.finding import Finding
 from queryargus.models.report import AuditReport
+from services.argus_profiles_service import (
+    ProfileNameConflict,
+    create_profile,
+    delete_profile,
+    get_profile_for_user,
+    list_profiles,
+)
 from services.argus_store import (
     fetch_report_created_by,
     fetch_run_summaries,
@@ -63,6 +70,16 @@ class AuditRequest(BaseModel):
     collection: str
     max_iterations: int = 20
     profile: Profile = "fast"
+    # Tier 2 overrides — merged onto ArgusConfig before the run.
+    # Unknown keys raise 400 via Pydantic's extra="forbid" on ArgusConfig.
+    argus_overrides: Optional[dict[str, Any]] = None
+    # Tier 3 — merged onto EvaluatorConfig. Wired here so the request
+    # contract is stable across phases even before the UI exposes it.
+    config_overrides: Optional[dict[str, Any]] = None
+    # Tier 4 — saved profile id. When set, the profile's overrides are
+    # resolved server-side; inline overrides above take precedence so the
+    # user can tweak a saved profile for a one-off run.
+    saved_profile_id: Optional[str] = None
 
 
 def _summary(description: str) -> str:
@@ -243,16 +260,57 @@ async def _execute_job(
         return
 
     store = get_report_store()
+
+    # Resolve saved profile (Tier 4): inline overrides win, so a user can tweak
+    # a saved profile for a single run without mutating the stored profile.
+    saved_evaluator: dict[str, Any] = {}
+    saved_argus: dict[str, Any] = {}
+    if req.saved_profile_id and caller_email:
+        profile_row = await run_in_threadpool(
+            get_profile_for_user,
+            profile_id=req.saved_profile_id,
+            user_email=caller_email,
+        )
+        if profile_row is None:
+            job["status"] = "error"
+            job["error"] = "Saved profile not found"
+            job["finished_at"] = datetime.now(timezone.utc).isoformat()
+            return
+        saved_evaluator = profile_row.get("evaluator_overrides") or {}
+        saved_argus = profile_row.get("argus_overrides") or {}
+
     try:
         connection = CosmosConnection.from_connection_string(
             connection_string=connection_string,
             cosmos_account=req.account_id,
             database=req.database,
         )
-        config = ArgusConfig(
-            max_iterations=req.max_iterations,
-            evaluation=_PROFILES[req.profile],
-        )
+        evaluation = _PROFILES[req.profile]
+        merged_eval = {**saved_evaluator, **(req.config_overrides or {})}
+        merged_argus = {**saved_argus, **(req.argus_overrides or {})}
+        if merged_eval:
+            try:
+                evaluation = evaluation.model_copy(update=merged_eval)
+                # Re-validate so threshold ranges + Literal fields are enforced.
+                evaluation = evaluation.__class__(**evaluation.model_dump())
+            except Exception as exc:
+                job["status"] = "error"
+                job["error"] = f"Invalid evaluator override: {exc}"
+                job["finished_at"] = datetime.now(timezone.utc).isoformat()
+                return
+        argus_kwargs: dict[str, Any] = {
+            "max_iterations": req.max_iterations,
+            "evaluation": evaluation,
+        }
+        if merged_argus:
+            argus_kwargs.update(merged_argus)
+        try:
+            config = ArgusConfig(**argus_kwargs)
+        except Exception as exc:
+            job["status"] = "error"
+            job["error"] = f"Invalid argus override: {exc}"
+            job["finished_at"] = datetime.now(timezone.utc).isoformat()
+            return
         llm = GeminiClient(model=config.llm_model)
         agent = ArgusAgent.from_config(config=config, llm=llm)
 
@@ -448,3 +506,68 @@ async def get_report(report_id: str, authorization: str = Header(...)):
             created_by=created_by,
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Tier 4 — saved custom profiles
+# ---------------------------------------------------------------------------
+
+
+class ProfileCreate(BaseModel):
+    name: str
+    base_profile: Profile
+    evaluator_overrides: dict[str, Any] = {}
+    argus_overrides: dict[str, Any] = {}
+
+
+def _require_caller_email(authorization: str) -> str:
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    email = extract_email_from_token(authorization.replace("Bearer ", ""))
+    if not email:
+        raise HTTPException(status_code=401, detail="Caller identity missing")
+    return email
+
+
+@router.get("/profiles")
+async def list_saved_profiles(authorization: str = Header(...)):
+    email = _require_caller_email(authorization)
+    rows = await run_in_threadpool(list_profiles, email)
+    return JSONResponse(content={"profiles": rows})
+
+
+@router.post("/profiles")
+async def create_saved_profile(
+    payload: ProfileCreate, authorization: str = Header(...)
+):
+    email = _require_caller_email(authorization)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    try:
+        row = await run_in_threadpool(
+            create_profile,
+            user_email=email,
+            name=name,
+            base_profile=payload.base_profile,
+            evaluator_overrides=payload.evaluator_overrides,
+            argus_overrides=payload.argus_overrides,
+        )
+    except ProfileNameConflict:
+        raise HTTPException(
+            status_code=409, detail="A profile with that name already exists"
+        )
+    if row is None:
+        raise HTTPException(status_code=500, detail="Failed to create profile")
+    return JSONResponse(status_code=201, content=row)
+
+
+@router.delete("/profiles/{profile_id}")
+async def delete_saved_profile(profile_id: str, authorization: str = Header(...)):
+    email = _require_caller_email(authorization)
+    ok = await run_in_threadpool(
+        delete_profile, profile_id=profile_id, user_email=email
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return JSONResponse(content={"deleted": True})
