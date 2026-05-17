@@ -19,6 +19,7 @@ import {
   startArgusAudit,
 } from '../services/argusService';
 import { ArgusTrendsPanel } from '../components/ArgusTrendsPanel';
+import { useNotifications } from '../contexts/NotificationsContext';
 
 const DEFAULT_MAX_ITER = 20;
 const DEFAULT_SAMPLE_SIZE = 200;
@@ -438,7 +439,40 @@ const sectionLabel: React.CSSProperties = {
 
 const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, collections }) => {
   const hasConnection = !!(accountId && databaseName);
-  const [collection, setCollection] = useState<string>(collections?.[0]?.name ?? '');
+  const { trackArgusRun } = useNotifications();
+  const [collection, setCollection] = useState<string>(() => {
+    if (!collections || collections.length === 0) return '';
+    return [...collections].sort((a, b) => a.name.localeCompare(b.name))[0].name;
+  });
+  const [collectionDefaulting, setCollectionDefaulting] = useState(false);
+  const userPickedCollectionRef = useRef(false);
+  // Reset the "user picked" flag whenever the account/database scope changes
+  // so the next auto-default can run for the new scope.
+  useEffect(() => { userPickedCollectionRef.current = false; }, [accountId, databaseName]);
+  // Default the dropdown to the collection with the most recent persisted run
+  // for this account/database; fall back to the first alphabetical collection.
+  useEffect(() => {
+    if (userPickedCollectionRef.current) return;
+    if (!collections || collections.length === 0) return;
+    const alphaFirst = [...collections].sort((a, b) => a.name.localeCompare(b.name))[0].name;
+    let cancelled = false;
+    setCollectionDefaulting(true);
+    (async () => {
+      let target = alphaFirst;
+      if (accountId && databaseName) {
+        try {
+          const rows = await listArgusRuns({ accountId, database: databaseName, limit: 1 });
+          const recent = rows[0]?.collection;
+          if (recent && collections.some((c) => c.name === recent)) target = recent;
+        } catch {
+          // ignore — fall back to alphabetical
+        }
+      }
+      if (!cancelled && !userPickedCollectionRef.current) setCollection(target);
+      if (!cancelled) setCollectionDefaulting(false);
+    })();
+    return () => { cancelled = true; };
+  }, [accountId, databaseName, collections]);
   const [profile, setProfile] = useState<ArgusProfile>('fast');
   const [report, setReport] = useState<ArgusReport | null>(null);
   const [jobStatus, setJobStatus] = useState<ArgusJobStatus | null>(null);
@@ -663,13 +697,20 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
     const stored = readJobMap()[jobKey(accountId, databaseName, collection)];
     if (!stored) return;
     setJobStatus('running');
+    trackArgusRun({
+      jobId: stored,
+      accountId,
+      database: databaseName,
+      collection,
+      startedAt: Date.now(),
+    });
     pollJob(stored, accountId, databaseName, collection);
     pollRef.current = window.setInterval(
       () => pollJob(stored, accountId, databaseName, collection),
       3000,
     );
     return clearPoll;
-  }, [accountId, databaseName, collection, pollJob]);
+  }, [accountId, databaseName, collection, pollJob, trackArgusRun]);
 
   const runAudit = async () => {
     if (!accountId || !databaseName || !collection) return;
@@ -696,6 +737,13 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
       const map = readJobMap();
       map[jobKey(accountId, databaseName, collection)] = job_id;
       writeJobMap(map);
+      trackArgusRun({
+        jobId: job_id,
+        accountId,
+        database: databaseName,
+        collection,
+        startedAt: Date.now(),
+      });
       pollJob(job_id, accountId, databaseName, collection);
       pollRef.current = window.setInterval(
         () => pollJob(job_id, accountId, databaseName, collection),
@@ -741,22 +789,38 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
           {databaseName ?? '—'}
         </span>
         {hasConnection && (collections?.length ?? 0) > 0 && (
-          <select
-            value={collection}
-            onChange={(e) => setCollection(e.target.value)}
-            style={{
-              fontFamily: 'var(--font-mono)', fontSize: 12,
-              padding: '3px 8px', borderRadius: 6,
-              background: 'var(--panel)', color: 'var(--fg)',
-              border: '1px solid var(--border)', cursor: 'pointer',
-            }}
-          >
-            {[...collections!]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((c) => (
-                <option key={c.name} value={c.name}>{c.name}</option>
-              ))}
-          </select>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <select
+              value={collection}
+              onChange={(e) => { userPickedCollectionRef.current = true; setCollection(e.target.value); }}
+              disabled={collectionDefaulting}
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 12,
+                padding: '3px 8px', borderRadius: 6,
+                background: 'var(--panel)', color: 'var(--fg)',
+                border: '1px solid var(--border)',
+                cursor: collectionDefaulting ? 'progress' : 'pointer',
+                opacity: collectionDefaulting ? 0.7 : 1,
+              }}
+            >
+              {[...collections!]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((c) => (
+                  <option key={c.name} value={c.name}>{c.name}</option>
+                ))}
+            </select>
+            {collectionDefaulting && (
+              <svg
+                width="13" height="13" viewBox="0 0 16 16" fill="none"
+                stroke="var(--muted)" strokeWidth="1.5"
+                style={{ animation: 'qp-spin 0.8s linear infinite' }}
+                aria-label="Loading recent run"
+              >
+                <circle cx="8" cy="8" r="6" strokeOpacity="0.3" />
+                <path d="M8 2a6 6 0 0 1 6 6" />
+              </svg>
+            )}
+          </div>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Profile</span>
@@ -1301,6 +1365,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
           </div>
         </div>
       )}
+      <style>{`@keyframes qp-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };
