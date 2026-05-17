@@ -56,3 +56,6 @@ CLAUDE.md
 .claude/settings.local.json
 HANDOFF.md
 DESIGN_HANDBOOK.md
+
+# virtual environment
+.venv/
