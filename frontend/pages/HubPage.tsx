@@ -182,18 +182,33 @@ const HubPage: React.FC = () => {
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
     : 'U';
 
+  const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<'open' | 'explorer' | null>(null);
+
   const handleOpenAccount = (account: CosmosDBAccount) => {
+    if (busyAccountId) return;
+    setBusyAccountId(account.id);
+    setBusyAction('open');
     navigate('/query-generator', { state: { preselectedAccountId: account.id, preselectedAccountName: account.name } });
   };
 
   const handleOpenExplorer = async (account: CosmosDBAccount) => {
+    if (busyAccountId) return;
+    setBusyAccountId(account.id);
+    setBusyAction('explorer');
     try {
       const databases = await getDatabasesForAccount(account.id);
-      if (databases.length === 0) return;
+      if (databases.length === 0) {
+        setBusyAccountId(null);
+        setBusyAction(null);
+        return;
+      }
       const firstDb = databases[0];
       navigate(`/data-explorer/${encodeURIComponent(account.id)}/${encodeURIComponent(firstDb.name)}`);
     } catch (e) {
       console.error('Failed to open explorer:', e);
+      setBusyAccountId(null);
+      setBusyAction(null);
     }
   };
 
@@ -320,7 +335,14 @@ const HubPage: React.FC = () => {
               </div>
             )}
             {accounts.map((account) => (
-              <ConnectionCard key={account.id} account={account} onOpen={handleOpenAccount} onOpenExplorer={handleOpenExplorer} />
+              <ConnectionCard
+                key={account.id}
+                account={account}
+                onOpen={handleOpenAccount}
+                onOpenExplorer={handleOpenExplorer}
+                busyAction={busyAccountId === account.id ? busyAction : null}
+                disabled={!!busyAccountId && busyAccountId !== account.id}
+              />
             ))}
           </div>
         </section>
@@ -402,26 +424,43 @@ const HubPage: React.FC = () => {
   );
 };
 
+/* ── Inline spinner ── */
+const Spinner: React.FC<{ size?: number }> = ({ size = 11 }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="8" cy="8" r="6" opacity="0.3" />
+    <path d="M14 8a6 6 0 0 0-6-6">
+      <animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.9s" repeatCount="indefinite" />
+    </path>
+  </svg>
+);
+
 /* ── Connection card ── */
 const ConnectionCard: React.FC<{
   account: CosmosDBAccount;
   onOpen: (a: CosmosDBAccount) => void;
   onOpenExplorer: (a: CosmosDBAccount) => void;
-}> = ({ account, onOpen, onOpenExplorer }) => {
+  busyAction: 'open' | 'explorer' | null;
+  disabled: boolean;
+}> = ({ account, onOpen, onOpenExplorer, busyAction, disabled }) => {
   const [hovered, setHovered] = useState(false);
   const [explorerHovered, setExplorerHovered] = useState(false);
+  const isOpenBusy = busyAction === 'open';
+  const isExplorerBusy = busyAction === 'explorer';
+  const anyBusy = !!busyAction;
+  const inert = disabled || anyBusy;
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
         background: 'var(--panel)',
-        border: `1px solid ${hovered ? 'color-mix(in oklch, var(--accent) 35%, var(--border))' : 'var(--border)'}`,
+        border: `1px solid ${hovered && !disabled ? 'color-mix(in oklch, var(--accent) 35%, var(--border))' : 'var(--border)'}`,
         borderRadius: 14, padding: 22,
         display: 'flex', flexDirection: 'column', gap: 14,
-        transform: hovered ? 'translateY(-1px)' : 'none',
-        boxShadow: hovered ? '0 12px 24px -16px rgba(20,18,14,0.18)' : 'none',
-        transition: 'transform 0.12s, border-color 0.12s, box-shadow 0.12s',
+        transform: hovered && !disabled ? 'translateY(-1px)' : 'none',
+        boxShadow: hovered && !disabled ? '0 12px 24px -16px rgba(20,18,14,0.18)' : 'none',
+        transition: 'transform 0.12s, border-color 0.12s, box-shadow 0.12s, opacity 0.12s',
+        opacity: disabled ? 0.5 : 1,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -451,34 +490,57 @@ const ConnectionCard: React.FC<{
             onClick={() => onOpenExplorer(account)}
             onMouseEnter={() => setExplorerHovered(true)}
             onMouseLeave={() => setExplorerHovered(false)}
+            disabled={inert}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               fontSize: 12, padding: '5px 10px', borderRadius: 6,
-              border: `1px solid ${explorerHovered ? 'var(--accent)' : 'var(--border)'}`,
-              background: explorerHovered ? 'var(--accent-soft)' : 'var(--soft)',
-              color: explorerHovered ? 'var(--accent)' : 'var(--muted)',
-              cursor: 'pointer', fontFamily: 'var(--font-body)',
+              border: `1px solid ${isExplorerBusy ? 'var(--accent)' : explorerHovered && !inert ? 'var(--accent)' : 'var(--border)'}`,
+              background: isExplorerBusy ? 'var(--accent-soft)' : explorerHovered && !inert ? 'var(--accent-soft)' : 'var(--soft)',
+              color: isExplorerBusy ? 'var(--accent)' : explorerHovered && !inert ? 'var(--accent)' : 'var(--muted)',
+              cursor: inert ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-body)',
               transition: 'border-color 0.12s, background 0.12s, color 0.12s',
+              opacity: inert && !isExplorerBusy ? 0.6 : 1,
             }}
           >
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M2 3h12v3H2zM2 7h12v3H2zM2 11h12v3H2z"/>
-            </svg>
-            Explorer
+            {isExplorerBusy ? (
+              <>
+                <Spinner />
+                Loading…
+              </>
+            ) : (
+              <>
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M2 3h12v3H2zM2 7h12v3H2zM2 11h12v3H2z"/>
+                </svg>
+                Explorer
+              </>
+            )}
           </button>
           <button
             onClick={() => onOpen(account)}
+            disabled={inert}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               fontSize: 12.5, padding: '5px 10px', borderRadius: 6,
               border: 'none', background: 'none',
-              color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-body)',
+              color: 'var(--accent)',
+              cursor: inert ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-body)',
+              opacity: inert && !isOpenBusy ? 0.6 : 1,
             }}
           >
-            Open
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <path d="M3 8h10M9 4l4 4-4 4"/>
-            </svg>
+            {isOpenBusy ? (
+              <>
+                <Spinner />
+                Loading…
+              </>
+            ) : (
+              <>
+                Open
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <path d="M3 8h10M9 4l4 4-4 4"/>
+                </svg>
+              </>
+            )}
           </button>
         </div>
       </div>
