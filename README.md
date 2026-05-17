@@ -78,6 +78,7 @@ Azure Cosmos DB's portal interface can be limiting for real-world data explorati
 | **Backend API**    | FastAPI (Python 3.12), Uvicorn, Pydantic V2                               |
 | **Database**       | Azure Cosmos DB (MongoDB API), PostgreSQL (User Data)                      |
 | **Cloud Platform** | Google Cloud Run, Azure Resource Manager (ARM)                             |
+| **Infrastructure** | Terraform, GCP Secret Manager, Serverless VPC Access, Cloud SQL            |
 | **DevOps & CI/CD** | GitHub Actions, Docker, Google Container Registry                          |
 | **Testing**        | Vitest, React Testing Library, Pytest, Coverage.py                        |
 | **Code Quality**   | ESLint, Black, Flake8, MyPy, TypeScript Strict Mode                       |
@@ -286,50 +287,127 @@ npm run test:ui
 
 ---
 
-## ☁️ Cloud Deployment
+## ☁️ Infrastructure & Deployment
 
-### Google Cloud Run (Production)
+### Production Architecture
 
-QueryPal is designed for Google Cloud Run with automatic CI/CD:
+QueryPal runs on Google Cloud Run with a private backend topology. The frontend nginx container is the only public entry point — the backend service is network-isolated and unreachable from the internet.
 
-#### Automatic Deployment
-1. **Push to Production**: Commits to `production` branch trigger automatic deployment
-2. **GitHub Actions**: Builds and deploys both frontend and backend containers
-3. **Environment Variables**: Securely managed through GitHub Secrets
+```mermaid
+graph TB
+    Browser(["👤 Browser"])
 
-#### Manual Deployment
-```bash
-# Authenticate with Google Cloud
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
+    subgraph gcp["☁️ Google Cloud Platform &mdash; europe-west1"]
+        subgraph cloudrun["Cloud Run"]
+            direction TB
+            Frontend["<b>querypal-frontend</b><br/>──────────────<br/>ingress: public<br/>nginx · serves SPA<br/>proxies /api/* → backend"]
+            Backend["<b>querypal-backend</b><br/>──────────────<br/>ingress: internal only<br/>FastAPI · Uvicorn<br/>❌ not reachable from internet"]
+        end
 
-# Deploy backend
-cd backend
-docker build -t gcr.io/YOUR_PROJECT_ID/querypal-backend .
-docker push gcr.io/YOUR_PROJECT_ID/querypal-backend
-gcloud run deploy querypal-backend \
-  --image gcr.io/YOUR_PROJECT_ID/querypal-backend \
-  --region europe-west1 \
-  --port 8000 \
-  --add-cloudsql-instances YOUR_CLOUDSQL_INSTANCE \
-  --set-env-vars AZURE_TENANT_ID=xxx,GEMINI_API_KEY=xxx \
-  --allow-unauthenticated
+        subgraph vpc["VPC Network"]
+            Connector["Serverless VPC<br/>Access Connector<br/><i>10.8.0.0/28</i>"]
+        end
 
-# Deploy frontend
-cd ../frontend
-docker build -t gcr.io/YOUR_PROJECT_ID/querypal-frontend \
-  --build-arg VITE_API_BASE_URL=https://your-backend-url \
-  --build-arg VITE_AZURE_REDIRECT_URI=https://your-frontend-url .
-docker push gcr.io/YOUR_PROJECT_ID/querypal-frontend
-gcloud run deploy querypal-frontend \
-  --image gcr.io/YOUR_PROJECT_ID/querypal-frontend \
-  --region europe-west1 \
-  --port 4000 \
-  --allow-unauthenticated
+        SM[("🔑 Secret Manager<br/>6 secrets")]
+        SQL[("🗄️ Cloud SQL<br/>PostgreSQL")]
+        GCR["📦 Container Registry"]
+        SA["🪪 Cloud Run SA<br/><i>least-privilege</i>"]
+    end
+
+    subgraph azure["☁️ Microsoft Azure"]
+        Entra["🔐 Entra ID<br/><i>MSAL · OBO flow</i>"]
+        Cosmos[("🌍 Cosmos DB<br/>MongoDB API")]
+    end
+
+    Gemini["🤖 Google Gemini Pro"]
+
+    Browser -- "HTTPS" --> Frontend
+    Frontend -. "vpc-egress: all-traffic" .-> Connector
+    Connector -- "internal ingress\n✅ VPC source allowed" --> Backend
+    Backend -- "Cloud SQL Proxy\nunix socket" --> SQL
+    Backend -- "HTTPS" --> Entra
+    Backend -- "HTTPS" --> Cosmos
+    Backend -- "HTTPS" --> Gemini
+    SM -- "mounted at startup\nvia --set-secrets" --> Backend
+    SA -. "identity" .-> Frontend
+    SA -. "identity" .-> Backend
+    GCR -- "image" --> Frontend
+    GCR -- "image" --> Backend
 ```
 
-### Azure Web App (Alternative)
-QueryPal also supports deployment to Azure Web Apps using the included publish profiles.
+### Network Security Model
+
+| | Frontend | Backend |
+|---|---|---|
+| **Cloud Run ingress** | `all` (public) | `internal` (VPC only) |
+| **VPC egress** | `all-traffic` (proxy to backend) | `private-ranges-only` |
+| **Internet accessible** | ✅ Yes | ❌ No — 403 from GFE |
+| **Who can call it** | Anyone | Frontend nginx via VPC connector |
+
+All API calls from the browser go to `/api/*` on the frontend's own origin. Nginx strips the `/api` prefix and proxies the request to the backend's internal Cloud Run URL through the VPC connector. The backend URL is never exposed to the browser.
+
+### Secret Management
+
+All sensitive configuration is stored in **GCP Secret Manager** and mounted into the backend container at startup via Cloud Run's native `--set-secrets` integration. Secrets are never passed as plain environment variables and never appear in deployment logs or `gcloud run describe` output.
+
+| Secret | Description |
+|---|---|
+| `querypal-azure-tenant-id` | Microsoft Entra ID tenant |
+| `querypal-azure-client-id` | Backend app registration client ID |
+| `querypal-azure-client-secret` | Backend app registration client secret |
+| `querypal-gemini-api-key` | Google Gemini API key |
+| `querypal-db-user` | Cloud SQL PostgreSQL username |
+| `querypal-db-pass` | Cloud SQL PostgreSQL password |
+
+### Infrastructure as Code
+
+Cloud infrastructure is managed by **Terraform** in the `terraform/` directory. The CI pipeline owns image builds and Cloud Run deployments; Terraform owns everything underneath.
+
+| Resource | Managed by |
+|---|---|
+| VPC connector | Terraform |
+| Secret Manager secrets | Terraform |
+| Cloud Run service account + IAM | Terraform |
+| Cloud SQL instance & database | Terraform (import existing) |
+| Cloud Run services | CI pipeline (GitHub Actions) |
+| Docker images | CI pipeline (GitHub Actions) |
+
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+./import.sh      # import existing Cloud SQL — no data migration needed
+terraform apply
+```
+
+> See the PR migration guide for the full step-by-step checklist, including how to populate Secret Manager values and what to verify before the first production deploy.
+
+### CI/CD Pipeline
+
+Pushes to the `production` branch trigger the deploy workflow (`.github/workflows/google-cloudrun-docker.yml`).
+
+```mermaid
+flowchart LR
+    Push(["push to\nproduction"]) --> Auth
+
+    subgraph gha["GitHub Actions"]
+        Auth["Authenticate\nWorkload Identity\nFederation"]
+        Auth --> BuildBE["Build &amp; push\nbackend image"]
+        Auth --> BuildFE["Build &amp; push\nfrontend image"]
+        BuildBE --> DeployBE["Deploy backend\n--ingress=internal\n--set-secrets\n--vpc-connector"]
+        BuildFE --> DeployFE
+        DeployBE -- "backend URL" --> DeployFE["Deploy frontend\nBACKEND_URL=internal URL\n--vpc-connector"]
+    end
+
+    DeployBE --> SM
+    DeployFE --> Done(["✅ Live"])
+
+    subgraph gcp["GCP"]
+        SM[("Secret Manager\nfetch at startup")]
+    end
+```
+
+Workload Identity Federation is used for keyless authentication — no long-lived service account keys are stored in GitHub. The dedicated Cloud Run service account (`querypal-cloudrun-sa`) holds only the permissions it needs: `secretmanager.secretAccessor`, `cloudsql.client`, and `vpcaccess.user`.
 
 ---
 
