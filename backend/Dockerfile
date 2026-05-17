@@ -4,8 +4,10 @@ FROM python:3.12-slim
 WORKDIR /app/backend
 
 COPY requirements.txt .
+COPY queryargus ./queryargus
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir --no-deps -e ./queryargus
 
 COPY . .
 

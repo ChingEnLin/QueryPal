@@ -10,5 +10,6 @@ exclude = '''
   | htmlcov
   | venv
   | \.venv
+  | queryargus
 )/
 '''
