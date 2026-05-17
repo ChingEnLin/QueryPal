@@ -1,3 +1,9 @@
+## [2.10.1](https://github.com/ChingEnLin/QueryPal/compare/v2.10.0...v2.10.1) (2026-05-17)
+
+### Maintenance
+
+* merge dev into production ([#34](https://github.com/ChingEnLin/QueryPal/issues/34)) ([b363f16](https://github.com/ChingEnLin/QueryPal/commit/b363f16670ccaede184558225b0a654143199f92)), closes [#33](https://github.com/ChingEnLin/QueryPal/issues/33)
+
 ## [2.10.0](https://github.com/ChingEnLin/QueryPal/compare/v2.9.0...v2.10.0) (2026-05-14)
 
 ### Features
