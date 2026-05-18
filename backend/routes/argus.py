@@ -38,7 +38,7 @@ from services.argus_store import (
     set_finding_rating,
     set_report_created_by,
 )
-from services.azure_auth import exchange_token_obo, extract_email_from_token
+from services.azure_auth import exchange_token_obo, extract_email_from_token, is_local_mode
 from services.azure_cosmos_resources import (
     get_connection_string,
     list_cosmos_resources,
@@ -65,6 +65,11 @@ _SEVERITY_UI = {
 
 _JOBS: dict[str, dict[str, Any]] = {}
 _MAX_JOBS = 50
+
+# Stable sentinel account-id used in local mode. The harness MUST pass this
+# value as ``--cosmos-account`` so requests, persisted reports, and the
+# access-scope check all line up.
+LOCAL_ACCOUNT_ID = "local"
 
 
 class AuditRequest(BaseModel):
@@ -250,6 +255,11 @@ def _evict_old_jobs() -> None:
 
 def _accessible_account_ids(access_token: str) -> list[str]:
     """Cosmos accounts (full ARM resource IDs) visible to the caller."""
+    # Local-mode bypass — there is no Azure to ask. Grant access to the
+    # single sentinel account-id so the existing access-scope checks pass
+    # for any /argus/{run, runs, reports, findings, escalations} call.
+    if is_local_mode():
+        return [LOCAL_ACCOUNT_ID]
     try:
         resources = list_cosmos_resources(access_token)
     except Exception:

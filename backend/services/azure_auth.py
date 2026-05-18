@@ -9,6 +9,21 @@ CLIENT_ID = env.get("AZURE_CLIENT_ID")
 CLIENT_SECRET = env.get("AZURE_CLIENT_SECRET")
 ARM_SCOPE = env.get("ARM_SCOPE")
 
+# Local-mode bypass: when ``LOCAL_MONGO_URI`` is set the backend skips Azure
+# OBO + ARM lookups entirely so the HITL experiment harness can run against
+# a local MongoDB without standing up a real Cosmos account. The stub token
+# and email are surfaced verbatim through the same code paths that handle
+# the real values, so created_by / rated_by populate sensibly.
+LOCAL_MODE_ENV = "LOCAL_MONGO_URI"
+LOCAL_STUB_TOKEN = "local-mode-stub-token"
+LOCAL_EMAIL = "local@dev"
+
+
+def is_local_mode() -> bool:
+    """True iff the backend is running against a local MongoDB (no Azure)."""
+    return bool(env.get(LOCAL_MODE_ENV))
+
+
 _app: Optional[msal.ConfidentialClientApplication] = None
 
 
@@ -28,6 +43,8 @@ def _get_msal_app() -> msal.ConfidentialClientApplication:
 
 def exchange_token_obo(user_token: str) -> str:
     """Exchange user token for access token using On-Behalf-Of flow."""
+    if is_local_mode():
+        return LOCAL_STUB_TOKEN
     app = _get_msal_app()
     result = app.acquire_token_on_behalf_of(
         user_assertion=user_token, scopes=[ARM_SCOPE]
@@ -43,6 +60,8 @@ def extract_email_from_token(jwt: str) -> Optional[str]:
     No signature check — Azure already validated this token during the OBO
     exchange the caller just performed. We only need to read claims.
     """
+    if is_local_mode():
+        return LOCAL_EMAIL
     try:
         parts = jwt.split(".")
         if len(parts) < 2:
