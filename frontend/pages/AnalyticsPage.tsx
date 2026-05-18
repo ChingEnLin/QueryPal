@@ -27,7 +27,7 @@ const DEFAULT_SAMPLE_SIZE = 200;
 const DEFAULT_MIN_SEVERITY: ArgusMinSeverity = 'low';
 const MIN_SEVERITIES: ArgusMinSeverity[] = ['low', 'medium', 'high', 'critical'];
 
-type EvalStrategy = 'none' | 'rules' | 'self' | 'judge' | 'composite';
+type EvalStrategy = 'none' | 'rules' | 'self' | 'judge' | 'composite' | 'escalation';
 type JudgeProvider = 'gemini' | 'openai' | 'anthropic';
 type RejectedPolicy = 'drop' | 'log_only' | 'demote_severity';
 type RunFailPolicy = 'continue' | 'warn_only' | 'abort';
@@ -43,6 +43,10 @@ interface EvalState {
   run_pass_threshold: number;
   rejected_finding_policy: RejectedPolicy;
   run_fail_policy: RunFailPolicy;
+  // Arm B — only consulted when finding_evaluator === 'escalation'.
+  escalation_high_threshold: number;
+  escalation_low_threshold: number;
+  escalation_cap: number;
 }
 
 // Baselines must match backend `PROFILE_*` in queryargus/models/config.py.
@@ -52,22 +56,35 @@ const PROFILE_BASELINES: Record<ArgusProfile, EvalState> = {
     judge_provider: null, judge_model: null,
     action_pass_threshold: 0.6, finding_pass_threshold: 0.7, run_pass_threshold: 0.5,
     rejected_finding_policy: 'log_only', run_fail_policy: 'continue',
+    escalation_high_threshold: 0.85, escalation_low_threshold: 0.40, escalation_cap: 10,
   },
   balanced: {
     action_evaluator: 'rules', finding_evaluator: 'composite', run_evaluator: 'self',
     judge_provider: null, judge_model: null,
     action_pass_threshold: 0.6, finding_pass_threshold: 0.7, run_pass_threshold: 0.5,
     rejected_finding_policy: 'log_only', run_fail_policy: 'continue',
+    escalation_high_threshold: 0.85, escalation_low_threshold: 0.40, escalation_cap: 10,
   },
   thorough: {
     action_evaluator: 'rules', finding_evaluator: 'composite', run_evaluator: 'judge',
     judge_provider: 'openai', judge_model: 'gpt-4o',
     action_pass_threshold: 0.6, finding_pass_threshold: 0.7, run_pass_threshold: 0.5,
     rejected_finding_policy: 'log_only', run_fail_policy: 'continue',
+    escalation_high_threshold: 0.85, escalation_low_threshold: 0.40, escalation_cap: 10,
   },
 };
 
-const EVAL_STRATEGIES: EvalStrategy[] = ['none', 'rules', 'self', 'judge', 'composite'];
+const EVAL_STRATEGIES: EvalStrategy[] = ['none', 'rules', 'self', 'judge', 'composite', 'escalation'];
+// 'escalation' is only meaningful on the finding gate — the matrix renders a
+// non-clickable em-dash for the action/run rows in that column.
+const STRATEGY_GATE_SCOPE: Record<EvalStrategy, ReadonlyArray<keyof EvalState>> = {
+  none: ['action_evaluator', 'finding_evaluator', 'run_evaluator'],
+  rules: ['action_evaluator', 'finding_evaluator', 'run_evaluator'],
+  self: ['action_evaluator', 'finding_evaluator', 'run_evaluator'],
+  judge: ['action_evaluator', 'finding_evaluator', 'run_evaluator'],
+  composite: ['action_evaluator', 'finding_evaluator', 'run_evaluator'],
+  escalation: ['finding_evaluator'],
+};
 const JUDGE_PROVIDERS: JudgeProvider[] = ['gemini', 'openai', 'anthropic'];
 const REJECTED_POLICIES: RejectedPolicy[] = ['drop', 'log_only', 'demote_severity'];
 const RUN_FAIL_POLICIES: RunFailPolicy[] = ['continue', 'warn_only', 'abort'];
@@ -1070,6 +1087,14 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
                             )}
                           </td>
                           {EVAL_STRATEGIES.map(s => {
+                            const supported = STRATEGY_GATE_SCOPE[s].includes(gate);
+                            if (!supported) {
+                              return (
+                                <td key={s} style={{ padding: 2, textAlign: 'center', color: 'var(--muted)', opacity: 0.4 }}>
+                                  <span title={`'${s}' applies only to the finding gate`}>—</span>
+                                </td>
+                              );
+                            }
                             const isCurrent = current === s;
                             const isBaseline = baseline === s;
                             return (
@@ -1111,6 +1136,59 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
                   value={evalState.run_pass_threshold} defaultValue={evalBaseline.run_pass_threshold}
                   onChange={(v) => updateEval('run_pass_threshold', v)} />
               </div>
+
+              {/* Escalation knobs — only meaningful when finding_evaluator === 'escalation' */}
+              {evalState.finding_evaluator === 'escalation' && (
+                <div style={{
+                  display: 'flex', gap: 18, flexWrap: 'wrap',
+                  padding: '10px 12px', borderRadius: 6,
+                  background: 'color-mix(in oklch, var(--accent) 6%, var(--panel))',
+                  border: '1px dashed var(--border)',
+                }}>
+                  <div style={{ flexBasis: '100%', fontSize: 11, color: 'var(--muted)', marginBottom: -2 }}>
+                    Escalation gate · confidence ≥ high → publish, &lt; low → drop,
+                    in between → queued for human review (capped per run).
+                  </div>
+                  <ThresholdInput
+                    label="Publish threshold"
+                    help="Findings with self-confidence ≥ this value are published without escalation."
+                    value={evalState.escalation_high_threshold}
+                    defaultValue={evalBaseline.escalation_high_threshold}
+                    onChange={(v) => updateEval('escalation_high_threshold', v)}
+                  />
+                  <ThresholdInput
+                    label="Drop threshold"
+                    help="Findings with self-confidence < this value are dropped silently — the reviewer never sees them."
+                    value={evalState.escalation_low_threshold}
+                    defaultValue={evalBaseline.escalation_low_threshold}
+                    onChange={(v) => updateEval('escalation_low_threshold', v)}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 110 }}>
+                    <div style={sectionLabel}>
+                      <span>Cap per run</span>
+                      <InfoPopover title="Escalation cap">
+                        Maximum number of findings that can be parked as <code>pending_review</code> in
+                        a single run. Once exceeded, further mid-confidence findings are dropped instead
+                        of escalated so a noisy run can't spam the reviewer queue.
+                      </InfoPopover>
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={50}
+                      step={1}
+                      value={evalState.escalation_cap}
+                      onChange={(e) => updateEval('escalation_cap', Math.max(0, Math.min(50, Number(e.target.value) || 0)))}
+                      style={{
+                        padding: '4px 8px', borderRadius: 6, fontSize: 12, width: 80,
+                        background: 'var(--panel)', color: 'var(--fg)',
+                        border: '1px solid var(--border)',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Judge */}
               <div style={{
