@@ -7,19 +7,37 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import query, azure, system, user_queries, data_documents, audit, argus
 
-# uvicorn's default config only routes the ``uvicorn.*`` loggers, so anything
-# emitted by the ``queryargus.*`` submodule or our own ``services.*`` modules
-# is silently dropped at the root level. Configure root once here so those
-# logs surface in the terminal during local dev. Idempotent — calling
-# basicConfig twice is a no-op (the second call's args are ignored).
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO"),
-    format="%(asctime)s %(levelname)-7s %(name)s · %(message)s",
-)
+
+def _configure_app_logging() -> None:
+    """Surface queryargus.* + services.* INFO logs in the terminal.
+
+    uvicorn ships a LOGGING_CONFIG that registers handlers on ``uvicorn`` /
+    ``uvicorn.error`` / ``uvicorn.access`` but leaves the root logger
+    untouched, so submodule logs (``queryargus.*``, ``services.*``) reach a
+    no-op root and disappear. ``force=True`` replaces any pre-existing root
+    config so this works even if uvicorn (or a parent) has already done
+    setup. We also pin the two namespaces we care about to INFO and let
+    them propagate so a stricter ancestor level can't silence them.
+    """
+    level = os.getenv("LOG_LEVEL", "INFO").upper()
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)-7s %(name)s · %(message)s",
+        force=True,
+    )
+    for name in ("queryargus", "services", "routes"):
+        lg = logging.getLogger(name)
+        lg.setLevel(level)
+        lg.propagate = True
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Apply logging config AFTER uvicorn finishes its own LOGGING_CONFIG
+    # pass — lifespan startup runs after Server.startup, so by here uvicorn
+    # is done touching the logging tree.
+    _configure_app_logging()
+
     from services.argus_store import get_report_store
 
     get_report_store()
