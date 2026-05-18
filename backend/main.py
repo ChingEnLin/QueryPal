@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -5,6 +6,16 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import query, azure, system, user_queries, data_documents, audit, argus
+
+# uvicorn's default config only routes the ``uvicorn.*`` loggers, so anything
+# emitted by the ``queryargus.*`` submodule or our own ``services.*`` modules
+# is silently dropped at the root level. Configure root once here so those
+# logs surface in the terminal during local dev. Idempotent — calling
+# basicConfig twice is a no-op (the second call's args are ignored).
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)-7s %(name)s · %(message)s",
+)
 
 
 @asynccontextmanager
