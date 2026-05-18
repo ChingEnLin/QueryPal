@@ -46,16 +46,31 @@ harness and seed script auto-detect it and default `--cosmos-account` to
 the sentinel `"local"`, `--bearer-token` to `"local-mode"`, and
 `--connection-string` to `$LOCAL_MONGO_URI`.
 
+The harness ALSO needs its own Postgres for the cross-run learning
+loop — a separate instance from the production one in `backend/.env`,
+so experiment runs don't pollute production storage.
+
 ```bash
-# Start a local MongoDB (Docker, brew, whatever — only Mongo wire protocol matters).
+# 1. Local MongoDB for the agent's collection-under-audit.
 docker run -d --name hitl-mongo -p 27017:27017 mongo:7
 
-# Start QueryPal's backend with the bypass on. Postgres still required for
-# ReportStore persistence; the existing DB_* env vars are untouched.
-export LOCAL_MONGO_URI='mongodb://localhost:27017'
-uvicorn main:app --reload   # from backend/
+# 2. Local Postgres for ReportStore. Skip if argus-pg is already running.
+docker run -d --name argus-pg -p 5432:5432 -e POSTGRES_PASSWORD=dev postgres:16
+PGPASSWORD=dev psql -h localhost -U postgres -c "CREATE DATABASE querypal_hitl;"
 
-# Seed the fixture. The defaults come from LOCAL_MONGO_URI.
+# 3. Copy the env template and load it. backend/experiments/.env.local is
+#    gitignored (the .env.local pattern is in the repo's .gitignore).
+cp backend/experiments/.env.local.template backend/experiments/.env.local
+set -a && . backend/experiments/.env.local && set +a
+export GEMINI_API_KEY='...'      # the agent still calls Gemini
+
+# 4. Start the backend. Crucial: do NOT source backend/.env in this shell
+#    — that would point ReportStore at the production Postgres.
+cd backend && uvicorn main:app --reload
+# Watch the startup log for: "argus report store disabled" → DB vars not
+# loaded; OR a successful "argus schema applied" → all set.
+
+# 5. From a fresh shell with the same env loaded, seed the fixture.
 python -m backend.experiments.seed_fixture \
   --database hitl_test --collection hitl_eval \
   --docs 15000 --seed 42
