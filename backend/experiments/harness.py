@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -300,15 +301,22 @@ def main(argv: list[str] | None = None) -> int:
         default=[42, 43, 44],
         help="comma-separated list of integer seeds (labels each run batch)",
     )
-    parser.add_argument("--cosmos-account", required=True)
+    parser.add_argument(
+        "--cosmos-account",
+        default=("local" if os.getenv("LOCAL_MONGO_URI") else None),
+        help="ARM resource id of the Cosmos account. In local mode (backend "
+             "running with LOCAL_MONGO_URI set), defaults to 'local' — the "
+             "sentinel the backend recognises.",
+    )
     parser.add_argument("--database", required=True)
     parser.add_argument("--collection", required=True)
     parser.add_argument("--api-base-url", default="http://localhost:8000")
     parser.add_argument(
         "--bearer-token",
-        required=True,
+        default=("local-mode" if os.getenv("LOCAL_MONGO_URI") else None),
         help="MSAL access token. Grab from the browser devtools' network tab "
-             "on any /argus/runs request, or via msalInstance.acquireTokenSilent.",
+             "on any /argus/runs request, or via msalInstance.acquireTokenSilent. "
+             "In local mode, any non-empty string works — the backend ignores it.",
     )
     parser.add_argument(
         "--results-dir",
@@ -322,6 +330,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--escalation-low-threshold", type=float, default=0.40)
     parser.add_argument("--escalation-cap", type=int, default=25)
     args = parser.parse_args(argv)
+    if not args.cosmos_account:
+        parser.error("--cosmos-account is required (or set LOCAL_MONGO_URI for local mode)")
+    if not args.bearer_token:
+        parser.error("--bearer-token is required (or set LOCAL_MONGO_URI for local mode)")
 
     config = RunConfig(
         arm=args.arm,
