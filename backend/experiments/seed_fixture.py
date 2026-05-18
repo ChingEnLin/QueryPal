@@ -297,12 +297,21 @@ def _ground_truth_path() -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    import os
     parser = argparse.ArgumentParser(description="Seed the HITL experiment fixture.")
-    parser.add_argument("--connection-string", required=True,
-                        help="MongoDB / Cosmos-for-MongoDB connection URI.")
-    parser.add_argument("--cosmos-account", required=True,
-                        help="ARM resource id of the Cosmos account — recorded in ground_truth.json "
-                             "so the harness can run the experiment under the same auth scope.")
+    parser.add_argument(
+        "--connection-string",
+        default=os.getenv("LOCAL_MONGO_URI"),
+        help="MongoDB / Cosmos-for-MongoDB connection URI. Defaults to the "
+             "LOCAL_MONGO_URI env var when set.",
+    )
+    parser.add_argument(
+        "--cosmos-account",
+        default=("local" if os.getenv("LOCAL_MONGO_URI") else None),
+        help="ARM resource id of the Cosmos account — recorded in ground_truth.json "
+             "so the harness can run the experiment under the same auth scope. "
+             "In local mode, defaults to the sentinel 'local'.",
+    )
     parser.add_argument("--database", required=True)
     parser.add_argument("--collection", required=True)
     parser.add_argument("--docs", type=int, default=15000)
@@ -311,6 +320,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="Do NOT drop the collection first. Use with care — counts will not "
                              "match the returned ground truth.")
     args = parser.parse_args(argv)
+    if not args.connection_string:
+        parser.error("--connection-string is required (or set LOCAL_MONGO_URI)")
+    if not args.cosmos_account:
+        parser.error("--cosmos-account is required (or set LOCAL_MONGO_URI for local mode)")
 
     truth = seed_collection(
         connection_string=args.connection_string,

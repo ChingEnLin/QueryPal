@@ -38,6 +38,31 @@ decides which endpoints exist.
 
 ## End-to-end
 
+### Local mode (recommended for the experiment proper)
+
+The backend recognises a `LOCAL_MONGO_URI` env var that bypasses Azure
+OBO + ARM lookups and uses the named MongoDB instance instead. The
+harness and seed script auto-detect it and default `--cosmos-account` to
+the sentinel `"local"`, `--bearer-token` to `"local-mode"`, and
+`--connection-string` to `$LOCAL_MONGO_URI`.
+
+```bash
+# Start a local MongoDB (Docker, brew, whatever — only Mongo wire protocol matters).
+docker run -d --name hitl-mongo -p 27017:27017 mongo:7
+
+# Start QueryPal's backend with the bypass on. Postgres still required for
+# ReportStore persistence; the existing DB_* env vars are untouched.
+export LOCAL_MONGO_URI='mongodb://localhost:27017'
+uvicorn main:app --reload   # from backend/
+
+# Seed the fixture. The defaults come from LOCAL_MONGO_URI.
+python -m backend.experiments.seed_fixture \
+  --database hitl_test --collection hitl_eval \
+  --docs 15000 --seed 42
+```
+
+### Production / Cosmos mode
+
 ```bash
 # 0. Seed the fixture once. Use a dedicated Cosmos test collection — the
 #    script DROPS the target before inserting.

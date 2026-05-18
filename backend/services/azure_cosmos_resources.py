@@ -1,7 +1,11 @@
+import os
+
 from cachetools import TTLCache, cached
 import requests
 import pymongo
 import bson
+
+from services.azure_auth import is_local_mode
 
 # Cache with max 100 entries and 10-minute TTL
 _cosmos_list_cache = TTLCache(maxsize=5, ttl=3600)
@@ -35,6 +39,10 @@ def list_cosmos_resources(access_token: str):
 
 @cached(_connection_string_cache)
 def get_connection_string(account_id: str, access_token: str) -> str:
+    # Local-mode bypass — return the configured local MongoDB URI verbatim,
+    # ignoring account_id + access_token. Set LOCAL_MONGO_URI to enable.
+    if is_local_mode():
+        return os.environ["LOCAL_MONGO_URI"]
     url = f"https://management.azure.com/{account_id}/listConnectionStrings?api-version=2023-03-15"
     headers = {"Authorization": f"Bearer {access_token}"}
     response = requests.post(url, headers=headers, timeout=10)
