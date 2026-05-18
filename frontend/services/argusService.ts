@@ -6,6 +6,8 @@ export type ArgusSeverity = 'critical' | 'warning' | 'info';
 export type ArgusDiff = 'new' | 'regressed' | 'existing' | 'resolved';
 export type ArgusJobStatus = 'queued' | 'running' | 'done' | 'error';
 export type ArgusUserLabel = 'tp' | 'fp';
+export type ArgusFindingStatus = 'published' | 'pending_review' | 'dropped';
+export type ArgusEscalationVerdict = 'tp' | 'fp' | 'need_info';
 
 export interface ArgusFinding {
   id: string;
@@ -22,6 +24,12 @@ export interface ArgusFinding {
   trace: string;
   // Arm A — most recent human verdict for this finding, when present.
   user_label?: ArgusUserLabel | null;
+  // Arm B — self-assessment + lifecycle marker. Pending findings are
+  // filtered out of report.findings server-side; these fields are still
+  // surfaced on the rare path where the UI inspects them directly.
+  confidence?: number | null;
+  confidence_reason?: string | null;
+  status?: ArgusFindingStatus;
 }
 
 export interface ArgusReport {
@@ -38,7 +46,7 @@ export interface ArgusReport {
   model: string;
   profile: ArgusProfile;
   quality_score: number | null;
-  counts: { critical: number; warning: number; info: number; dismissed: number };
+  counts: { critical: number; warning: number; info: number; dismissed: number; pending_review?: number };
   diff: { new: number; resolved: number; regressed: number };
   findings: ArgusFinding[];
   created_by: string | null;
@@ -276,6 +284,70 @@ export const rateArgusFinding = async (
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.detail || `Failed to rate finding (${response.status})`);
+  }
+  return response.json();
+};
+
+// ---------------------------------------------------------------------------
+// Arm B — self-escalation queue
+// ---------------------------------------------------------------------------
+
+export interface ArgusEscalation {
+  finding_id: string;
+  report_id: string;
+  collection: string;
+  database: string;
+  cosmos_account: string;
+  field: string;
+  category: string;
+  severity: string;
+  description: string;
+  hypothesis: string;
+  evidence_query: string;
+  affected_count: number;
+  affected_pct: number;
+  confidence: number | null;
+  confidence_reason: string | null;
+  sample_values: unknown[];
+  created_at: string | null;
+  escalated_at: string | null;
+}
+
+export const listArgusEscalations = async (limit = 50): Promise<ArgusEscalation[]> => {
+  if (!USE_MSAL_AUTH) return [];
+  const token = await getToken();
+  const response = await fetch(`${API_BASE_URL}/argus/escalations?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to list escalations (${response.status})`);
+  }
+  const data = await response.json();
+  return data.escalations ?? [];
+};
+
+export const resolveArgusEscalation = async (args: {
+  reportId: string;
+  findingId: string;
+  verdict: ArgusEscalationVerdict;
+}): Promise<{ verdict: ArgusEscalationVerdict; resolved_by: string }> => {
+  if (!USE_MSAL_AUTH) throw new Error('Sign in to resolve escalations.');
+  const token = await getToken();
+  const response = await fetch(
+    `${API_BASE_URL}/argus/escalations/${encodeURIComponent(args.reportId)}/${encodeURIComponent(args.findingId)}/resolve`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ verdict: args.verdict }),
+    },
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to resolve escalation (${response.status})`);
   }
   return response.json();
 };

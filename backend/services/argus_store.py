@@ -68,6 +68,17 @@ def _apply_querypal_columns(dsn: str) -> None:
             "ALTER TABLE argus_findings "
             "ADD COLUMN IF NOT EXISTS rated_at TIMESTAMPTZ"
         )
+        # Arm B (self-escalation) audit trail — when a finding was queued for
+        # human review and when the human resolved it. ``status`` itself is
+        # upstream on this branch (see submodule schema.sql).
+        cur.execute(
+            "ALTER TABLE argus_findings "
+            "ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ"
+        )
+        cur.execute(
+            "ALTER TABLE argus_findings "
+            "ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ"
+        )
         # Per-user saved custom profiles (Tier 4). Per-user scoping only — no
         # team sharing in v1. Reference to argus_reports is intentionally absent;
         # deleting a profile must not break reproducibility of past reports.
@@ -190,6 +201,122 @@ def fetch_report_created_by(report_id: str) -> Optional[str]:
     except Exception:
         logger.exception("failed to fetch created_by for report %s", report_id)
         return None
+
+
+def fetch_pending_escalations(
+    *,
+    cosmos_accounts: list[str],
+    limit: int = 100,
+) -> list[dict]:
+    """List findings currently in status='pending_review', scoped by account access.
+
+    Returns rows pre-shaped for the HTTP response — each carries enough context
+    (collection, database, finding fields, confidence) for the UI to render the
+    review modal without a second fetch.
+    """
+    if not cosmos_accounts:
+        return []
+    dsn = _build_dsn()
+    if dsn is None:
+        return []
+    sql = """
+        SELECT f.id, f.report_id, r.collection, r.database, r.cosmos_account,
+               f.field, f.category, f.severity, f.description, f.hypothesis,
+               f.evidence_query, f.affected_count, f.affected_pct,
+               f.confidence, f.confidence_reason, f.sample_values,
+               f.created_at, f.escalated_at
+        FROM argus_findings f
+        JOIN argus_reports r ON f.report_id = r.id
+        WHERE f.status = 'pending_review'
+          AND r.cosmos_account = ANY(%s)
+        ORDER BY COALESCE(f.escalated_at, f.created_at) DESC
+        LIMIT %s
+    """
+    try:
+        with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+            cur.execute(sql, (cosmos_accounts, limit))
+            rows = cur.fetchall()
+    except Exception:
+        logger.exception("failed to list pending escalations")
+        return []
+    return [
+        {
+            "finding_id": str(row[0]),
+            "report_id": str(row[1]),
+            "collection": row[2],
+            "database": row[3],
+            "cosmos_account": row[4],
+            "field": row[5],
+            "category": row[6],
+            "severity": row[7],
+            "description": row[8],
+            "hypothesis": row[9],
+            "evidence_query": row[10],
+            "affected_count": int(row[11] or 0),
+            "affected_pct": float(row[12] or 0.0),
+            "confidence": float(row[13]) if row[13] is not None else None,
+            "confidence_reason": row[14],
+            "sample_values": row[15] or [],
+            "created_at": row[16].isoformat() if row[16] else None,
+            "escalated_at": row[17].isoformat() if row[17] else None,
+        }
+        for row in rows
+    ]
+
+
+def resolve_escalation(
+    *,
+    report_id: str,
+    finding_id: str,
+    verdict: str,
+    resolved_by: str,
+) -> bool:
+    """Persist a human's resolution of a pending_review finding (Arm B).
+
+    Bridges the submodule's ``ReportStore.resolve_pending_finding`` (which flips
+    ``status`` + writes ``user_label`` + patches raw_report) with the QueryPal-only
+    ``resolved_at`` / ``rated_by`` / ``rated_at`` audit columns.
+
+    Returns ``True`` when the finding was found and resolved, ``False`` otherwise
+    (e.g. finding does not exist or is no longer in pending_review).
+    """
+    if verdict not in ("tp", "fp", "need_info"):
+        raise ValueError(f"invalid verdict {verdict!r}; expected 'tp' | 'fp' | 'need_info'")
+    store = get_report_store()
+    if store is None:
+        return False
+    from uuid import UUID
+
+    ok = store.resolve_pending_finding(
+        report_id=UUID(report_id),
+        finding_id=UUID(finding_id),
+        verdict=verdict,
+    )
+    if not ok:
+        return False
+    # need_info is a non-decision — skip the audit-column write.
+    if verdict == "need_info":
+        return True
+    dsn = _build_dsn()
+    if dsn is None:
+        return True
+    try:
+        with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE argus_findings
+                SET rated_by = %s, rated_at = NOW(), resolved_at = NOW()
+                WHERE id = %s AND report_id = %s
+                """,
+                (resolved_by, finding_id, report_id),
+            )
+    except Exception:
+        logger.exception(
+            "failed to record resolution audit trail for finding %s on report %s",
+            finding_id,
+            report_id,
+        )
+    return True
 
 
 def fetch_run_summaries(

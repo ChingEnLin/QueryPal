@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from 'react';
-import { getArgusJob } from '../services/argusService';
+import { getArgusJob, listArgusEscalations, ArgusEscalation } from '../services/argusService';
+import { USE_MSAL_AUTH } from '../app.config';
 
 export type NotificationKind = 'argus_done' | 'argus_error';
 
@@ -29,6 +30,10 @@ interface NotificationsContextType {
   notifications: AppNotification[];
   unreadCount: number;
   activeRuns: TrackedRun[];
+  // Arm B — pending escalations awaiting human resolution. Refreshed on a
+  // slow interval and on demand after the user acts on one.
+  pendingEscalations: ArgusEscalation[];
+  refreshEscalations: () => Promise<void>;
   trackArgusRun: (run: TrackedRun) => void;
   markAllRead: () => void;
   markRead: (id: string) => void;
@@ -41,6 +46,7 @@ const NotificationsContext = createContext<NotificationsContextType | undefined>
 const NOTIFS_KEY = 'qp:notifications:v1';
 const RUNS_KEY = 'qp:notifications:active-runs:v1';
 const POLL_MS = 4000;
+const ESCALATIONS_POLL_MS = 20000;  // slower than job polls; escalations don't change as fast
 const MAX_NOTIFS = 50;
 
 const readNotifs = (): AppNotification[] => {
@@ -71,6 +77,8 @@ const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).sl
 export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<AppNotification[]>(() => readNotifs());
   const [activeRuns, setActiveRuns] = useState<TrackedRun[]>(() => readRuns());
+  const [pendingEscalations, setPendingEscalations] = useState<ArgusEscalation[]>([]);
+  const knownEscalationIdsRef = useRef<Set<string>>(new Set());
   const runsRef = useRef<TrackedRun[]>(activeRuns);
   runsRef.current = activeRuns;
   const pollingRef = useRef<Set<string>>(new Set());
@@ -150,6 +158,61 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
     });
   }, []);
 
+  // Arm B — pending-review escalations. Refreshed on a slow interval and
+  // whenever the caller resolves one (so the queue reflects current state
+  // without waiting for the next poll). Emits a notification for newly-seen
+  // pending findings so the bell can surface them without the user being on
+  // the Analytics page.
+  const refreshEscalations = useCallback(async () => {
+    if (!USE_MSAL_AUTH) return;
+    try {
+      const rows = await listArgusEscalations();
+      setPendingEscalations(rows);
+      const seen = knownEscalationIdsRef.current;
+      const fresh = rows.filter((r) => !seen.has(r.finding_id));
+      fresh.forEach((r) => seen.add(r.finding_id));
+      if (fresh.length > 0 && seen.size > fresh.length) {
+        // Skip first-load avalanche: only notify when we already had a baseline
+        // of known ids and brand-new ones appeared on top of it.
+        pushNotification({
+          kind: 'argus_done',
+          title: `Argus needs review on ${fresh.length} finding${fresh.length === 1 ? '' : 's'}`,
+          body: fresh
+            .slice(0, 3)
+            .map((r) => `${r.collection}: ${r.field}`)
+            .join(' · '),
+          accountId: fresh[0].cosmos_account,
+          database: fresh[0].database,
+          collection: fresh[0].collection,
+          reportId: fresh[0].report_id,
+        });
+      } else if (seen.size === 0 && rows.length === 0) {
+        // First poll with no rows — record empty baseline so future arrivals notify.
+        knownEscalationIdsRef.current = new Set();
+      } else if (fresh.length === rows.length) {
+        // Cold start with existing escalations — silently baseline them.
+        knownEscalationIdsRef.current = new Set(rows.map((r) => r.finding_id));
+      }
+      // Drop ids for findings that are no longer pending so a re-escalation later
+      // (e.g. user marked need_info, agent re-emits next run) would re-notify.
+      const currentIds = new Set(rows.map((r) => r.finding_id));
+      const pruned = new Set<string>();
+      knownEscalationIdsRef.current.forEach((id) => {
+        if (currentIds.has(id)) pruned.add(id);
+      });
+      knownEscalationIdsRef.current = pruned;
+    } catch (e) {
+      console.warn('listArgusEscalations failed', e);
+    }
+  }, [pushNotification]);
+
+  useEffect(() => {
+    if (!USE_MSAL_AUTH) return;
+    refreshEscalations();
+    const handle = window.setInterval(refreshEscalations, ESCALATIONS_POLL_MS);
+    return () => window.clearInterval(handle);
+  }, [refreshEscalations]);
+
   const markAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => n.read ? n : { ...n, read: true }));
   }, []);
@@ -166,6 +229,7 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
   return (
     <NotificationsContext.Provider value={{
       notifications, unreadCount, activeRuns,
+      pendingEscalations, refreshEscalations,
       trackArgusRun, markAllRead, markRead, dismiss, clearAll,
     }}>
       {children}

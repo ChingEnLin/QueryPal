@@ -30,9 +30,11 @@ from services.argus_profiles_service import (
     list_profiles,
 )
 from services.argus_store import (
+    fetch_pending_escalations,
     fetch_report_created_by,
     fetch_run_summaries,
     get_report_store,
+    resolve_escalation,
     set_finding_rating,
     set_report_created_by,
 )
@@ -175,6 +177,12 @@ def _serialize_finding(
         # Arm A — surface the current verdict so the UI can render the
         # rating buttons in the correct state. None when unrated.
         "user_label": finding.user_label,
+        # Arm B — confidence + lifecycle status. ``pending_review`` findings
+        # are filtered out of the main `findings` array by _serialize_report
+        # but still exposed via /argus/escalations.
+        "confidence": finding.confidence,
+        "confidence_reason": finding.confidence_reason,
+        "status": finding.status,
     }
 
 
@@ -186,15 +194,21 @@ def _serialize_report(
     previous: Optional[AuditReport] = None,
     created_by: Optional[str] = None,
 ) -> dict[str, Any]:
+    # Arm B — pending_review findings are persisted but excluded from the
+    # user-visible Findings tab. They surface via /argus/escalations and the
+    # notification bell instead.
+    visible_findings = [f for f in report.findings if f.status != "pending_review"]
+    pending_findings = [f for f in report.findings if f.status == "pending_review"]
     new_keys, regressed, diff_counts = _compute_diff(report, previous)
     findings = [
-        _serialize_finding(f, report, new_keys, regressed) for f in report.findings
+        _serialize_finding(f, report, new_keys, regressed) for f in visible_findings
     ]
     counts = {
         "critical": sum(1 for f in findings if f["severity"] == "critical"),
         "warning": sum(1 for f in findings if f["severity"] == "warning"),
         "info": sum(1 for f in findings if f["severity"] == "info"),
         "dismissed": len(report.dismissed_findings),
+        "pending_review": len(pending_findings),
     }
     quality = (
         round(report.overall_quality_score * 100)
@@ -673,5 +687,113 @@ async def rate_finding(
             "finding_id": str(finding_uuid),
             "user_label": payload.label,
             "rated_by": email,
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
+# Arm B — self-escalation queue
+# ---------------------------------------------------------------------------
+
+
+class EscalationResolution(BaseModel):
+    verdict: Literal["tp", "fp", "need_info"]
+
+
+@router.get("/escalations")
+async def list_escalations(
+    authorization: str = Header(...),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    """List findings currently in pending_review across the caller's accessible accounts.
+
+    Scoped exactly like /argus/runs — the caller's ARM-visible Cosmos accounts
+    are the filter. No access → empty list (404 only on per-resource lookups).
+    """
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    user_token = authorization.replace("Bearer ", "")
+    try:
+        access_token = await run_in_threadpool(exchange_token_obo, user_token)
+    except Exception as exc:
+        logger.exception("argus list_escalations auth failed")
+        raise HTTPException(status_code=502, detail=f"Azure auth failed: {exc}")
+    accessible = await run_in_threadpool(_accessible_account_ids, access_token)
+    if not accessible:
+        return JSONResponse(content={"escalations": []})
+    rows = await run_in_threadpool(
+        fetch_pending_escalations, cosmos_accounts=accessible, limit=limit
+    )
+    return JSONResponse(content={"escalations": rows})
+
+
+@router.post("/escalations/{report_id}/{finding_id}/resolve")
+async def resolve_pending(
+    report_id: str,
+    finding_id: str,
+    payload: EscalationResolution,
+    authorization: str = Header(...),
+):
+    """Resolve a pending_review finding with a TP / FP / need_info verdict.
+
+    ``tp`` → status flips to ``published`` and user_label='tp'; the finding
+    becomes user-visible on the next report fetch and feeds the planner's
+    UserVerdictHistory as a high-confidence TP next run.
+    ``fp`` → status flips to ``dropped`` and user_label='fp'; feeds the
+    UserVerdictHistory as an FP signal so the planner requires stronger
+    evidence next time.
+    ``need_info`` → status stays ``pending_review`` (deferred).
+    """
+    email = _require_caller_email(authorization)
+    user_token = authorization.replace("Bearer ", "")
+    store = get_report_store()
+    if store is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    try:
+        report_uuid = uuid.UUID(report_id)
+        finding_uuid = uuid.UUID(finding_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Same fan-out + access-check pattern as rate_finding.
+    report_task = asyncio.create_task(run_in_threadpool(store.get, report_uuid))
+
+    async def _resolve_access() -> list[str]:
+        try:
+            access_token = await run_in_threadpool(exchange_token_obo, user_token)
+        except Exception as exc:
+            logger.exception("argus resolve_pending auth failed")
+            raise HTTPException(status_code=502, detail=f"Azure auth failed: {exc}")
+        return await run_in_threadpool(_accessible_account_ids, access_token)
+
+    accessible_task = asyncio.create_task(_resolve_access())
+
+    report = await report_task
+    if report is None:
+        accessible_task.cancel()
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    accessible = await accessible_task
+    if report.cosmos_account not in accessible:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    ok = await run_in_threadpool(
+        resolve_escalation,
+        report_id=str(report_uuid),
+        finding_id=str(finding_uuid),
+        verdict=payload.verdict,
+        resolved_by=email,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=404,
+            detail="Pending finding not found or already resolved",
+        )
+    return JSONResponse(
+        content={
+            "report_id": str(report_uuid),
+            "finding_id": str(finding_uuid),
+            "verdict": payload.verdict,
+            "resolved_by": email,
         }
     )

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotifications, AppNotification } from '../contexts/NotificationsContext';
+import { EscalationReviewModal } from './EscalationReviewModal';
 
 interface AppTopBarProps {
   accountName?: string;
@@ -25,9 +26,10 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [escalationsOpen, setEscalationsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const notifsRef = useRef<HTMLDivElement>(null);
-  const { notifications, unreadCount, activeRuns, markAllRead, dismiss, clearAll } = useNotifications();
+  const { notifications, unreadCount, activeRuns, pendingEscalations, markAllRead, dismiss, clearAll } = useNotifications();
 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
@@ -175,33 +177,44 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
             position: 'relative',
           }}
           title={
-            activeRuns.length > 0
-              ? `Notifications (${activeRuns.length} running)`
-              : 'Notifications'
+            pendingEscalations.length > 0
+              ? `${pendingEscalations.length} Argus escalation${pendingEscalations.length === 1 ? '' : 's'} awaiting review`
+              : activeRuns.length > 0
+                ? `Notifications (${activeRuns.length} running)`
+                : 'Notifications'
           }
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M8 1.5A3.5 3.5 0 0111.5 5v3.5l1 1.5H3.5l1-1.5V5A3.5 3.5 0 018 1.5z"/>
             <path d="M6.5 13a1.5 1.5 0 003 0"/>
           </svg>
-          {unreadCount > 0 && (
-            <span style={{
-              position: 'absolute', top: 1, right: 1,
-              minWidth: 14, height: 14, borderRadius: 7,
-              background: 'var(--status-err)', color: '#fff',
-              fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-body)',
-              display: 'grid', placeItems: 'center', padding: '0 3px',
-              border: '1px solid var(--bg)', lineHeight: 1,
-            }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
-          )}
-          {unreadCount === 0 && activeRuns.length > 0 && (
-            <span style={{
-              position: 'absolute', top: 4, right: 4,
-              width: 6, height: 6, borderRadius: 3,
-              background: 'var(--accent)',
-              border: '1px solid var(--bg)',
-            }} />
-          )}
+          {(() => {
+            const badge = unreadCount + pendingEscalations.length;
+            if (badge > 0) {
+              return (
+                <span style={{
+                  position: 'absolute', top: 1, right: 1,
+                  minWidth: 14, height: 14, borderRadius: 7,
+                  background: pendingEscalations.length > 0 ? 'var(--accent)' : 'var(--status-err)',
+                  color: '#fff',
+                  fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-body)',
+                  display: 'grid', placeItems: 'center', padding: '0 3px',
+                  border: '1px solid var(--bg)', lineHeight: 1,
+                }}>{badge > 9 ? '9+' : badge}</span>
+              );
+            }
+            if (activeRuns.length > 0) {
+              return (
+                <span style={{
+                  position: 'absolute', top: 4, right: 4,
+                  width: 6, height: 6, borderRadius: 3,
+                  background: 'var(--accent)',
+                  border: '1px solid var(--bg)',
+                }} />
+              );
+            }
+            return null;
+          })()}
         </button>
 
         {showNotifs && (
@@ -235,6 +248,32 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
             </div>
 
             <div style={{ overflowY: 'auto', flex: 1 }}>
+              {pendingEscalations.length > 0 && (
+                <div style={{
+                  padding: '8px 12px', borderBottom: '1px solid var(--border)',
+                  background: 'color-mix(in oklch, var(--accent) 8%, var(--panel))',
+                }}>
+                  <div style={{
+                    fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+                    color: 'var(--muted)', marginBottom: 4, fontFamily: 'var(--font-body)',
+                  }}>Needs your review</div>
+                  <div style={{
+                    fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-body)',
+                    marginBottom: 6,
+                  }}>
+                    Argus parked{' '}
+                    <strong>{pendingEscalations.length}</strong>{' '}
+                    finding{pendingEscalations.length === 1 ? '' : 's'} at mid-confidence.
+                  </div>
+                  <button
+                    onClick={() => { setShowNotifs(false); setEscalationsOpen(true); }}
+                    className="qa-btn primary"
+                    style={{ fontSize: 11.5, padding: '4px 10px' }}
+                  >
+                    Review now
+                  </button>
+                </div>
+              )}
               {activeRuns.length > 0 && (
                 <div style={{
                   padding: '8px 12px', borderBottom: '1px solid var(--border)',
@@ -450,6 +489,10 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
           </div>
         )}
       </div>
+      <EscalationReviewModal
+        open={escalationsOpen}
+        onClose={() => setEscalationsOpen(false)}
+      />
     </header>
   );
 };
