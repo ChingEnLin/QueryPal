@@ -78,6 +78,19 @@ def test_type_drift_canonical_vs_agent_label() -> None:
     assert v.label == "tp"
 
 
+def test_enum_violation_synonyms_cover_observed_agent_label() -> None:
+    """The live agent emitted ``invalid_value`` for the status enum_violation
+    fixture during the 2026-05-18 smoke run — must match TP."""
+    gt = _gt()
+    gt["defects"].append(
+        {"field": "status", "category": "enum_violation",
+         "affected_count": 60, "total": 1000, "notes": ""},
+    )
+    for cat in ("enum_violation", "invalid_value", "low_cardinality_constant"):
+        v = rate_finding({"field": "status", "category": cat}, ground_truth=gt)
+        assert v.label == "tp", f"{cat} should be TP"
+
+
 def test_duplicates_synonyms() -> None:
     for cat in ("duplicates", "duplicate_value", "non_unique"):
         v = rate_finding(

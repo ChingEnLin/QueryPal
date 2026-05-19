@@ -38,6 +38,9 @@ CATEGORY_SYNONYMS: dict[str, set[str]] = {
     "enum_violation": {
         "enum_violation", "unexpected_value", "invalid_enum",
         "out_of_enum", "low_cardinality_constant",  # see notes in seed_fixture
+        # Live-agent variants observed during smoke testing — keep this set
+        # tight to avoid inflating TP counts via overly-loose matching.
+        "invalid_value",
     },
     "stale_timestamp": {
         "stale_timestamp", "stale_data", "outdated_timestamp", "stale_record",
