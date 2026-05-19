@@ -59,3 +59,7 @@ DESIGN_HANDBOOK.md
 
 # virtual environment
 .venv/
+
+# HITL experiment artifacts (lives on experiment/hitl-* branches)
+results/
+backend/experiments/
