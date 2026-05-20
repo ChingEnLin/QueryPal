@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { CollectionSummary } from '../types';
 import {
   ArgusDiff,
@@ -374,6 +375,9 @@ interface AnalyticsPageProps {
   accountId?: string;
   databaseName?: string;
   collections?: CollectionSummary[];
+  collection: string;
+  onCollectionChange: (name: string) => void;
+  collectionDefaulting?: boolean;
 }
 
 const SEVER_COLOR: Record<ArgusSeverity, string> = {
@@ -438,42 +442,17 @@ const sectionLabel: React.CSSProperties = {
   fontFamily: 'var(--font-body)',
 };
 
-const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, collections }) => {
+const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
+  accountId,
+  databaseName,
+  collections,
+  collection,
+  onCollectionChange,
+  collectionDefaulting = false,
+}) => {
   const hasConnection = !!(accountId && databaseName);
   const { trackArgusRun } = useNotifications();
-  const [collection, setCollection] = useState<string>(() => {
-    if (!collections || collections.length === 0) return '';
-    return [...collections].sort((a, b) => a.name.localeCompare(b.name))[0].name;
-  });
-  const [collectionDefaulting, setCollectionDefaulting] = useState(false);
-  const userPickedCollectionRef = useRef(false);
-  // Reset the "user picked" flag whenever the account/database scope changes
-  // so the next auto-default can run for the new scope.
-  useEffect(() => { userPickedCollectionRef.current = false; }, [accountId, databaseName]);
-  // Default the dropdown to the collection with the most recent persisted run
-  // for this account/database; fall back to the first alphabetical collection.
-  useEffect(() => {
-    if (userPickedCollectionRef.current) return;
-    if (!collections || collections.length === 0) return;
-    const alphaFirst = [...collections].sort((a, b) => a.name.localeCompare(b.name))[0].name;
-    let cancelled = false;
-    setCollectionDefaulting(true);
-    (async () => {
-      let target = alphaFirst;
-      if (accountId && databaseName) {
-        try {
-          const rows = await listArgusRuns({ accountId, database: databaseName, limit: 1 });
-          const recent = rows[0]?.collection;
-          if (recent && collections.some((c) => c.name === recent)) target = recent;
-        } catch {
-          // ignore — fall back to alphabetical
-        }
-      }
-      if (!cancelled && !userPickedCollectionRef.current) setCollection(target);
-      if (!cancelled) setCollectionDefaulting(false);
-    })();
-    return () => { cancelled = true; };
-  }, [accountId, databaseName, collections]);
+  const setCollection = onCollectionChange;
   const [profile, setProfile] = useState<ArgusProfile>('fast');
   const [report, setReport] = useState<ArgusReport | null>(null);
   const [jobStatus, setJobStatus] = useState<ArgusJobStatus | null>(null);
@@ -484,6 +463,10 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
   const [historyLoading, setHistoryLoading] = useState(false);
   const [openingReportId, setOpeningReportId] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
+  // When we load a historical report and sync the sidebar collection to match,
+  // we want to skip the next "collection changed → reset report" effect run,
+  // otherwise the freshly-loaded report would be cleared immediately.
+  const skipNextCollectionResetRef = useRef(false);
 
   // Tier 2 — Customize this run
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -648,12 +631,33 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
       setReport(r);
       setSelId(r.findings[0]?.id ?? null);
       setActiveTab('findings');
+      // Sync the sidebar / dropdown selection to whatever collection this
+      // report belongs to — otherwise opening a report (e.g. from a
+      // notification) leaves the left rail pointing at a different collection.
+      // The resume-poll effect would normally clear our freshly-loaded report
+      // when `collection` changes; flag it to skip that reset for one cycle.
+      if (r.collection && r.collection !== collection) {
+        skipNextCollectionResetRef.current = true;
+        onCollectionChange(r.collection);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setOpeningReportId(null);
     }
-  }, []);
+  }, [collection, onCollectionChange]);
+
+  // If we landed here via a notification click, location.state carries the
+  // reportId to auto-open. Consume it once, then clear it so back/refresh
+  // doesn't keep reloading the same report.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const reportId = (location.state as { reportId?: string } | null)?.reportId;
+    if (!reportId) return;
+    loadHistoricalReport(reportId);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, loadHistoricalReport, navigate]);
 
   const loading = jobStatus === 'queued' || jobStatus === 'running';
 
@@ -702,11 +706,18 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
   // Resume an in-flight poll when the page mounts or the collection changes.
   useEffect(() => {
     clearPoll();
-    setReport(null);
-    setError(null);
-    setJobStatus(null);
-    setSelId(null);
-    setActiveTab('findings');
+    if (skipNextCollectionResetRef.current) {
+      // Caller (loadHistoricalReport) just set this collection to match the
+      // report it loaded. Don't wipe the report — but still resume any
+      // in-flight poll for the new scope below.
+      skipNextCollectionResetRef.current = false;
+    } else {
+      setReport(null);
+      setError(null);
+      setJobStatus(null);
+      setSelId(null);
+      setActiveTab('findings');
+    }
     if (!accountId || !databaseName || !collection) return;
     const stored = readJobMap()[jobKey(accountId, databaseName, collection)];
     if (!stored) return;
@@ -806,7 +817,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ accountId, databaseName, 
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <select
               value={collection}
-              onChange={(e) => { userPickedCollectionRef.current = true; setCollection(e.target.value); }}
+              onChange={(e) => { setCollection(e.target.value); }}
               disabled={collectionDefaulting}
               style={{
                 fontFamily: 'var(--font-mono)', fontSize: 12,
@@ -1429,6 +1440,33 @@ const ReportBody: React.FC<{
   const scoreBand = score >= 80 ? 'Good' : score >= 60 ? 'Moderate' : 'Poor';
   const scoreBandColor = score >= 80 ? '#3a8c5f' : score >= 60 ? '#c98d42' : '#c94250';
 
+  type FindingsSort = 'severity' | 'affected_desc' | 'affected_asc' | 'field' | 'verdict';
+  type VerdictFilter = 'all' | 'rated' | 'unrated' | 'tp' | 'fp';
+  const [sortBy, setSortBy] = useState<FindingsSort>('severity');
+  const [hiddenSev, setHiddenSev] = useState<{ critical: boolean; warning: boolean; info: boolean }>({ critical: false, warning: false, info: false });
+  const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>('all');
+
+  const SEVER_RANK: Record<ArgusSeverity, number> = { critical: 0, warning: 1, info: 2 };
+
+  const visibleFindings = useMemo(() => {
+    let list = findings.filter((f) => !hiddenSev[f.severity]);
+    if (verdictFilter === 'rated') list = list.filter((f) => f.user_label != null);
+    else if (verdictFilter === 'unrated') list = list.filter((f) => f.user_label == null);
+    else if (verdictFilter === 'tp') list = list.filter((f) => f.user_label === 'tp');
+    else if (verdictFilter === 'fp') list = list.filter((f) => f.user_label === 'fp');
+
+    const sorted = [...list];
+    if (sortBy === 'severity') sorted.sort((a, b) => SEVER_RANK[a.severity] - SEVER_RANK[b.severity] || b.affected - a.affected);
+    else if (sortBy === 'affected_desc') sorted.sort((a, b) => b.affected - a.affected);
+    else if (sortBy === 'affected_asc') sorted.sort((a, b) => a.affected - b.affected);
+    else if (sortBy === 'field') sorted.sort((a, b) => a.field.localeCompare(b.field));
+    else if (sortBy === 'verdict') sorted.sort((a, b) => {
+      const rank = (l: 'tp' | 'fp' | null | undefined) => l === 'tp' ? 0 : l === 'fp' ? 1 : 2;
+      return rank(a.user_label) - rank(b.user_label) || SEVER_RANK[a.severity] - SEVER_RANK[b.severity];
+    });
+    return sorted;
+  }, [findings, hiddenSev, verdictFilter, sortBy]);
+
   return (
     <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 400px', minHeight: 0, position: 'relative' }}>
       {openingReportId && (
@@ -1558,8 +1596,98 @@ const ReportBody: React.FC<{
             onSelectRun={onSelectHistorical}
           />
         ) : (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {findings.map((f) => {
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          {/* Findings toolbar — sort + filters */}
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8,
+            padding: '8px 16px', borderBottom: '1px solid var(--border)',
+            background: 'var(--bg)', fontFamily: 'var(--font-body)', flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)' }}>
+              Sort
+            </span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as FindingsSort)}
+              style={{
+                fontSize: 11.5, fontFamily: 'var(--font-body)',
+                padding: '3px 6px', borderRadius: 6,
+                background: 'var(--panel)', color: 'var(--fg)',
+                border: '1px solid var(--border)', cursor: 'pointer',
+              }}
+            >
+              <option value="severity">Severity</option>
+              <option value="affected_desc">Most affected docs</option>
+              <option value="affected_asc">Fewest affected docs</option>
+              <option value="field">Field name</option>
+              <option value="verdict">Verdict (TP → FP → unrated)</option>
+            </select>
+
+            <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 2px' }} />
+
+            {(['critical', 'warning', 'info'] as const).map((sev) => {
+              const on = !hiddenSev[sev];
+              return (
+                <button
+                  key={sev}
+                  onClick={() => setHiddenSev((h) => ({ ...h, [sev]: !h[sev] }))}
+                  title={on ? `Hide ${sev}` : `Show ${sev}`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '2px 8px', borderRadius: 999,
+                    fontSize: 11, fontFamily: 'var(--font-body)',
+                    border: `1px solid ${on ? SEVER_COLOR[sev] : 'var(--border)'}`,
+                    background: on ? SEVER_BG[sev] : 'var(--panel)',
+                    color: on ? SEVER_COLOR[sev] : 'var(--muted)',
+                    cursor: 'pointer', textTransform: 'capitalize',
+                    opacity: on ? 1 : 0.55,
+                  }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: 999, background: SEVER_COLOR[sev] }} />
+                  {sev}
+                </button>
+              );
+            })}
+
+            <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 2px' }} />
+
+            <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)' }}>
+              Verdict
+            </span>
+            <select
+              value={verdictFilter}
+              onChange={(e) => setVerdictFilter(e.target.value as VerdictFilter)}
+              style={{
+                fontSize: 11.5, fontFamily: 'var(--font-body)',
+                padding: '3px 6px', borderRadius: 6,
+                background: 'var(--panel)', color: 'var(--fg)',
+                border: '1px solid var(--border)', cursor: 'pointer',
+              }}
+            >
+              <option value="all">All</option>
+              <option value="rated">Rated</option>
+              <option value="unrated">Unrated</option>
+              <option value="tp">True positive</option>
+              <option value="fp">False positive</option>
+            </select>
+
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
+              {visibleFindings.length === findings.length
+                ? `${findings.length}`
+                : `${visibleFindings.length} / ${findings.length}`}
+            </span>
+          </div>
+
+          {visibleFindings.length === 0 ? (
+            <div style={{
+              padding: '24px 16px', fontSize: 12.5, color: 'var(--muted)',
+              fontFamily: 'var(--font-body)', textAlign: 'center',
+            }}>
+              No findings match the current filters.
+            </div>
+          ) : (
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+          {visibleFindings.map((f) => {
             const isSel = f.id === (selId ?? findings[0]?.id);
             return (
               <div
@@ -1582,6 +1710,27 @@ const ReportBody: React.FC<{
                       ...tagStyle, background: SEVER_BG[f.severity], color: SEVER_COLOR[f.severity],
                       borderColor: 'transparent',
                     }}>{f.category.replace(/_/g, ' ')}</span>
+                    {f.user_label && (
+                      <span
+                        title={f.user_label === 'tp' ? 'You marked this as true positive' : 'You marked this as false positive'}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 14, height: 14, borderRadius: 999, flexShrink: 0,
+                          background: f.user_label === 'tp' ? 'var(--status-ok)' : 'var(--status-err)',
+                          color: '#fff',
+                        }}
+                      >
+                        {f.user_label === 'tp' ? (
+                          <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="3">
+                            <path d="M3 8l3 3 7-7" />
+                          </svg>
+                        ) : (
+                          <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="3">
+                            <path d="M3 3l10 10M13 3L3 13" />
+                          </svg>
+                        )}
+                      </span>
+                    )}
                     {f.diff !== 'existing' && (
                       <span style={{
                         fontSize: 10, color: DIFF_COLOR[f.diff],
@@ -1602,6 +1751,8 @@ const ReportBody: React.FC<{
               </div>
             );
           })}
+        </div>
+        )}
         </div>
         )}
       </div>

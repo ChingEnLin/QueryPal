@@ -58,7 +58,9 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
 
   const handleNotifClick = (n: AppNotification) => {
     setShowNotifs(false);
-    if (n.kind === 'argus_done' || n.kind === 'argus_error') navigate('/analytics');
+    if (n.kind === 'argus_done' || n.kind === 'argus_error') {
+      navigate('/analytics', n.reportId ? { state: { reportId: n.reportId } } : undefined);
+    }
   };
 
   const openNotifs = () => {

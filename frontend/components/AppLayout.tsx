@@ -15,6 +15,8 @@ interface AppLayoutProps {
   collections?: CollectionSummary[];
   activeCollection?: string;
   onCollectionSelect?: (name: string) => void;
+  collectionSeverity?: Record<string, 'critical' | 'warning' | 'info' | 'clean'>;
+  collectionFindings?: Record<string, number>;
   onNewQuery?: () => void;
   availableDbs?: DbInfo[];
   onSwitchDatabase?: (db: DbInfo) => void;
@@ -31,6 +33,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   collections,
   activeCollection,
   onCollectionSelect,
+  collectionSeverity,
+  collectionFindings,
   onNewQuery,
   availableDbs,
   onSwitchDatabase,
@@ -86,6 +90,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         collections={collections}
         activeCollection={activeCollection}
         onCollectionSelect={onCollectionSelect}
+        collectionSeverity={collectionSeverity}
+        collectionFindings={collectionFindings}
         availableDbs={availableDbs}
         onSwitchDatabase={onSwitchDatabase}
         availableAccounts={availableAccounts}
