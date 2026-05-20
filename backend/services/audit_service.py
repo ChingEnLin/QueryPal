@@ -66,14 +66,16 @@ def get_recent_activity(user_email: str, limit: int = 10) -> List[Dict[str, Any]
         return []
 
 
-def process_audit_question(question: str) -> Dict[str, Any]:
+def process_audit_question(
+    question: str, model: str = "gemini-2.5-flash"
+) -> Dict[str, Any]:
     """
     Orchestrates the process of answering a user's audit question:
     1. Generate SQL from NL question (via Gemini)
     2. Execute SQL
     3. Summarize results (via Gemini)
     """
-    sql_query = generate_audit_sql(question)
+    sql_query = generate_audit_sql(question, model=model)
 
     # If the generator returned an error query or invalid SQL, return it
     if "Error:" in sql_query:
@@ -93,7 +95,9 @@ def process_audit_question(question: str) -> Dict[str, Any]:
             "summary": f"Error executing query: {results[0]['error']}",
         }
 
-    summary_response = summarize_audit_results(question, sql_query, results)
+    summary_response = summarize_audit_results(
+        question, sql_query, results, model=model
+    )
 
     return {
         "sql_query": sql_query,

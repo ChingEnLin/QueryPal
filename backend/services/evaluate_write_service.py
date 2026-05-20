@@ -11,6 +11,7 @@ def evaluate_write_result(
     write_result: dict,
     connection_string: str = "",
     database_name: str = "",
+    model: str = "gemini-2.5-flash",
 ) -> EvaluateWriteResponse:
     prompt = f"""
 You are an expert MongoDB database administrator and assistant.
@@ -63,7 +64,7 @@ Respond with plain text only in your final answer.
     tools = [query_database] if connection_string else None
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
             tools=tools, thinking_config=types.ThinkingConfig(thinking_budget=0)
@@ -84,7 +85,7 @@ Respond with plain text only in your final answer.
 
                 # Send the tool result back to the model
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model=model,
                     contents=[
                         prompt,
                         response.candidates[0].content,
