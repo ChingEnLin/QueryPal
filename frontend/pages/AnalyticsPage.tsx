@@ -31,7 +31,9 @@ const DEFAULT_LLM_MODEL = 'gemini-2.5-flash';
 const MIN_SEVERITIES: ArgusMinSeverity[] = ['low', 'medium', 'high', 'critical'];
 
 type EvalStrategy = 'none' | 'rules' | 'self' | 'judge' | 'composite';
-type JudgeProvider = 'gemini' | 'openai' | 'anthropic';
+// Only Gemini is wired up end-to-end in our deployment; openai/anthropic
+// remain valid backend values but aren't surfaced as options in the UI.
+type JudgeProvider = 'gemini';
 type RejectedPolicy = 'drop' | 'log_only' | 'demote_severity';
 type RunFailPolicy = 'continue' | 'warn_only' | 'abort';
 
@@ -64,14 +66,14 @@ const PROFILE_BASELINES: Record<ArgusProfile, EvalState> = {
   },
   thorough: {
     action_evaluator: 'rules', finding_evaluator: 'composite', run_evaluator: 'judge',
-    judge_provider: 'openai', judge_model: 'gpt-4o',
+    judge_provider: 'gemini', judge_model: 'gemini-2.5-pro',
     action_pass_threshold: 0.6, finding_pass_threshold: 0.7, run_pass_threshold: 0.5,
     rejected_finding_policy: 'log_only', run_fail_policy: 'continue',
   },
 };
 
 const EVAL_STRATEGIES: EvalStrategy[] = ['none', 'rules', 'self', 'judge', 'composite'];
-const JUDGE_PROVIDERS: JudgeProvider[] = ['gemini', 'openai', 'anthropic'];
+const JUDGE_PROVIDERS: JudgeProvider[] = ['gemini'];
 const REJECTED_POLICIES: RejectedPolicy[] = ['drop', 'log_only', 'demote_severity'];
 const RUN_FAIL_POLICIES: RunFailPolicy[] = ['continue', 'warn_only', 'abort'];
 
@@ -1195,10 +1197,8 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 220 }}>
                   <div style={sectionLabel}><span>Judge model</span></div>
-                  <input
-                    type="text"
+                  <select
                     disabled={!judgeEnabled}
-                    placeholder="e.g. gpt-4o"
                     value={evalState.judge_model ?? ''}
                     onChange={(e) => updateEval('judge_model', e.target.value || null)}
                     style={{
@@ -1206,7 +1206,12 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
                       background: 'var(--panel)', color: 'var(--fg)',
                       border: '1px solid var(--border)', fontFamily: 'var(--font-mono)',
                     }}
-                  />
+                  >
+                    <option value="">(default)</option>
+                    {availableModels.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1483,6 +1488,39 @@ const ReportBody: React.FC<{
   const scoreBand = score >= 80 ? 'Good' : score >= 60 ? 'Moderate' : 'Poor';
   const scoreBandColor = score >= 80 ? '#3a8c5f' : score >= 60 ? '#c98d42' : '#c94250';
 
+  // Build tailored hints when the audit confidence isn't Good. We surface the
+  // run evaluator's actual reason when present, then list remedies — context-
+  // weighted by symptoms readable from the report.
+  const improvementHints = useMemo<string[]>(() => {
+    if (scoreBand === 'Good') return [];
+    const hints: string[] = [];
+    if (report.profile === 'fast') {
+      hints.push('Switch profile to Balanced or Thorough — Fast skips the AI review of findings, which often trips the run evaluator.');
+    } else if (report.profile === 'balanced') {
+      hints.push('Try Thorough — it adds an independent judge model that catches issues self-review misses.');
+    }
+    if (report.iterations <= 8) {
+      hints.push(`Raise Max iterations (Customize → Max iterations). The agent stopped after ${report.iterations} rounds — give it more room to probe.`);
+    }
+    if (report.documents_sampled > 0 && report.documents_sampled < 200) {
+      hints.push(`Increase Sample size (currently ${report.documents_sampled} docs). Larger samples reveal rarer issues and stabilize the score.`);
+    }
+    if (report.findings.length === 0) {
+      hints.push('Zero findings on a non-trivial sample usually means the agent gave up early — re-run with more iterations or a deeper profile.');
+    }
+    hints.push('Lower the Minimum severity floor (Customize → Minimum severity) so borderline findings count toward the evaluator.');
+    hints.push('Switch the run evaluator strategy to judge or composite (Advanced) — adds an independent grader on top of the rules.');
+    hints.push('Try a stronger main model (e.g. gemini-2.5-pro). Heavier models miss fewer edge cases per iteration.');
+    return hints;
+  }, [scoreBand, report.profile, report.iterations, report.documents_sampled, report.findings.length]);
+
+  const runEvalReason = report.run_evaluation?.reason;
+  const runEvalCritique = report.run_evaluation?.critique;
+  // Default open whenever the hint card is shown (Moderate/Poor); collapses
+  // per-report so opening a different run resets to the default.
+  const [hintsCollapsed, setHintsCollapsed] = useState(false);
+  useEffect(() => { setHintsCollapsed(false); }, [report.report_id]);
+
   type FindingsSort = 'severity' | 'affected_desc' | 'affected_asc' | 'field' | 'verdict';
   type VerdictFilter = 'all' | 'rated' | 'unrated' | 'tp' | 'fp';
   const [sortBy, setSortBy] = useState<FindingsSort>('severity');
@@ -1594,6 +1632,76 @@ const ReportBody: React.FC<{
             ))}
           </div>
         </div>
+
+        {/* Improvement hint — shown when audit confidence is Moderate or Poor */}
+        {improvementHints.length > 0 && (
+          <div style={{
+            padding: '10px 16px',
+            borderBottom: '1px solid var(--border)',
+            background: scoreBand === 'Poor' ? '#fdf0f1' : '#fdf6ed',
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            fontFamily: 'var(--font-body)', flexShrink: 0,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+              stroke={scoreBandColor} strokeWidth="1.5" style={{ marginTop: 2, flexShrink: 0 }}>
+              <circle cx="8" cy="8" r="6" />
+              <path d="M8 5v3.5M8 11v.01" strokeLinecap="round" />
+            </svg>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <button
+                type="button"
+                onClick={() => setHintsCollapsed((v) => !v)}
+                aria-expanded={!hintsCollapsed}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'none', border: 'none', padding: 0,
+                  cursor: 'pointer', color: 'var(--fg)',
+                  fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 500,
+                  marginBottom: hintsCollapsed ? 0 : 4,
+                }}
+              >
+                <svg width="9" height="9" viewBox="0 0 16 16" fill="none"
+                  stroke="currentColor" strokeWidth="1.8"
+                  style={{
+                    transform: hintsCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.15s',
+                  }}>
+                  <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                How to improve next run
+                {hintsCollapsed && (
+                  <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 11 }}>
+                    · {improvementHints.length} suggestion{improvementHints.length === 1 ? '' : 's'}
+                  </span>
+                )}
+              </button>
+              {!hintsCollapsed && (
+                <>
+                  {runEvalReason && (
+                    <div style={{
+                      fontSize: 11.5, color: 'var(--fg)', marginBottom: 6,
+                      lineHeight: 1.45,
+                    }}>
+                      <span style={{ color: 'var(--muted)' }}>Evaluator: </span>
+                      {runEvalReason}
+                      {runEvalCritique && (
+                        <span style={{ color: 'var(--muted)' }}> — {runEvalCritique}</span>
+                      )}
+                    </div>
+                  )}
+                  <ul style={{
+                    margin: 0, paddingLeft: 16, fontSize: 11.5,
+                    color: 'var(--muted)', lineHeight: 1.45,
+                  }}>
+                    {improvementHints.map((h, i) => (
+                      <li key={i} style={{ marginBottom: 2 }}>{h}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Tab bar */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg)', flexShrink: 0 }}>

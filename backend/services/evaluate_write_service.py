@@ -3,6 +3,7 @@ from google.genai import types
 from models.schemas import EvaluateWriteResponse
 from services.mongo_service import execute_mongo_query, transform_mongo_result
 from services.react_agent_service import is_write_operation
+from services.gemini_service import thinking_config_for
 
 
 def evaluate_write_result(
@@ -67,7 +68,7 @@ Respond with plain text only in your final answer.
         model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
-            tools=tools, thinking_config=types.ThinkingConfig(thinking_budget=0)
+            tools=tools, thinking_config=thinking_config_for(model)
         ),
     )
 
@@ -95,7 +96,7 @@ Respond with plain text only in your final answer.
                     ],
                     config=types.GenerateContentConfig(
                         tools=tools,
-                        thinking_config=types.ThinkingConfig(thinking_budget=0),
+                        thinking_config=thinking_config_for(model),
                     ),
                 )
 

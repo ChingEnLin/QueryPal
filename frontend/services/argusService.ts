@@ -38,6 +38,13 @@ export interface ArgusReport {
   model: string;
   profile: ArgusProfile;
   quality_score: number | null;
+  run_evaluation: {
+    verdict: 'pass' | 'warn' | 'fail' | string;
+    score: number;
+    reason: string;
+    critique: string | null;
+    evaluated_by: string;
+  } | null;
   counts: { critical: number; warning: number; info: number; dismissed: number };
   diff: { new: number; resolved: number; regressed: number };
   findings: ArgusFinding[];

@@ -2,6 +2,7 @@ import json
 from google import genai
 from google.genai import types
 from models.analyze import AnalyzeResponse
+from services.gemini_service import thinking_config_for
 
 
 def analyze_query_result(
@@ -23,7 +24,7 @@ Respond in JSON with keys: insight, chartType, chartData, chartOptions.
         model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=0)
+            thinking_config=thinking_config_for(model)
         ),
     )
     # Try to extract JSON from the response

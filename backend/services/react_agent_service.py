@@ -18,7 +18,7 @@ if not logger.handlers:
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-from services.gemini_service import extract_python_code
+from services.gemini_service import extract_python_code, thinking_config_for
 from services.mongo_service import execute_mongo_query, transform_mongo_result
 
 WRITE_METHODS = {
@@ -131,7 +131,7 @@ def generate_query_node(state: AgentState):
             model=state.get("model", "gemini-2.5-flash"),
             contents=prompt,
             config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_budget=0)
+                thinking_config=thinking_config_for(state.get("model", "gemini-2.5-flash"))
             ),
         )
         code = extract_python_code(response.text)
@@ -215,7 +215,7 @@ def evaluate_node(state: AgentState):
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                thinking_config=thinking_config_for(state.get("model", "gemini-2.5-flash")),
             ),
         )
 

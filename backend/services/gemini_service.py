@@ -10,6 +10,18 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 
 
+def thinking_config_for(model: str) -> Optional[types.ThinkingConfig]:
+    """Return a ThinkingConfig appropriate for the model.
+
+    gemini-2.5-pro requires thinking mode (rejects thinking_budget=0), so we
+    return None to let the API use its default. Flash variants get an explicit
+    budget=0 to keep latency and cost down.
+    """
+    if model and "pro" in model.lower():
+        return None
+    return types.ThinkingConfig(thinking_budget=0)
+
+
 class VisualizationConfig(BaseModel):
     available: bool = Field(description="Whether a chart is recommended for this data")
     type: Optional[str] = Field(
@@ -140,7 +152,7 @@ def generate_query_from_prompt(
         model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=0)  # Disables thinking
+            thinking_config=thinking_config_for(model),
         ),
     )
     code = extract_python_code(response.text)
@@ -159,7 +171,7 @@ def generate_suggestion_from_query_error(
         model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=0)  # Disables thinking
+            thinking_config=thinking_config_for(model),
         ),
     )
     suggestion = (
@@ -212,7 +224,7 @@ def generate_audit_sql(user_input: str, model: str = "gemini-2.5-flash") -> str:
         model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=0)
+            thinking_config=thinking_config_for(model),
         ),
     )
     sql = extract_python_code(response.text)
@@ -237,7 +249,7 @@ def summarize_audit_results(
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=AuditSummaryResponse,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            thinking_config=thinking_config_for(model),
         ),
     )
 
@@ -297,7 +309,7 @@ def generate_schema_relationships(
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=SchemaRelationshipsResponse,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            thinking_config=thinking_config_for(model),
         ),
     )
 

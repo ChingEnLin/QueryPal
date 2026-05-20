@@ -48,10 +48,17 @@ router = APIRouter()
 Profile = Literal["fast", "balanced", "thorough"]
 JobStatus = Literal["queued", "running", "done", "error"]
 
+# Upstream PROFILE_THOROUGH ships with judge_provider="openai"/judge_model="gpt-4o".
+# Only Gemini is wired up end-to-end in our deployment, so swap the default to
+# gemini-2.5-pro. Inline config_overrides from the UI still take precedence.
+_PROFILE_THOROUGH_GEMINI = PROFILE_THOROUGH.model_copy(
+    update={"judge_provider": "gemini", "judge_model": "gemini-2.5-pro"},
+)
+
 _PROFILES = {
     "fast": PROFILE_FAST,
     "balanced": PROFILE_BALANCED,
-    "thorough": PROFILE_THOROUGH,
+    "thorough": _PROFILE_THOROUGH_GEMINI,
 }
 
 _SEVERITY_UI = {
@@ -201,6 +208,15 @@ def _serialize_report(
         if report.overall_quality_score is not None
         else None
     )
+    run_eval = None
+    if report.run_evaluation is not None:
+        run_eval = {
+            "verdict": str(report.run_evaluation.verdict),
+            "score": report.run_evaluation.score,
+            "reason": report.run_evaluation.reason,
+            "critique": report.run_evaluation.critique,
+            "evaluated_by": report.run_evaluation.evaluated_by,
+        }
     return {
         "report_id": str(report.id),
         "collection": report.collection,
@@ -215,6 +231,7 @@ def _serialize_report(
         "model": model,
         "profile": profile,
         "quality_score": quality,
+        "run_evaluation": run_eval,
         "counts": counts,
         "diff": diff_counts,
         "findings": findings,
@@ -316,7 +333,33 @@ async def _execute_job(
             job["finished_at"] = datetime.now(timezone.utc).isoformat()
             return
         llm = GeminiClient(model=config.llm_model)
-        agent = ArgusAgent.from_config(config=config, llm=llm)
+        # Build a judge client when the evaluator config asks for a judge or
+        # composite gate. Only Gemini is wired up end-to-end in our deployment;
+        # `judge_provider` is validated by Pydantic but we ignore non-gemini
+        # values here and fall through to GeminiClient.
+        judge_llm = None
+        judge_model_name = None
+        eval_cfg = config.evaluation
+        needs_judge = any(
+            getattr(eval_cfg, gate) in ("judge", "composite")
+            for gate in ("action_evaluator", "finding_evaluator", "run_evaluator")
+        )
+        if needs_judge:
+            # Always route the judge through Gemini in our deployment. If the
+            # config carries a non-gemini model (e.g. upstream's gpt-4o default
+            # leaking through a stale saved profile), force a sane gemini model.
+            jm = eval_cfg.judge_model or ""
+            if not jm or "gemini" not in jm.lower():
+                judge_model_name = "gemini-2.5-pro"
+            else:
+                judge_model_name = jm
+            judge_llm = GeminiClient(model=judge_model_name)
+        agent = ArgusAgent.from_config(
+            config=config,
+            llm=llm,
+            judge_llm=judge_llm,
+            judge_model_name=judge_model_name,
+        )
 
         history = None
         previous: Optional[AuditReport] = None
