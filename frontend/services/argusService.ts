@@ -63,6 +63,7 @@ export interface ArgusOverrides {
   sample_size?: number;
   max_iterations?: number;
   min_severity?: ArgusMinSeverity;
+  llm_model?: string;
 }
 
 export interface EvaluatorOverrides {

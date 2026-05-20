@@ -22,10 +22,12 @@ import {
 import { ArgusTrendsPanel } from '../components/ArgusTrendsPanel';
 import { useNotifications } from '../contexts/NotificationsContext';
 import { FindingRatingButtons } from '../components/FindingRatingButtons';
+import { getAvailableModels } from '../services/geminiService';
 
 const DEFAULT_MAX_ITER = 20;
 const DEFAULT_SAMPLE_SIZE = 200;
 const DEFAULT_MIN_SEVERITY: ArgusMinSeverity = 'low';
+const DEFAULT_LLM_MODEL = 'gemini-2.5-flash';
 const MIN_SEVERITIES: ArgusMinSeverity[] = ['low', 'medium', 'high', 'critical'];
 
 type EvalStrategy = 'none' | 'rules' | 'self' | 'judge' | 'composite';
@@ -454,6 +456,15 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
   const { trackArgusRun } = useNotifications();
   const setCollection = onCollectionChange;
   const [profile, setProfile] = useState<ArgusProfile>('fast');
+  const [selectedModel, setSelectedModel] = useState<string>(
+    () => localStorage.getItem('qp_selected_model') ?? DEFAULT_LLM_MODEL,
+  );
+  const [availableModels, setAvailableModels] = useState<string[]>([DEFAULT_LLM_MODEL]);
+  useEffect(() => {
+    getAvailableModels().then((models) => {
+      if (models.length > 0) setAvailableModels(models);
+    }).catch((e) => console.warn('getAvailableModels failed', e));
+  }, []);
   const [report, setReport] = useState<ArgusReport | null>(null);
   const [jobStatus, setJobStatus] = useState<ArgusJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -749,6 +760,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
       if (maxIter !== DEFAULT_MAX_ITER) argusOverrides.max_iterations = maxIter;
       if (sampleSize !== DEFAULT_SAMPLE_SIZE) argusOverrides.sample_size = sampleSize;
       if (minSeverity !== DEFAULT_MIN_SEVERITY) argusOverrides.min_severity = minSeverity;
+      if (selectedModel && selectedModel !== DEFAULT_LLM_MODEL) argusOverrides.llm_model = selectedModel;
       const { job_id } = await startArgusAudit({
         accountId,
         database: databaseName,
@@ -886,6 +898,37 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
               ))}
             </div>
           )}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <label
+              htmlFor="argus-model-select"
+              style={{ fontSize: 11.5, color: 'var(--muted)', whiteSpace: 'nowrap' }}
+            >
+              Model
+            </label>
+            <select
+              id="argus-model-select"
+              value={selectedModel}
+              onChange={(e) => {
+                setSelectedModel(e.target.value);
+                localStorage.setItem('qp_selected_model', e.target.value);
+              }}
+              disabled={loading}
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 11.5,
+                padding: '3px 8px', borderRadius: 6,
+                background: 'var(--panel)', color: 'var(--fg)',
+                border: '1px solid var(--border)',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                maxWidth: 220,
+              }}
+              aria-label="Select AI model for audit"
+              title="AI model used by QueryArgus for this run"
+            >
+              {availableModels.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
           <button
             type="button"
             onClick={() => setCustomizeOpen(v => !v)}
