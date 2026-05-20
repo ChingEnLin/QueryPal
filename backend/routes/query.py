@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Header, Body, HTTPException
+from typing import List
 from services.azure_auth import exchange_token_obo
 from services.azure_cosmos_resources import (
     get_connection_string,
@@ -36,6 +37,7 @@ from pymongo.results import (
 )
 import ast
 import re
+from google import genai
 
 router = APIRouter()
 
@@ -107,6 +109,7 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
         intermediate_context=prompt.intermediate_context,
         connection_string=connection_string,
         max_iterations=prompt.max_iterations,
+        model=prompt.model,
     )
 
 
@@ -129,7 +132,7 @@ def infer_relationships(
             collection_filter=request.collection_names,
         )
 
-        return generate_schema_relationships(schema_summary)
+        return generate_schema_relationships(schema_summary, model=request.model)
 
     except Exception as e:
         print(f"Error inferring relationships: {e}")
@@ -202,7 +205,9 @@ def debug(body: DebugQueryRequest = Body(...)):
     """
     Sends a failed query and error message to Gemini for debugging suggestion.
     """
-    return generate_suggestion_from_query_error(body.query, body.error_message)
+    return generate_suggestion_from_query_error(
+        body.query, body.error_message, model=body.model
+    )
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -210,7 +215,7 @@ def analyze(body: AnalyzeRequest = Body(...)):
     """
     Sends a query result to the AI for analysis and visualization suggestions.
     """
-    return analyze_query_result(body.query_result)
+    return analyze_query_result(body.query_result, model=body.model)
 
 
 @router.post("/evaluate-write", response_model=EvaluateWriteResponse)
@@ -240,4 +245,35 @@ def evaluate_write(
         write_result=body.write_result,
         connection_string=connection_string,
         database_name=body.database_name,
+        model=body.model,
     )
+
+
+@router.get("/models", response_model=List[str])
+def list_models():
+    """
+    Returns available Gemini model IDs filtered to generative models.
+    Intentionally unauthenticated — model names are non-sensitive and
+    this endpoint is called on page load before auth completes.
+    """
+    try:
+        client = genai.Client()
+        models = list(client.models.list())
+        model_ids = [
+            m.name.replace("models/", "")
+            for m in models
+            if m.name
+            and "gemini" in m.name.lower()
+            and hasattr(m, "supported_actions")
+            and "generateContent" in (m.supported_actions or [])
+        ]
+        if not model_ids:
+            # Fallback: return all gemini models if supported_actions is absent
+            model_ids = [
+                m.name.replace("models/", "")
+                for m in models
+                if m.name and "gemini" in m.name.lower()
+            ]
+        return sorted(set(model_ids))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list models: {str(e)}")

@@ -10,6 +10,7 @@ router = APIRouter()
 
 class AuditQueryRequest(BaseModel):
     question: str
+    model: str = "gemini-2.5-flash"
 
 
 class AuditQueryResponse(BaseModel):
@@ -35,7 +36,7 @@ def query_audit_log(
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
 
-    response = process_audit_question(body.question)
+    response = process_audit_question(body.question, model=body.model)
     return AuditQueryResponse(**response)
 
 

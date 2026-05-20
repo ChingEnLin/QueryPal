@@ -119,6 +119,7 @@ def generate_query_from_prompt(
     collection_context: CollectionContext = None,
     intermediate_context: dict = None,
     all_collections_schema: str = "",
+    model: str = "gemini-2.5-flash",
 ) -> GeneratedCode:
     # Prune intermediate_context to remove image/large data
     safe_intermediate_context = (
@@ -136,7 +137,7 @@ def generate_query_from_prompt(
     )
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=0)  # Disables thinking
@@ -146,14 +147,16 @@ def generate_query_from_prompt(
     return GeneratedCode(generated_code=code)
 
 
-def generate_suggestion_from_query_error(query: str, error_message: str) -> str:
+def generate_suggestion_from_query_error(
+    query: str, error_message: str, model: str = "gemini-2.5-flash"
+) -> str:
     """
     Sends a failed query and error message to Gemini for debugging suggestion.
     """
     full_prompt = PROMPT_TEMPLATE_DEBUG.format(query=query, error_message=error_message)
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=0)  # Disables thinking
@@ -202,11 +205,11 @@ Tasks:
 """
 
 
-def generate_audit_sql(user_input: str) -> str:
+def generate_audit_sql(user_input: str, model: str = "gemini-2.5-flash") -> str:
     full_prompt = PROMPT_TEMPLATE_AUDIT_SQL.format(user_input=user_input)
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=0)
@@ -220,7 +223,7 @@ def generate_audit_sql(user_input: str) -> str:
 
 
 def summarize_audit_results(
-    user_input: str, sql_query: str, results: list
+    user_input: str, sql_query: str, results: list, model: str = "gemini-2.5-flash"
 ) -> AuditSummaryResponse:
     # Truncate results if too large to avoid token limits
     results_str = str(results)[:10000]
@@ -229,7 +232,7 @@ def summarize_audit_results(
     )
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -281,13 +284,15 @@ Output Format (Json):
 """
 
 
-def generate_schema_relationships(schema_summary: str) -> SchemaRelationshipsResponse:
+def generate_schema_relationships(
+    schema_summary: str, model: str = "gemini-2.5-flash"
+) -> SchemaRelationshipsResponse:
     from models.schemas import SchemaRelationshipsResponse
 
     full_prompt = PROMPT_TEMPLATE_RELATIONSHIPS.format(schema_summary=schema_summary)
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
