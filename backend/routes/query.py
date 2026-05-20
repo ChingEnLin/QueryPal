@@ -37,6 +37,7 @@ from pymongo.results import (
 )
 import ast
 import re
+from google import genai
 
 router = APIRouter()
 
@@ -252,12 +253,12 @@ def evaluate_write(
 def list_models():
     """
     Returns available Gemini model IDs filtered to generative models.
+    Intentionally unauthenticated — model names are non-sensitive and
+    this endpoint is called on page load before auth completes.
     """
     try:
-        from google import genai
-
         client = genai.Client()
-        models = client.models.list()
+        models = list(client.models.list())
         model_ids = [
             m.name.replace("models/", "")
             for m in models
@@ -267,10 +268,10 @@ def list_models():
             and "generateContent" in (m.supported_actions or [])
         ]
         if not model_ids:
-            # Fallback: return all gemini models even if supported_actions is missing
+            # Fallback: return all gemini models if supported_actions is absent
             model_ids = [
                 m.name.replace("models/", "")
-                for m in client.models.list()
+                for m in models
                 if m.name and "gemini" in m.name.lower()
             ]
         return sorted(set(model_ids))

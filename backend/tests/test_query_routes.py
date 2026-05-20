@@ -191,7 +191,10 @@ def test_analyze_query(client):
         assert "chartData" in data
         assert "chartOptions" in data
 
-        mock_analyze.assert_called_once()
+        mock_analyze.assert_called_once_with(
+            [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}],
+            model="gemini-2.5-flash",
+        )
 
 
 from models.schemas import EvaluateWriteRequest
@@ -291,3 +294,56 @@ def test_execute_query_write_logging(client):
             call_kwargs["after_data"]["query"]
             == "db.users.update_one({'_id': '123'}, {'$set': {'age': 30}})"
         )
+
+
+def test_list_models_with_supported_actions(client):
+    """Test /models returns gemini models filtered by generateContent support."""
+
+    class MockModel:
+        def __init__(self, name, supported_actions=None):
+            self.name = name
+            self.supported_actions = supported_actions
+
+    mock_models = [
+        MockModel("models/gemini-2.5-flash", ["generateContent", "countTokens"]),
+        MockModel("models/gemini-2.0-flash", ["generateContent"]),
+        MockModel("models/gemini-1.0-pro", ["countTokens"]),  # no generateContent
+        MockModel("models/text-embedding-004", ["embedContent"]),  # not gemini
+        MockModel(None),  # name is None
+    ]
+
+    with patch("routes.query.genai") as mock_genai:
+        mock_genai.Client.return_value.models.list.return_value = mock_models
+        response = client.get("/query/models")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "gemini-2.5-flash" in data
+    assert "gemini-2.0-flash" in data
+    assert "gemini-1.0-pro" not in data
+    assert "text-embedding-004" not in data
+    assert data == sorted(data)
+
+
+def test_list_models_fallback_no_supported_actions(client):
+    """Test /models fallback when supported_actions is absent on all models."""
+
+    class MockModelNoActions:
+        def __init__(self, name):
+            self.name = name
+
+    mock_models = [
+        MockModelNoActions("models/gemini-2.5-flash"),
+        MockModelNoActions("models/gemini-2.0-flash"),
+        MockModelNoActions("models/text-embedding-004"),
+    ]
+
+    with patch("routes.query.genai") as mock_genai:
+        mock_genai.Client.return_value.models.list.return_value = mock_models
+        response = client.get("/query/models")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "gemini-2.5-flash" in data
+    assert "gemini-2.0-flash" in data
+    assert "text-embedding-004" not in data

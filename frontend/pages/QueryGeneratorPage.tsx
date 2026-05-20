@@ -507,7 +507,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
   // Agent configuration
   const [maxIterations, setMaxIterations] = useState<number>(3);
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash');
+  const [selectedModel, setSelectedModel] = useState<string>(
+    () => localStorage.getItem('qp_selected_model') ?? 'gemini-2.5-flash'
+  );
   const [availableModels, setAvailableModels] = useState<string[]>(['gemini-2.5-flash']);
 
   // State for collection details
@@ -1859,7 +1861,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                 <select
                   id="model-select"
                   value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
+                  onChange={(e) => { setSelectedModel(e.target.value); localStorage.setItem('qp_selected_model', e.target.value); }}
                   disabled={isLoading || isQuerySectionDisabled}
                   style={{
                     fontSize: 12.5,
@@ -2466,7 +2468,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
             </div>
             <select
               value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
+              onChange={(e) => { setSelectedModel(e.target.value); localStorage.setItem('qp_selected_model', e.target.value); }}
               disabled={isLoading || isQuerySectionDisabled}
               style={{
                 fontSize: 11,

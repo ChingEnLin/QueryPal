@@ -15,6 +15,9 @@ import { getAuthErrorMessage } from '../utils/authErrorHandler';
  * @returns A promise that resolves with the structured query data.
  */
 export const getAvailableModels = async (): Promise<string[]> => {
+    if (!USE_MSAL_AUTH) {
+        return ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    }
     try {
         const response = await fetch(`${API_BASE_URL}/query/models`);
         if (!response.ok) return ['gemini-2.5-flash'];
