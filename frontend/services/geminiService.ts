@@ -14,6 +14,16 @@ import { getAuthErrorMessage } from '../utils/authErrorHandler';
  * @param intermediateContext Optional data from a previous query result to be used as context.
  * @returns A promise that resolves with the structured query data.
  */
+export const getAvailableModels = async (): Promise<string[]> => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/query/models`);
+        if (!response.ok) return ['gemini-2.5-flash'];
+        return await response.json();
+    } catch {
+        return ['gemini-2.5-flash'];
+    }
+};
+
 export const generateMongoQuery = async (
     userInput: string,
     accountId: string,
@@ -21,7 +31,8 @@ export const generateMongoQuery = async (
     collectionContext?: CollectionInfo, // Kept for backward compatibility/single select
     intermediateContext?: any,
     selectedCollections: CollectionInfo[] = [],
-    maxIterations: number = 3
+    maxIterations: number = 3,
+    model: string = 'gemini-2.5-flash'
 ): Promise<QueryResultData> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
@@ -75,6 +86,7 @@ export const generateMongoQuery = async (
             })) : (collectionContext ? [collectionContext] : []), // Fallback to single context as array
             intermediate_context: intermediateContext, // Optional: send data from a previous query
             max_iterations: maxIterations,
+            model,
         }),
     });
 
@@ -94,7 +106,7 @@ export const generateMongoQuery = async (
  * @param errorMessage The error message from the database.
  * @returns A promise that resolves with the AI's debugging suggestion.
  */
-export const debugMongoQuery = async (query: string, errorMessage: string): Promise<DebuggingResult> => {
+export const debugMongoQuery = async (query: string, errorMessage: string, model: string = 'gemini-2.5-flash'): Promise<DebuggingResult> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
         console.log("DEV MODE: Returning mock AI debugging result.");
@@ -113,6 +125,7 @@ export const debugMongoQuery = async (query: string, errorMessage: string): Prom
         body: JSON.stringify({
             query: query,
             error_message: errorMessage,
+            model,
         }),
     });
 
@@ -132,7 +145,7 @@ export const debugMongoQuery = async (query: string, errorMessage: string): Prom
  * @param queryResult The data returned from a successful query execution.
  * @returns A promise that resolves with the AI's analysis.
  */
-export const analyzeQueryResult = async (queryResult: any): Promise<AnalysisResult> => {
+export const analyzeQueryResult = async (queryResult: any, model: string = 'gemini-2.5-flash'): Promise<AnalysisResult> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
         console.log("DEV MODE: Returning mock AI analysis result.");
@@ -151,7 +164,7 @@ export const analyzeQueryResult = async (queryResult: any): Promise<AnalysisResu
     const response = await fetch(`${API_BASE_URL}/query/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query_result: queryResult }),
+        body: JSON.stringify({ query_result: queryResult, model }),
     });
 
     if (!response.ok) {
@@ -175,7 +188,8 @@ export const analyzeQueryResult = async (queryResult: any): Promise<AnalysisResu
 export const inferSchemaRelationships = async (
     accountId: string,
     databaseName: string,
-    collectionNames: string[]
+    collectionNames: string[],
+    model: string = 'gemini-2.5-flash'
 ): Promise<SchemaRelationshipsResponse> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
@@ -224,7 +238,8 @@ export const inferSchemaRelationships = async (
         body: JSON.stringify({
             account_id: accountId,
             database_name: databaseName,
-            collection_names: collectionNames
+            collection_names: collectionNames,
+            model,
         }),
     });
 
@@ -242,7 +257,7 @@ export const inferSchemaRelationships = async (
 /**
  * Evaluates the result of a write operation against the user's intent.
  */
-export const evaluateWriteResult = async (userIntent: string, queryCode: string, writeResult: any, accountId: string, databaseName: string): Promise<{ evaluation: string }> => {
+export const evaluateWriteResult = async (userIntent: string, queryCode: string, writeResult: any, accountId: string, databaseName: string, model: string = 'gemini-2.5-flash'): Promise<{ evaluation: string }> => {
     // --- DEVELOPMENT MOCK ---
     if (!USE_MSAL_AUTH) {
         console.log("DEV MODE: Returning mock AI write evaluation.");
@@ -279,7 +294,8 @@ export const evaluateWriteResult = async (userIntent: string, queryCode: string,
             query_code: queryCode,
             write_result: writeResult,
             account_id: accountId,
-            database_name: databaseName
+            database_name: databaseName,
+            model,
         }),
     });
 

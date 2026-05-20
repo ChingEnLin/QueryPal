@@ -56,6 +56,7 @@ class AgentState(TypedDict):
     schema_context: str
     intermediate_context: dict
     connection_string: str
+    model: str
 
     generated_query: str
     is_write_action: bool
@@ -127,7 +128,7 @@ def generate_query_node(state: AgentState):
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=state.get("model", "gemini-2.5-flash"),
             contents=prompt,
             config=types.GenerateContentConfig(
                 thinking_config=types.ThinkingConfig(thinking_budget=0)
@@ -210,7 +211,7 @@ def evaluate_node(state: AgentState):
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=state.get("model", "gemini-2.5-flash"),
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -271,6 +272,7 @@ def run_query_generator(
     intermediate_context: dict,
     connection_string: str,
     max_iterations: int = 3,
+    model: str = "gemini-2.5-flash",
 ):
     logger.info(f"Starting ReAct Agent workflow for input: '{user_input}'")
     initial_state = {
@@ -280,6 +282,7 @@ def run_query_generator(
         "schema_context": schema_context,
         "intermediate_context": intermediate_context,
         "connection_string": connection_string,
+        "model": model,
         "iterations": 0,
         "max_iterations": max_iterations,
     }

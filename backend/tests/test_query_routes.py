@@ -163,7 +163,9 @@ def test_debug_query(client):
         data = response.json()
         assert data["suggestion"] == "Check collection name"
 
-        mock_debug.assert_called_once_with("db.users.find({})", "Collection not found")
+        mock_debug.assert_called_once_with(
+            "db.users.find({})", "Collection not found", model="gemini-2.5-flash"
+        )
 
 
 def test_analyze_query(client):

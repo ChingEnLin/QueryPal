@@ -39,6 +39,7 @@ class QueryPrompt(BaseModel):
     max_iterations: int = Field(
         default=3, ge=1, le=10
     )  # Server-enforced agent iteration cap
+    model: str = "gemini-2.5-flash"
 
 
 class GeneratedCode(BaseModel):
@@ -54,6 +55,7 @@ class ExecuteInput(BaseModel):
 class DebugQueryRequest(BaseModel):
     query: str
     error_message: str
+    model: str = "gemini-2.5-flash"
 
 
 class DebugSuggestionResponse(BaseModel):
@@ -64,6 +66,7 @@ class SchemaRelationshipsRequest(BaseModel):
     account_id: str
     database_name: str
     collection_names: list[str]
+    model: str = "gemini-2.5-flash"
 
 
 class Relationship(BaseModel):
@@ -85,6 +88,7 @@ class EvaluateWriteRequest(BaseModel):
     write_result: dict
     account_id: str
     database_name: str
+    model: str = "gemini-2.5-flash"
 
 
 class EvaluateWriteResponse(BaseModel):
