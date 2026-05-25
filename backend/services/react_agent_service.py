@@ -54,6 +54,7 @@ class AgentState(TypedDict):
     database: str
     collections: list[str]
     schema_context: str
+    relationship_context: str
     intermediate_context: dict
     connection_string: str
     model: str
@@ -71,25 +72,71 @@ class AgentState(TypedDict):
 # Define LLM clients and prompts
 client = genai.Client()
 
+CROSS_COLLECTION_GUIDANCE = """
+
+Cross-Collection Join Guidance (MULTIPLE collections selected):
+- Produce ONE aggregate() pipeline that joins via $lookup. Do not emit multiple queries.
+- Pick the most-filtering collection as the driver; $lookup the others onto it.
+- Use the Inferred Relationships block above to choose join fields. Do NOT invent field names that are not in the schema or relationships.
+- If a foreign key is an ObjectId on one side and a string on the other, use the `let` + `pipeline` form of $lookup with $toObjectId / $toString — `localField`/`foreignField` silently matches nothing on type mismatch.
+- After $lookup, $unwind the joined array (use `preserveNullAndEmptyArrays: True` for LEFT-JOIN semantics).
+- Always include a $limit (<=50) unless the user explicitly asks for all rows.
+
+Example A — simple equality join (same field type on both sides):
+```python
+db['orders'].aggregate([
+    {"$match": {"status": "paid"}},
+    {"$lookup": {
+        "from": "users",
+        "localField": "userId",
+        "foreignField": "_id",
+        "as": "user"
+    }},
+    {"$unwind": {"path": "$user", "preserveNullAndEmptyArrays": True}},
+    {"$limit": 20}
+])
+```
+
+Example B — join with type conversion or extra filter (use `let` + `pipeline`):
+```python
+db['orders'].aggregate([
+    {"$lookup": {
+        "from": "users",
+        "let": {"uid": {"$toObjectId": "$userId"}},
+        "pipeline": [
+            {"$match": {"$expr": {"$eq": ["$_id", "$$uid"]}, "active": True}},
+            {"$project": {"name": 1, "email": 1}}
+        ],
+        "as": "user"
+    }},
+    {"$unwind": "$user"},
+    {"$limit": 20}
+])
+```
+"""
+
 GENERATE_PROMPT = """
-You are an expert MongoDB architect. 
+You are an expert MongoDB architect.
 Your task is to generate a PyMongo query based on the user's request.
 
 User Request: {user_input}
 Database: {database}
 Collections: {collections}
 Schema summary: {schema_context}
+Inferred Relationships (foreign keys between collections):
+{relationship_context}
 Intermediate Context (optional): {intermediate_context}
 
-Previous Evaluation Feedback (if this is a retry): 
+Previous Evaluation Feedback (if this is a retry):
 {evaluation}
 
 Instructions:
-1. Write ONLY the PyMongo query code. 
+1. Write ONLY the PyMongo query code.
 2. Use variables appropriately (e.g., db['collection_name'].find(...) or db['collection_name'].aggregate(...)).
 3. Do not include markdown formatting or explanations, just return the code, but you can use ```python if you must.
 4. If the user is asking for a visualization, ensure the query retrieves the necessary data format.
 5. You are allowed to use both find() and aggregate() pipelines. If using aggregate(), be mindful of the resulting data size and include $limit stages if applicable.
+{cross_collection_guidance}
 """
 
 EVALUATE_PROMPT = """
@@ -105,6 +152,10 @@ Your task:
 Determine if this query successfully answers the user's request based on the code and the result.
 If there is an error in the query result, or if it clearly does not match the intent, it is NOT valid.
 If it is a write action, we cannot test the result, but you should evaluate if the code looks correct for the user's intent.
+If the query uses $lookup, specifically verify:
+  - The `localField`/`foreignField` (or the `let` + `pipeline` $expr) reference fields that actually exist on each side.
+  - When the joined array is empty for every input doc, suspect a type mismatch (ObjectId vs string) — the query is NOT valid; recommend the `let` + `pipeline` form with $toObjectId/$toString.
+  - The driving collection is the right one (smallest filtered set first).
 
 Respond in JSON format:
 {{
@@ -117,13 +168,16 @@ Respond in JSON format:
 def generate_query_node(state: AgentState):
     logger.info(f"--- GENERATE NODE (Iteration {state.get('iterations', 0)}) ---")
 
+    is_multi_collection = len(state.get("collections", [])) > 1
     prompt = GENERATE_PROMPT.format(
         user_input=state["user_input"],
         database=state["database"],
         collections=", ".join(state["collections"]),
         schema_context=state["schema_context"],
+        relationship_context=state.get("relationship_context") or "None (single collection or no inferred relationships).",
         intermediate_context=state.get("intermediate_context", {}),
         evaluation=state.get("evaluation", "None"),
+        cross_collection_guidance=CROSS_COLLECTION_GUIDANCE if is_multi_collection else "",
     )
 
     try:
@@ -273,6 +327,7 @@ def run_query_generator(
     connection_string: str,
     max_iterations: int = 3,
     model: str = "gemini-2.5-flash",
+    relationship_context: str = "",
 ):
     logger.info(f"Starting ReAct Agent workflow for input: '{user_input}'")
     initial_state = {
@@ -280,6 +335,7 @@ def run_query_generator(
         "database": database,
         "collections": collections,
         "schema_context": schema_context,
+        "relationship_context": relationship_context,
         "intermediate_context": intermediate_context,
         "connection_string": connection_string,
         "model": model,
