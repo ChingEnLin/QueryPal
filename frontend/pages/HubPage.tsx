@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useTheme } from '../contexts/ThemeContext';
-import { getAzureCosmosAccounts, getDatabasesForAccount } from '../services/dbService';
+import { getAzureCosmosAccounts } from '../services/dbService';
 import { CosmosDBAccount } from '../types';
 import { API_BASE_URL } from '../app.config';
 
@@ -192,24 +192,15 @@ const HubPage: React.FC = () => {
     navigate('/query-generator', { state: { preselectedAccountId: account.id, preselectedAccountName: account.name } });
   };
 
-  const handleOpenExplorer = async (account: CosmosDBAccount) => {
+  const handleOpenExplorer = (account: CosmosDBAccount) => {
     if (busyAccountId) return;
     setBusyAccountId(account.id);
     setBusyAction('explorer');
-    try {
-      const databases = await getDatabasesForAccount(account.id);
-      if (databases.length === 0) {
-        setBusyAccountId(null);
-        setBusyAction(null);
-        return;
-      }
-      const firstDb = databases[0];
-      navigate(`/data-explorer/${encodeURIComponent(account.id)}/${encodeURIComponent(firstDb.name)}`);
-    } catch (e) {
-      console.error('Failed to open explorer:', e);
-      setBusyAccountId(null);
-      setBusyAction(null);
-    }
+    // Navigate immediately; the explorer wrapper resolves the first database
+    // and shows a blurred connection chip while it loads.
+    navigate(`/data-explorer/${encodeURIComponent(account.id)}`, {
+      state: { pendingAccountName: account.name },
+    });
   };
 
   return (

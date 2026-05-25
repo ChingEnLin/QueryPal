@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CollectionSummary } from '../types';
 import {
   ArgusDiff,
   ArgusFinding,
@@ -378,7 +377,6 @@ const ThresholdInput: React.FC<{
 interface AnalyticsPageProps {
   accountId?: string;
   databaseName?: string;
-  collections?: CollectionSummary[];
   collection: string;
   onCollectionChange: (name: string) => void;
   collectionDefaulting?: boolean;
@@ -437,6 +435,7 @@ const tagStyle: React.CSSProperties = {
   padding: '0 6px', height: 18, borderRadius: 4,
   fontSize: 10, fontFamily: 'var(--font-body)',
   border: '1px solid var(--border)', background: 'var(--soft)',
+  whiteSpace: 'nowrap', flexShrink: 0,
 };
 
 const sectionLabel: React.CSSProperties = {
@@ -449,7 +448,6 @@ const sectionLabel: React.CSSProperties = {
 const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
   accountId,
   databaseName,
-  collections,
   collection,
   onCollectionChange,
   collectionDefaulting = false,
@@ -794,19 +792,24 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
     }
   };
 
+  const collectionSwitching =
+    !!collection && historyLoading && !report && jobStatus !== 'running' && jobStatus !== 'queued';
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', minHeight: 0 }}>
+    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', minHeight: 0 }}>
       {/* QueryArgus + controls row */}
       <div style={{
         padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10,
+        rowGap: 8, flexWrap: 'wrap',
         borderBottom: '1px solid var(--border)', background: 'var(--bg)', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'nowrap' }}>
           <div style={{
             width: 20, height: 20, borderRadius: 4, background: 'var(--fg)', color: 'var(--bg)',
             display: 'grid', placeItems: 'center', fontSize: 11, fontFamily: 'var(--font-display)', fontWeight: 600,
+            flexShrink: 0,
           }}>A</div>
-          <span style={{ fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)' }}>QueryArgus</span>
+          <span style={{ fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap' }}>QueryArgus</span>
           <span style={tagStyle}>data quality</span>
           <InfoPopover title="What is QueryArgus?">
             <p style={{ margin: '0 0 6px' }}>
@@ -824,44 +827,27 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
           </InfoPopover>
         </div>
         <span style={{ color: 'var(--border)' }}>·</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
           {databaseName ?? '—'}
+          {collection && (
+            <>
+              <span style={{ margin: '0 6px', color: 'var(--border)' }}>/</span>
+              <span style={{ color: 'var(--fg)' }}>{collection}</span>
+            </>
+          )}
         </span>
-        {hasConnection && (collections?.length ?? 0) > 0 && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <select
-              value={collection}
-              onChange={(e) => { setCollection(e.target.value); }}
-              disabled={collectionDefaulting}
-              style={{
-                fontFamily: 'var(--font-mono)', fontSize: 12,
-                padding: '3px 8px', borderRadius: 6,
-                background: 'var(--panel)', color: 'var(--fg)',
-                border: '1px solid var(--border)',
-                cursor: collectionDefaulting ? 'progress' : 'pointer',
-                opacity: collectionDefaulting ? 0.7 : 1,
-              }}
-            >
-              {[...collections!]
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((c) => (
-                  <option key={c.name} value={c.name}>{c.name}</option>
-                ))}
-            </select>
-            {collectionDefaulting && (
-              <svg
-                width="13" height="13" viewBox="0 0 16 16" fill="none"
-                stroke="var(--muted)" strokeWidth="1.5"
-                style={{ animation: 'qp-spin 0.8s linear infinite' }}
-                aria-label="Loading recent run"
-              >
-                <circle cx="8" cy="8" r="6" strokeOpacity="0.3" />
-                <path d="M8 2a6 6 0 0 1 6 6" />
-              </svg>
-            )}
-          </div>
+        {collectionDefaulting && (
+          <svg
+            width="13" height="13" viewBox="0 0 16 16" fill="none"
+            stroke="var(--muted)" strokeWidth="1.5"
+            style={{ animation: 'qp-spin 0.8s linear infinite', flexShrink: 0 }}
+            aria-label="Loading recent run"
+          >
+            <circle cx="8" cy="8" r="6" strokeOpacity="0.3" />
+            <path d="M8 2a6 6 0 0 1 6 6" />
+          </svg>
         )}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', rowGap: 6, justifyContent: 'flex-end' }}>
           <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Profile</span>
           <InfoPopover title="Profiles" align="right">
             <p style={{ margin: '0 0 6px' }}>
@@ -1436,6 +1422,29 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
                 style={{ fontSize: 12 }}
               >{saveBusy ? 'Saving…' : 'Save'}</button>
             </div>
+          </div>
+        </div>
+      )}
+      {collectionSwitching && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 40,
+          background: 'rgba(0,0,0,0.18)', backdropFilter: 'blur(2px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: 'var(--panel)', borderRadius: 10,
+            boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+            padding: '12px 22px', display: 'flex', alignItems: 'center', gap: 10,
+            border: '1px solid var(--border)',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.5"
+                 style={{ animation: 'qp-spin 0.8s linear infinite' }}>
+              <circle cx="8" cy="8" r="6" strokeOpacity="0.3"/>
+              <path d="M8 2a6 6 0 0 1 6 6"/>
+            </svg>
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)', fontFamily: 'var(--font-body)' }}>
+              Loading {collection}…
+            </span>
           </div>
         </div>
       )}

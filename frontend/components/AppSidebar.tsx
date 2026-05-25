@@ -9,13 +9,15 @@ interface AppSidebarProps {
   databaseName?: string;
   collections?: CollectionSummary[];
   activeCollection?: string;
-  onCollectionSelect?: (name: string) => void;
+  onCollectionSelect?: (name: string, ev?: { ctrlKey?: boolean; metaKey?: boolean }) => void;
+  activeCollections?: string[];
   collectionSeverity?: Record<string, 'critical' | 'warning' | 'info' | 'clean'>;
   collectionFindings?: Record<string, number>;
   availableDbs?: DbInfo[];
   onSwitchDatabase?: (db: DbInfo) => void;
   availableAccounts?: CosmosDBAccount[];
   onSwitchAccount?: (account: CosmosDBAccount) => void;
+  chipLoading?: boolean;
 }
 
 type NavItem =
@@ -70,12 +72,14 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   collections,
   activeCollection,
   onCollectionSelect,
+  activeCollections,
   collectionSeverity,
   collectionFindings,
   availableDbs,
   onSwitchDatabase,
   availableAccounts,
   onSwitchAccount,
+  chipLoading,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -138,7 +142,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         </Link>
 
         {/* Connection chip — always rendered so the brand section never changes height */}
-        <div ref={chipRef} style={{ position: 'relative' }}>
+        <div ref={chipRef} style={{ position: 'relative', filter: chipLoading ? 'blur(3px)' : undefined, pointerEvents: chipLoading ? 'none' : undefined, transition: 'filter 0.18s ease' }}>
           {!accountName ? (
             /* Placeholder keeps the same height as the real chip */
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 9px', background: 'var(--soft)', borderRadius: 7 }}>
@@ -384,7 +388,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               if (collectionSort === 'findings_desc') return bf - af || a.name.localeCompare(b.name);
               return af - bf || a.name.localeCompare(b.name);
             })).map((col) => {
-              const active = activeCollection === col.name;
+              const active = activeCollection === col.name || (activeCollections?.includes(col.name) ?? false);
               const status = collectionSeverity?.[col.name];
               const railColor =
                 status === 'critical' ? '#c94250'
@@ -403,7 +407,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               return (
                 <button
                   key={col.name}
-                  onClick={() => onCollectionSelect?.(col.name)}
+                  onClick={(e) => onCollectionSelect?.(col.name, { ctrlKey: e.ctrlKey, metaKey: e.metaKey })}
                   title={statusLabel}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center',
