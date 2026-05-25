@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { parseQueryForHandover } from '../utils/queryHandover';
-import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships, evaluateWriteResult } from '../services/geminiService';
+import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships, evaluateWriteResult, getAvailableModels } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
@@ -405,10 +405,16 @@ export interface QueryGeneratorPageProps {
   onConnectionChange?: (accountId: string | null, databaseName: string | null, accountName?: string | null, collections?: CollectionSummary[], availableAccounts?: CosmosDBAccount[], availableDbs?: DbInfo[]) => void;
   embedded?: boolean;
   preselectedAccountId?: string;
+  /** Sidebar click trigger. The token must change on every click so the page
+   *  re-applies the selection even when the same name is clicked twice. */
+  sidebarCollectionClick?: { name: string; modifier: boolean; token: number } | null;
+  /** Notify the wrapper of the full current selection so it can highlight every
+   *  selected collection in the sidebar (multi-select aware). */
+  onSelectedCollectionsChange?: (collectionNames: string[]) => void;
 }
 
 // --- Main Page Component ---
-const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, onConnectionChange, embedded = false, preselectedAccountId }) => {
+const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, onConnectionChange, embedded = false, preselectedAccountId, sidebarCollectionClick, onSelectedCollectionsChange }) => {
   const navigate = useNavigate();
 
   const [userInput, setUserInput] = useState<string>(() => {
@@ -507,6 +513,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
   // Agent configuration
   const [maxIterations, setMaxIterations] = useState<number>(3);
+  const [selectedModel, setSelectedModel] = useState<string>(
+    () => localStorage.getItem('qp_selected_model') ?? 'gemini-2.5-flash'
+  );
+  const [availableModels, setAvailableModels] = useState<string[]>(['gemini-2.5-flash']);
 
   // State for collection details
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
@@ -665,6 +675,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   useEffect(() => {
     fetchAccounts();
     fetchSavedQueries();
+    getAvailableModels().then(models => {
+      if (models.length > 0) setAvailableModels(models);
+    });
     // Check if the user has seen the tutorial before
     const hasSeenTutorial = localStorage.getItem('hasSeenTutorial');
     if (!hasSeenTutorial) {
@@ -865,7 +878,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         collectionCtx,
         intermediateContext?.data,
         selectedCollectionInfos,
-        maxIterations
+        maxIterations,
+        selectedModel
       );
       setQueryResult(result);
       setIntermediateContext(null); // Clear context after use
@@ -901,7 +915,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } finally {
       setIsLoading(false);
     }
-  }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext, connectedResource, selectedAccountId, selectedCollections, collectionDetailsMap]);
+  }, [connectedDbInfo, codeHistory, historyIndex, intermediateContext, connectedResource, selectedAccountId, selectedCollections, collectionDetailsMap, selectedModel]);
 
   const handleGenerateQueryClick = useCallback(() => {
     if (intermediateContext) {
@@ -975,7 +989,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setDebuggingResult(null);
 
     try {
-      const result = await debugMongoQuery(editableCode, executionError);
+      const result = await debugMongoQuery(editableCode, executionError, selectedModel);
       setDebuggingResult(result);
     } catch (e) {
       if (e instanceof Error) setDebugError(e.message);
@@ -983,7 +997,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } finally {
       setIsDebugging(false);
     }
-  }, [editableCode, executionError]);
+  }, [editableCode, executionError, selectedModel]);
 
   const handleAnalyzeQuery = useCallback(async (dataToAnalyze: any) => {
     if (!dataToAnalyze) return;
@@ -993,7 +1007,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setAnalysisResult(null);
 
     try {
-      const result = await analyzeQueryResult(dataToAnalyze);
+      const result = await analyzeQueryResult(dataToAnalyze, selectedModel);
       setAnalysisResult(result);
     } catch (e) {
       if (e instanceof Error) setAnalysisError(e.message);
@@ -1001,7 +1015,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } finally {
       setIsAnalyzing(false);
     }
-  }, []);
+  }, [selectedModel]);
 
   const handleEvaluateWrite = useCallback(async () => {
     if (!editableCode || !executionResult || !lastSuccessfulPrompt || !selectedAccountId || !connectedDbInfo) return;
@@ -1011,7 +1025,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setWriteEvaluationResult(null);
 
     try {
-      const result = await evaluateWriteResult(lastSuccessfulPrompt, editableCode, executionResult, selectedAccountId, connectedDbInfo.name);
+      const result = await evaluateWriteResult(lastSuccessfulPrompt, editableCode, executionResult, selectedAccountId, connectedDbInfo.name, selectedModel);
       setWriteEvaluationResult(result);
     } catch (e) {
       if (e instanceof Error) setWriteEvaluationError(e.message);
@@ -1019,7 +1033,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } finally {
       setIsEvaluatingWrite(false);
     }
-  }, [lastSuccessfulPrompt, editableCode, executionResult, selectedAccountId, connectedDbInfo]);
+  }, [lastSuccessfulPrompt, editableCode, executionResult, selectedAccountId, connectedDbInfo, selectedModel]);
 
 
   const handleCollectionClick = useCallback(async (collectionName: string, event?: React.MouseEvent) => {
@@ -1086,6 +1100,28 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     });
   }, [connectedResource, selectedCollections, collectionDetailsMap, loadingCollections]);
 
+  // Sidebar-driven collection selection — mirrors the middle-panel buttons,
+  // including Cmd/Ctrl+click multi-select. Driven by a token so re-clicking the
+  // same collection (toggle off) still triggers the effect.
+  const lastSidebarToken = useRef<number | null>(null);
+  useEffect(() => {
+    if (!sidebarCollectionClick) return;
+    if (lastSidebarToken.current === sidebarCollectionClick.token) return;
+    lastSidebarToken.current = sidebarCollectionClick.token;
+    if (!connectedResource) return;
+    const fakeEvent = {
+      ctrlKey: sidebarCollectionClick.modifier,
+      metaKey: sidebarCollectionClick.modifier,
+    } as React.MouseEvent;
+    handleCollectionClick(sidebarCollectionClick.name, fakeEvent);
+  }, [sidebarCollectionClick, connectedResource, handleCollectionClick]);
+
+  // Report the full selection back so the sidebar can highlight every selected
+  // collection when picks come from the middle panel.
+  useEffect(() => {
+    onSelectedCollectionsChange?.(selectedCollections);
+  }, [selectedCollections, onSelectedCollectionsChange]);
+
   const handleAnalyzeRelationships = useCallback(async () => {
     if (!connectedResource || selectedCollections.length < 2) return;
 
@@ -1098,7 +1134,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       const result = await inferSchemaRelationships(
         connectedResource.accountId,
         connectedResource.databaseName,
-        selectedCollections
+        selectedCollections,
+        selectedModel
       );
       setRelationships(result);
     } catch (e: any) {
@@ -1106,7 +1143,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     } finally {
       setIsAnalyzingRelationships(false);
     }
-  }, [connectedResource, selectedCollections]);
+  }, [connectedResource, selectedCollections, selectedModel]);
 
   // Debounced effect to trigger analysis when selections change
   useEffect(() => {
@@ -1844,6 +1881,33 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                   aria-label={`Agent iterations: ${maxIterations}`}
                 />
               </div>
+              {/* Model selector */}
+              <div className="flex items-center justify-between gap-3 py-1">
+                <label htmlFor="model-select" style={{ fontSize: 12.5, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                  Model:
+                </label>
+                <select
+                  id="model-select"
+                  value={selectedModel}
+                  onChange={(e) => { setSelectedModel(e.target.value); localStorage.setItem('qp_selected_model', e.target.value); }}
+                  disabled={isLoading || isQuerySectionDisabled}
+                  style={{
+                    fontSize: 12.5,
+                    padding: '3px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border)',
+                    background: 'var(--soft)',
+                    color: 'var(--fg)',
+                    cursor: 'pointer',
+                    maxWidth: 240,
+                  }}
+                  aria-label="Select AI model"
+                >
+                  {availableModels.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
               <button
                 onClick={handleGenerateQueryClick}
                 disabled={isLoading || !userInput.trim() || isQuerySectionDisabled || isPromptUnchanged}
@@ -2385,7 +2449,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         <div className="qa-card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--muted)' }}>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 8l3 3 7-7"/></svg>
-            Ask in plain English · Gemini
+            Ask in plain English
             {selectedCollectionsForRender.length > 0 && (
               <span className="qa-chip" style={{ marginLeft: 'auto' }}>{selectedCollectionsForRender.join(', ')}</span>
             )}
@@ -2430,6 +2494,26 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
               />
               <span style={{ fontSize: 11.5, color: 'var(--accent)', fontFamily: 'var(--font-mono)', minWidth: 14 }}>{maxIterations}</span>
             </div>
+            <select
+              value={selectedModel}
+              onChange={(e) => { setSelectedModel(e.target.value); localStorage.setItem('qp_selected_model', e.target.value); }}
+              disabled={isLoading || isQuerySectionDisabled}
+              style={{
+                fontSize: 11,
+                padding: '2px 6px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                background: 'var(--soft)',
+                color: 'var(--muted)',
+                cursor: 'pointer',
+                maxWidth: 180,
+              }}
+              aria-label="Select AI model"
+            >
+              {availableModels.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
             <span className="qa-chip" style={{ marginLeft: 'auto', fontSize: 10.5, cursor: 'pointer' }}
               onClick={() => setIsShortcutCheatsheetOpen(true)} title="Keyboard shortcuts">⌘/</span>
           </div>

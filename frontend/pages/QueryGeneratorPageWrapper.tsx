@@ -30,6 +30,13 @@ const MsalQueryGeneratorPageWrapper: React.FC = () => {
   const [connection, setConnection] = React.useState<ConnectionState | null>(() =>
     hubState.preselectedAccountId ? null : readSessionConnection()
   );
+  const [activeCollections, setActiveCollections] = React.useState<string[]>([]);
+  const [sidebarClick, setSidebarClick] = React.useState<{ name: string; modifier: boolean; token: number } | null>(null);
+  const sidebarTokenRef = React.useRef(0);
+  const handleSidebarCollectionSelect = React.useCallback((name: string, ev?: { ctrlKey?: boolean; metaKey?: boolean }) => {
+    sidebarTokenRef.current += 1;
+    setSidebarClick({ name, modifier: !!(ev?.ctrlKey || ev?.metaKey), token: sidebarTokenRef.current });
+  }, []);
 
   const name = accounts[0]?.name;
   const email = accounts[0]?.username;
@@ -58,6 +65,9 @@ const MsalQueryGeneratorPageWrapper: React.FC = () => {
       databaseName={connection?.databaseName}
       accountName={connection?.accountName}
       collections={connection?.collections}
+      activeCollection={activeCollections[0]}
+      activeCollections={activeCollections}
+      onCollectionSelect={handleSidebarCollectionSelect}
       availableAccounts={connection?.availableAccounts}
       availableDbs={connection?.availableDbs}
       onSwitchAccount={(acc) => navigate('/query-generator', { state: { preselectedAccountId: acc.id } })}
@@ -72,6 +82,8 @@ const MsalQueryGeneratorPageWrapper: React.FC = () => {
           setConnection(accountId && databaseName ? { accountId, databaseName, accountName: accountName ?? undefined, collections, availableAccounts, availableDbs } : null)
         }
         preselectedAccountId={hubState.preselectedAccountId}
+        sidebarCollectionClick={sidebarClick}
+        onSelectedCollectionsChange={setActiveCollections}
         embedded
       />
     </AppLayout>
@@ -87,6 +99,13 @@ const BypassQueryGeneratorPageWrapper: React.FC = () => {
   const [connection, setConnection] = React.useState<ConnectionState | null>(() =>
     hubState.preselectedAccountId ? null : readSessionConnection()
   );
+  const [activeCollections, setActiveCollections] = React.useState<string[]>([]);
+  const [sidebarClick, setSidebarClick] = React.useState<{ name: string; modifier: boolean; token: number } | null>(null);
+  const sidebarTokenRef = React.useRef(0);
+  const handleSidebarCollectionSelect = React.useCallback((name: string, ev?: { ctrlKey?: boolean; metaKey?: boolean }) => {
+    sidebarTokenRef.current += 1;
+    setSidebarClick({ name, modifier: !!(ev?.ctrlKey || ev?.metaKey), token: sidebarTokenRef.current });
+  }, []);
 
   const name = user?.name;
   const email = user?.email;
@@ -114,6 +133,9 @@ const BypassQueryGeneratorPageWrapper: React.FC = () => {
       databaseName={connection?.databaseName}
       accountName={connection?.accountName}
       collections={connection?.collections}
+      activeCollection={activeCollections[0]}
+      activeCollections={activeCollections}
+      onCollectionSelect={handleSidebarCollectionSelect}
       availableAccounts={connection?.availableAccounts}
       availableDbs={connection?.availableDbs}
       onSwitchAccount={(acc) => navigate('/query-generator', { state: { preselectedAccountId: acc.id } })}
@@ -128,6 +150,8 @@ const BypassQueryGeneratorPageWrapper: React.FC = () => {
           setConnection(accountId && databaseName ? { accountId, databaseName, accountName: accountName ?? undefined, collections, availableAccounts, availableDbs } : null)
         }
         preselectedAccountId={hubState.preselectedAccountId}
+        sidebarCollectionClick={sidebarClick}
+        onSelectedCollectionsChange={setActiveCollections}
         embedded
       />
     </AppLayout>

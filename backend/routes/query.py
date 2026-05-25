@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Header, Body, HTTPException
+from typing import List
 from services.azure_auth import exchange_token_obo
 from services.azure_cosmos_resources import (
     get_connection_string,
@@ -22,6 +23,7 @@ from services.mongo_service import (
     execute_mongo_query,
     transform_mongo_result,
     get_database_schema_summary,
+    SCHEMA_FETCH_FAILED,
 )
 from models.analyze import AnalyzeRequest, AnalyzeResponse
 from services.analyze_service import analyze_query_result
@@ -35,7 +37,11 @@ from pymongo.results import (
     DeleteResult,
 )
 import ast
+import logging
 import re
+from google import genai
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -99,6 +105,26 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
 
     collections = [col.name for col in prompt.db_context.collections]
 
+    relationship_context = ""
+    if (
+        len(collections) > 1
+        and schema_summary
+        and schema_summary != SCHEMA_FETCH_FAILED
+    ):
+        try:
+            rels = generate_schema_relationships(schema_summary, model=prompt.model)
+            if rels.relationships:
+                relationship_context = "\n".join(
+                    f"- {r.source_collection}.{r.source_field} -> "
+                    f"{r.target_collection}.{r.target_field} "
+                    f"(confidence={r.confidence:.2f}) — {r.description}"
+                    for r in rels.relationships
+                )
+        except Exception as e:
+            logger.warning(
+                "Relationship inference failed; continuing without it: %s", e
+            )
+
     return run_query_generator(
         user_input=prompt.user_input,
         database=prompt.db_context.name,
@@ -107,6 +133,8 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
         intermediate_context=prompt.intermediate_context,
         connection_string=connection_string,
         max_iterations=prompt.max_iterations,
+        model=prompt.model,
+        relationship_context=relationship_context,
     )
 
 
@@ -129,7 +157,7 @@ def infer_relationships(
             collection_filter=request.collection_names,
         )
 
-        return generate_schema_relationships(schema_summary)
+        return generate_schema_relationships(schema_summary, model=request.model)
 
     except Exception as e:
         print(f"Error inferring relationships: {e}")
@@ -202,7 +230,9 @@ def debug(body: DebugQueryRequest = Body(...)):
     """
     Sends a failed query and error message to Gemini for debugging suggestion.
     """
-    return generate_suggestion_from_query_error(body.query, body.error_message)
+    return generate_suggestion_from_query_error(
+        body.query, body.error_message, model=body.model
+    )
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -210,7 +240,7 @@ def analyze(body: AnalyzeRequest = Body(...)):
     """
     Sends a query result to the AI for analysis and visualization suggestions.
     """
-    return analyze_query_result(body.query_result)
+    return analyze_query_result(body.query_result, model=body.model)
 
 
 @router.post("/evaluate-write", response_model=EvaluateWriteResponse)
@@ -240,4 +270,40 @@ def evaluate_write(
         write_result=body.write_result,
         connection_string=connection_string,
         database_name=body.database_name,
+        model=body.model,
     )
+
+
+# Curated allowlist of models we know work with our prompts, response_schema
+# usage, and tool-calling paths. Keep this short — every model here has been
+# manually verified against /nl2query, /analyze, /evaluate-write, and the
+# QueryArgus run path. Pro models route through thinking_config_for() so they
+# don't trip the "thinking_budget=0 invalid" error.
+SUPPORTED_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+]
+
+
+@router.get("/models", response_model=List[str])
+def list_models():
+    """
+    Returns the intersection of our supported-model allowlist and the
+    models actually available to the configured API key. Intentionally
+    unauthenticated — model names are non-sensitive and this endpoint is
+    called on page load before auth completes.
+    """
+    try:
+        client = genai.Client()
+        available = {
+            m.name.replace("models/", "") for m in client.models.list() if m.name
+        }
+        filtered = [m for m in SUPPORTED_MODELS if m in available]
+        # Fall back to the allowlist if the API listing is empty or filtered
+        # nothing through (e.g. unexpected naming): better to show known-good
+        # options than an empty dropdown.
+        return filtered or SUPPORTED_MODELS
+    except Exception:
+        return SUPPORTED_MODELS

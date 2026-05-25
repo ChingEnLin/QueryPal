@@ -163,7 +163,9 @@ def test_debug_query(client):
         data = response.json()
         assert data["suggestion"] == "Check collection name"
 
-        mock_debug.assert_called_once_with("db.users.find({})", "Collection not found")
+        mock_debug.assert_called_once_with(
+            "db.users.find({})", "Collection not found", model="gemini-2.5-flash"
+        )
 
 
 def test_analyze_query(client):
@@ -189,7 +191,10 @@ def test_analyze_query(client):
         assert "chartData" in data
         assert "chartOptions" in data
 
-        mock_analyze.assert_called_once()
+        mock_analyze.assert_called_once_with(
+            [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}],
+            model="gemini-2.5-flash",
+        )
 
 
 from models.schemas import EvaluateWriteRequest
@@ -289,3 +294,42 @@ def test_execute_query_write_logging(client):
             call_kwargs["after_data"]["query"]
             == "db.users.update_one({'_id': '123'}, {'$set': {'age': 30}})"
         )
+
+
+def test_list_models_intersects_allowlist(client):
+    """Test /models returns only allowlisted models the API actually exposes."""
+
+    class MockModel:
+        def __init__(self, name):
+            self.name = name
+
+    mock_models = [
+        MockModel("models/gemini-2.5-flash"),
+        MockModel("models/gemini-2.5-pro"),
+        MockModel("models/gemini-1.0-pro"),  # not in allowlist
+        MockModel("models/text-embedding-004"),  # not in allowlist
+        MockModel(None),
+    ]
+
+    with patch("routes.query.genai") as mock_genai:
+        mock_genai.Client.return_value.models.list.return_value = mock_models
+        response = client.get("/query/models")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "gemini-2.5-flash" in data
+    assert "gemini-2.5-pro" in data
+    assert "gemini-1.0-pro" not in data
+    assert "text-embedding-004" not in data
+
+
+def test_list_models_falls_back_when_api_errors(client):
+    """Test /models returns the allowlist when the API listing fails."""
+    from routes.query import SUPPORTED_MODELS
+
+    with patch("routes.query.genai") as mock_genai:
+        mock_genai.Client.side_effect = RuntimeError("API down")
+        response = client.get("/query/models")
+
+    assert response.status_code == 200
+    assert response.json() == SUPPORTED_MODELS

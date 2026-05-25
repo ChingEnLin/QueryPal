@@ -3,6 +3,7 @@ from google.genai import types
 from models.schemas import EvaluateWriteResponse
 from services.mongo_service import execute_mongo_query, transform_mongo_result
 from services.react_agent_service import is_write_operation
+from services.gemini_service import thinking_config_for
 
 
 def evaluate_write_result(
@@ -11,6 +12,7 @@ def evaluate_write_result(
     write_result: dict,
     connection_string: str = "",
     database_name: str = "",
+    model: str = "gemini-2.5-flash",
 ) -> EvaluateWriteResponse:
     prompt = f"""
 You are an expert MongoDB database administrator and assistant.
@@ -63,10 +65,10 @@ Respond with plain text only in your final answer.
     tools = [query_database] if connection_string else None
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
-            tools=tools, thinking_config=types.ThinkingConfig(thinking_budget=0)
+            tools=tools, thinking_config=thinking_config_for(model)
         ),
     )
 
@@ -84,7 +86,7 @@ Respond with plain text only in your final answer.
 
                 # Send the tool result back to the model
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model=model,
                     contents=[
                         prompt,
                         response.candidates[0].content,
@@ -94,7 +96,7 @@ Respond with plain text only in your final answer.
                     ],
                     config=types.GenerateContentConfig(
                         tools=tools,
-                        thinking_config=types.ThinkingConfig(thinking_budget=0),
+                        thinking_config=thinking_config_for(model),
                     ),
                 )
 

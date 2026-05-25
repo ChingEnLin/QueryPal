@@ -10,6 +10,18 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 
 
+def thinking_config_for(model: str) -> Optional[types.ThinkingConfig]:
+    """Return a ThinkingConfig appropriate for the model.
+
+    gemini-2.5-pro requires thinking mode (rejects thinking_budget=0), so we
+    return None to let the API use its default. Flash variants get an explicit
+    budget=0 to keep latency and cost down.
+    """
+    if model and "pro" in model.lower():
+        return None
+    return types.ThinkingConfig(thinking_budget=0)
+
+
 class VisualizationConfig(BaseModel):
     available: bool = Field(description="Whether a chart is recommended for this data")
     type: Optional[str] = Field(
@@ -119,6 +131,7 @@ def generate_query_from_prompt(
     collection_context: CollectionContext = None,
     intermediate_context: dict = None,
     all_collections_schema: str = "",
+    model: str = "gemini-2.5-flash",
 ) -> GeneratedCode:
     # Prune intermediate_context to remove image/large data
     safe_intermediate_context = (
@@ -136,27 +149,29 @@ def generate_query_from_prompt(
     )
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=0)  # Disables thinking
+            thinking_config=thinking_config_for(model),
         ),
     )
     code = extract_python_code(response.text)
     return GeneratedCode(generated_code=code)
 
 
-def generate_suggestion_from_query_error(query: str, error_message: str) -> str:
+def generate_suggestion_from_query_error(
+    query: str, error_message: str, model: str = "gemini-2.5-flash"
+) -> str:
     """
     Sends a failed query and error message to Gemini for debugging suggestion.
     """
     full_prompt = PROMPT_TEMPLATE_DEBUG.format(query=query, error_message=error_message)
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=0)  # Disables thinking
+            thinking_config=thinking_config_for(model),
         ),
     )
     suggestion = (
@@ -202,14 +217,14 @@ Tasks:
 """
 
 
-def generate_audit_sql(user_input: str) -> str:
+def generate_audit_sql(user_input: str, model: str = "gemini-2.5-flash") -> str:
     full_prompt = PROMPT_TEMPLATE_AUDIT_SQL.format(user_input=user_input)
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=0)
+            thinking_config=thinking_config_for(model),
         ),
     )
     sql = extract_python_code(response.text)
@@ -220,7 +235,7 @@ def generate_audit_sql(user_input: str) -> str:
 
 
 def summarize_audit_results(
-    user_input: str, sql_query: str, results: list
+    user_input: str, sql_query: str, results: list, model: str = "gemini-2.5-flash"
 ) -> AuditSummaryResponse:
     # Truncate results if too large to avoid token limits
     results_str = str(results)[:10000]
@@ -229,12 +244,12 @@ def summarize_audit_results(
     )
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=AuditSummaryResponse,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            thinking_config=thinking_config_for(model),
         ),
     )
 
@@ -281,18 +296,20 @@ Output Format (Json):
 """
 
 
-def generate_schema_relationships(schema_summary: str) -> SchemaRelationshipsResponse:
+def generate_schema_relationships(
+    schema_summary: str, model: str = "gemini-2.5-flash"
+) -> SchemaRelationshipsResponse:
     from models.schemas import SchemaRelationshipsResponse
 
     full_prompt = PROMPT_TEMPLATE_RELATIONSHIPS.format(schema_summary=schema_summary)
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model,
         contents=full_prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=SchemaRelationshipsResponse,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            thinking_config=thinking_config_for(model),
         ),
     )
 
