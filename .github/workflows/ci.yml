@@ -58,7 +58,9 @@ jobs:
       env:
         GEMINI_API_KEY: "dummy-key-for-tests"
       run: |
-        PYTHONPATH=. pytest --cov=. --cov-report=term-missing --cov-report=xml --verbose
+        # Skip queryargus submodule tests: they need extras (azure-*, typer)
+        # that we deliberately don't install via `pip install --no-deps`.
+        PYTHONPATH=. pytest --ignore=queryargus --cov=. --cov-report=term-missing --cov-report=xml --verbose
         
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
