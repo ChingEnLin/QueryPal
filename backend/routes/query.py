@@ -23,6 +23,7 @@ from services.mongo_service import (
     execute_mongo_query,
     transform_mongo_result,
     get_database_schema_summary,
+    SCHEMA_FETCH_FAILED,
 )
 from models.analyze import AnalyzeRequest, AnalyzeResponse
 from services.analyze_service import analyze_query_result
@@ -36,8 +37,11 @@ from pymongo.results import (
     DeleteResult,
 )
 import ast
+import logging
 import re
 from google import genai
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -101,6 +105,26 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
 
     collections = [col.name for col in prompt.db_context.collections]
 
+    relationship_context = ""
+    if (
+        len(collections) > 1
+        and schema_summary
+        and schema_summary != SCHEMA_FETCH_FAILED
+    ):
+        try:
+            rels = generate_schema_relationships(schema_summary, model=prompt.model)
+            if rels.relationships:
+                relationship_context = "\n".join(
+                    f"- {r.source_collection}.{r.source_field} -> "
+                    f"{r.target_collection}.{r.target_field} "
+                    f"(confidence={r.confidence:.2f}) — {r.description}"
+                    for r in rels.relationships
+                )
+        except Exception as e:
+            logger.warning(
+                "Relationship inference failed; continuing without it: %s", e
+            )
+
     return run_query_generator(
         user_input=prompt.user_input,
         database=prompt.db_context.name,
@@ -110,6 +134,7 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
         connection_string=connection_string,
         max_iterations=prompt.max_iterations,
         model=prompt.model,
+        relationship_context=relationship_context,
     )
 
 
