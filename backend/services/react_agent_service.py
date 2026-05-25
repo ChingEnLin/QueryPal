@@ -75,11 +75,13 @@ client = genai.Client()
 CROSS_COLLECTION_GUIDANCE = """
 
 Cross-Collection Join Guidance (MULTIPLE collections selected):
-- Produce ONE aggregate() pipeline that joins via $lookup. Do not emit multiple queries.
-- Pick the most-filtering collection as the driver; $lookup the others onto it.
+- Target: Azure Cosmos DB (MongoDB API). IMPORTANT — Cosmos does NOT support `let` or `pipeline` inside `$lookup`. Only the plain `localField`/`foreignField` form works. Never emit `let` or a `pipeline` array inside `$lookup` — it will fail with `CommandNotSupported`.
+- Produce ONE aggregate() pipeline. Pick the most-filtering collection as the driver.
 - Use the Inferred Relationships block above to choose join fields. Do NOT invent field names that are not in the schema or relationships.
-- If a foreign key is an ObjectId on one side and a string on the other, use the `let` + `pipeline` form of $lookup with $toObjectId / $toString — `localField`/`foreignField` silently matches nothing on type mismatch.
-- After $lookup, $unwind the joined array (use `preserveNullAndEmptyArrays: True` for LEFT-JOIN semantics).
+- TYPE-MISMATCH HANDLING (this is the #1 reason $lookup returns empty arrays on Cosmos): if one side is an ObjectId and the other is a string, you MUST pre-convert with an `$addFields` stage BEFORE `$lookup`, then $lookup on the converted field. Do not rely on $lookup to coerce types.
+  - String → ObjectId: `{"$addFields": {"<field>_oid": {"$toObjectId": "$<field>"}}}` (or `$map` over an array of strings).
+  - ObjectId → String: `{"$addFields": {"<field>_str": {"$toString": "$<field>"}}}`.
+- After $lookup, $unwind the joined array (use `preserveNullAndEmptyArrays: True` for LEFT-JOIN semantics) before filtering on joined fields, OR filter with `joined.field` dotted notation.
 - Always include a $limit (<=50) unless the user explicitly asks for all rows.
 
 Example A — simple equality join (same field type on both sides):
@@ -97,16 +99,31 @@ db['orders'].aggregate([
 ])
 ```
 
-Example B — join with type conversion or extra filter (use `let` + `pipeline`):
+Example B — array-of-strings → ObjectId join (Cosmos-safe; pre-convert via $addFields):
+```python
+db['patient-cohort'].aggregate([
+    {"$addFields": {
+        "patient_oids": {"$map": {"input": "$patient_ids", "in": {"$toObjectId": "$$this"}}}
+    }},
+    {"$lookup": {
+        "from": "patient",
+        "localField": "patient_oids",
+        "foreignField": "_id",
+        "as": "patients_info"
+    }},
+    {"$match": {"patients_info.origin_ethnicity": "caucasian"}},
+    {"$limit": 50}
+])
+```
+
+Example C — single ObjectId → string join (Cosmos-safe; pre-convert the other side):
 ```python
 db['orders'].aggregate([
+    {"$addFields": {"userId_str": {"$toString": "$userId"}}},
     {"$lookup": {
         "from": "users",
-        "let": {"uid": {"$toObjectId": "$userId"}},
-        "pipeline": [
-            {"$match": {"$expr": {"$eq": ["$_id", "$$uid"]}, "active": True}},
-            {"$project": {"name": 1, "email": 1}}
-        ],
+        "localField": "userId_str",
+        "foreignField": "external_id",
         "as": "user"
     }},
     {"$unwind": "$user"},
@@ -127,10 +144,14 @@ Inferred Relationships (foreign keys between collections):
 {relationship_context}
 Intermediate Context (optional): {intermediate_context}
 
+Previous Attempt (if this is a retry — DO NOT repeat the same query verbatim):
+{previous_query}
+
 Previous Evaluation Feedback (if this is a retry):
 {evaluation}
 
 Instructions:
+0. If a Previous Attempt is shown above, your new query MUST be materially different from it — change the join form, fields, types, or stages in response to the critique. Producing the same query (or a trivial reformat) is a failure. In particular, if the previous attempt used `localField`/`foreignField` $lookup and returned empty for every doc, switch to the `let` + `pipeline` form with $toObjectId/$toString to fix likely type mismatches.
 1. Write ONLY the PyMongo query code.
 2. Use variables appropriately (e.g., db['collection_name'].find(...) or db['collection_name'].aggregate(...)).
 3. Do not include markdown formatting or explanations, just return the code, but you can use ```python if you must.
@@ -152,9 +173,11 @@ Your task:
 Determine if this query successfully answers the user's request based on the code and the result.
 If there is an error in the query result, or if it clearly does not match the intent, it is NOT valid.
 If it is a write action, we cannot test the result, but you should evaluate if the code looks correct for the user's intent.
-If the query uses $lookup, specifically verify:
-  - The `localField`/`foreignField` (or the `let` + `pipeline` $expr) reference fields that actually exist on each side.
-  - When the joined array is empty for every input doc, suspect a type mismatch (ObjectId vs string) — the query is NOT valid; recommend the `let` + `pipeline` form with $toObjectId/$toString.
+If the query uses $lookup, specifically verify (target is Azure Cosmos DB MongoDB API):
+  - The query does NOT use `let` or `pipeline` inside `$lookup` — Cosmos rejects both with `CommandNotSupported`. If you see either, it is NOT valid; recommend pre-converting the type with an `$addFields` stage and then using plain `localField`/`foreignField`.
+  - The `localField`/`foreignField` reference fields that actually exist on each side.
+  - When the joined array is empty for every input doc, suspect a type mismatch (ObjectId vs string). The query is NOT valid; recommend an `$addFields` stage BEFORE `$lookup` that applies `$toObjectId` (string→OID) or `$toString` (OID→string), and a `$map` if the local field is an array of strings.
+  - Do not rationalize an empty result with "maybe no such records exist" when the filter is on a field inside the joined array — empty joined arrays will make the downstream $match drop everything; treat that as a join-correctness failure unless the join itself is clearly populated.
   - The driving collection is the right one (smallest filtered set first).
 
 Respond in JSON format:
@@ -169,6 +192,8 @@ def generate_query_node(state: AgentState):
     logger.info(f"--- GENERATE NODE (Iteration {state.get('iterations', 0)}) ---")
 
     is_multi_collection = len(state.get("collections", [])) > 1
+    is_retry = state.get("iterations", 0) > 0
+    previous_query = state.get("generated_query", "") if is_retry else ""
     prompt = GENERATE_PROMPT.format(
         user_input=state["user_input"],
         database=state["database"],
@@ -176,6 +201,7 @@ def generate_query_node(state: AgentState):
         schema_context=state["schema_context"],
         relationship_context=state.get("relationship_context") or "None (single collection or no inferred relationships).",
         intermediate_context=state.get("intermediate_context", {}),
+        previous_query=previous_query or "None (this is the first attempt).",
         evaluation=state.get("evaluation", "None"),
         cross_collection_guidance=CROSS_COLLECTION_GUIDANCE if is_multi_collection else "",
     )

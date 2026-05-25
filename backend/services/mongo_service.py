@@ -26,23 +26,23 @@ def execute_mongo_query(connection_string: str, database: str, query: str):
         return query_result
 
 
+def _convert_object_ids(value):
+    # Recursively stringify ObjectIds inside nested dicts/lists so FastAPI can
+    # serialize $lookup-joined documents (which carry nested _id ObjectIds).
+    if isinstance(value, ObjectId):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _convert_object_ids(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_convert_object_ids(v) for v in value]
+    return value
+
+
 def transform_mongo_result(result):
-    # If result is a list of dicts, convert ObjectIds
     if isinstance(result, list):
-        if result and isinstance(result[0], dict):
-            for doc in result:
-                for k, v in doc.items():
-                    if isinstance(v, ObjectId):
-                        doc[k] = str(v)
-            return result
-        else:
-            # List of primitives (e.g., from distinct)
-            return result
+        return _convert_object_ids(result)
     elif isinstance(result, dict):
-        for k, v in result.items():
-            if isinstance(v, ObjectId):
-                result[k] = str(v)
-        return result
+        return _convert_object_ids(result)
     elif isinstance(result, InsertOneResult):
         return {"inserted_id": str(result.inserted_id)}
     elif isinstance(result, InsertManyResult):
