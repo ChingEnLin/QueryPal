@@ -23,6 +23,7 @@ from services.mongo_service import (
     execute_mongo_query,
     transform_mongo_result,
     get_database_schema_summary,
+    SCHEMA_FETCH_FAILED,
 )
 from models.analyze import AnalyzeRequest, AnalyzeResponse
 from services.analyze_service import analyze_query_result
@@ -36,8 +37,11 @@ from pymongo.results import (
     DeleteResult,
 )
 import ast
+import logging
 import re
 from google import genai
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -105,7 +109,7 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
     if (
         len(collections) > 1
         and schema_summary
-        and schema_summary != "Could not fetch schema summary."
+        and schema_summary != SCHEMA_FETCH_FAILED
     ):
         try:
             rels = generate_schema_relationships(schema_summary, model=prompt.model)
@@ -117,7 +121,9 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
                     for r in rels.relationships
                 )
         except Exception as e:
-            print(f"[WARN] Relationship inference failed; continuing without it: {e}")
+            logger.warning(
+                "Relationship inference failed; continuing without it: %s", e
+            )
 
     return run_query_generator(
         user_input=prompt.user_input,

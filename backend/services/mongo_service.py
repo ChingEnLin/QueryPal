@@ -1,4 +1,6 @@
 from bson import ObjectId
+
+SCHEMA_FETCH_FAILED = "Could not fetch schema summary."
 import pymongo
 from pymongo.results import (
     UpdateResult,
@@ -90,4 +92,4 @@ def get_database_schema_summary(
         return "\n\n".join(summary)
     except Exception as e:
         print(f"Error fetching schema summary: {e}")
-        return "Could not fetch schema summary."
+        return SCHEMA_FETCH_FAILED

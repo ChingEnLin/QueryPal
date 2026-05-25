@@ -151,7 +151,7 @@ Previous Evaluation Feedback (if this is a retry):
 {evaluation}
 
 Instructions:
-0. If a Previous Attempt is shown above, your new query MUST be materially different from it — change the join form, fields, types, or stages in response to the critique. Producing the same query (or a trivial reformat) is a failure. In particular, if the previous attempt used `localField`/`foreignField` $lookup and returned empty for every doc, switch to the `let` + `pipeline` form with $toObjectId/$toString to fix likely type mismatches.
+0. If a Previous Attempt is shown above, your new query MUST be materially different — change the join form, fields, types, or stages in response to the critique. Producing the same query (or a trivial reformat) is a failure. If the previous $lookup returned empty arrays for every input doc, the cause is almost always a type mismatch on the join key: add an `$addFields` stage BEFORE the `$lookup` that applies `$toObjectId` (string→OID) or `$toString` (OID→string), then $lookup on the converted field. NEVER use `let` or `pipeline` inside `$lookup` — Cosmos rejects both with CommandNotSupported.
 1. Write ONLY the PyMongo query code.
 2. Use variables appropriately (e.g., db['collection_name'].find(...) or db['collection_name'].aggregate(...)).
 3. Do not include markdown formatting or explanations, just return the code, but you can use ```python if you must.
@@ -199,11 +199,14 @@ def generate_query_node(state: AgentState):
         database=state["database"],
         collections=", ".join(state["collections"]),
         schema_context=state["schema_context"],
-        relationship_context=state.get("relationship_context") or "None (single collection or no inferred relationships).",
+        relationship_context=state.get("relationship_context")
+        or "None (single collection or no inferred relationships).",
         intermediate_context=state.get("intermediate_context", {}),
         previous_query=previous_query or "None (this is the first attempt).",
         evaluation=state.get("evaluation", "None"),
-        cross_collection_guidance=CROSS_COLLECTION_GUIDANCE if is_multi_collection else "",
+        cross_collection_guidance=(
+            CROSS_COLLECTION_GUIDANCE if is_multi_collection else ""
+        ),
     )
 
     try:
