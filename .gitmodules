@@ -1,0 +1,4 @@
+[submodule "backend/queryargus"]
+	path = backend/queryargus
+	url = https://github.com/ChingEnLin/QueryArgus
+	branch = dev

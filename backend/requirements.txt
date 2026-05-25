@@ -1,6 +1,10 @@
+# Note: the queryargus submodule (backend/queryargus) is installed separately
+# via `pip install --no-deps -e ./queryargus`. Its pyproject pins google-genai<1,
+# which conflicts with langchain-google-genai (needs >=1.65). The 1.x client API
+# is compatible — we install --no-deps so the bound is ignored.
 cachetools
 fastapi
-google-genai
+google-genai>=1.65.0,<2
 uvicorn
 pydantic
 python-dotenv

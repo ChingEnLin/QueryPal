@@ -14,12 +14,16 @@ interface AppLayoutProps {
   collectionName?: string;
   collections?: CollectionSummary[];
   activeCollection?: string;
-  onCollectionSelect?: (name: string) => void;
+  onCollectionSelect?: (name: string, ev?: { ctrlKey?: boolean; metaKey?: boolean }) => void;
+  activeCollections?: string[];
+  collectionSeverity?: Record<string, 'critical' | 'warning' | 'info' | 'clean'>;
+  collectionFindings?: Record<string, number>;
   onNewQuery?: () => void;
   availableDbs?: DbInfo[];
   onSwitchDatabase?: (db: DbInfo) => void;
   availableAccounts?: CosmosDBAccount[];
   onSwitchAccount?: (account: CosmosDBAccount) => void;
+  chipLoading?: boolean;
 }
 
 const AppLayout: React.FC<AppLayoutProps> = ({
@@ -31,11 +35,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   collections,
   activeCollection,
   onCollectionSelect,
+  activeCollections,
+  collectionSeverity,
+  collectionFindings,
   onNewQuery,
   availableDbs,
   onSwitchDatabase,
   availableAccounts,
   onSwitchAccount,
+  chipLoading,
 }) => {
   const navigate = useNavigate();
   const { toggleTheme } = useTheme();
@@ -86,10 +94,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         collections={collections}
         activeCollection={activeCollection}
         onCollectionSelect={onCollectionSelect}
+        activeCollections={activeCollections}
+        collectionSeverity={collectionSeverity}
+        collectionFindings={collectionFindings}
         availableDbs={availableDbs}
         onSwitchDatabase={onSwitchDatabase}
         availableAccounts={availableAccounts}
         onSwitchAccount={onSwitchAccount}
+        chipLoading={chipLoading}
       />
       <div className="qp-main">
         <AppTopBar

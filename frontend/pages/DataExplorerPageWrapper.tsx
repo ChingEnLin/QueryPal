@@ -13,6 +13,7 @@ interface LocationState {
   availableAccounts?: CosmosDBAccount[];
   initialCollection?: string;
   initialFilters?: FilterState[];
+  pendingAccountName?: string;
 }
 
 const DataExplorerPageWrapper: React.FC = () => {
@@ -61,8 +62,53 @@ const DataExplorerPageWrapper: React.FC = () => {
 
   useEffect(() => {
     const initializePageData = async () => {
-      if (!accountId || !databaseName) {
+      if (!accountId) {
         navigate('/query-generator');
+        return;
+      }
+
+      // No databaseName in URL: resolve the first database for this account, then replace URL.
+      if (!databaseName) {
+        try {
+          setLoading(true);
+          setError(null);
+          const decodedAccountId = decodeURIComponent(accountId);
+          const [accounts, databases] = await Promise.all([
+            getAzureCosmosAccounts(),
+            getDatabasesForAccount(decodedAccountId),
+          ]);
+          const account = accounts.find(acc => acc.id === decodedAccountId);
+          if (!account) {
+            throw new Error(`Cosmos DB account '${decodedAccountId}' not found`);
+          }
+          if (databases.length === 0) {
+            throw new Error(`No databases found in account '${account.name}'`);
+          }
+          const firstDb = databases[0];
+          sessionStorage.setItem('qp_connection', JSON.stringify({
+            accountId: decodedAccountId,
+            databaseName: firstDb.name,
+            accountName: account.name,
+            collections: firstDb.collections,
+            availableAccounts: accounts,
+            availableDbs: databases,
+          }));
+          navigate(
+            `/data-explorer/${encodeURIComponent(decodedAccountId)}/${encodeURIComponent(firstDb.name)}`,
+            {
+              replace: true,
+              state: {
+                dbInfo: firstDb,
+                accountName: account.name,
+                availableDbs: databases,
+                availableAccounts: accounts,
+              } as LocationState,
+            }
+          );
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to load data explorer');
+          setLoading(false);
+        }
         return;
       }
 
@@ -198,22 +244,13 @@ const DataExplorerPageWrapper: React.FC = () => {
     });
   }, [pageData, navigate]);
 
-  const handleSwitchAccount = useCallback(async (account: CosmosDBAccount) => {
+  const handleSwitchAccount = useCallback((account: CosmosDBAccount) => {
     if (!pageData || account.id === pageData.resource.accountId) return;
-    try {
-      const databases = await getDatabasesForAccount(account.id);
-      if (!databases.length) return;
-      navigate(`/data-explorer/${encodeURIComponent(account.id)}/${encodeURIComponent(databases[0].name)}`, {
-        state: {
-          dbInfo: databases[0],
-          accountName: account.name,
-          availableDbs: databases,
-          availableAccounts: pageData.availableAccounts,
-        },
-      });
-    } catch (e) {
-      console.error('Failed to switch account:', e);
-    }
+    // Navigate immediately so the wrapper renders the loading state with a
+    // blurred connection chip while the first database resolves.
+    navigate(`/data-explorer/${encodeURIComponent(account.id)}`, {
+      state: { pendingAccountName: account.name } as LocationState,
+    });
   }, [pageData, navigate]);
 
   if (loading) {
@@ -227,14 +264,22 @@ const DataExplorerPageWrapper: React.FC = () => {
       availableAccounts: pageData.availableAccounts,
       availableDbs: pageData.availableDbs,
     } : null);
+    const pendingFromState = state?.pendingAccountName;
+    const isPending = !databaseName;
+    // While resolving (no databaseName yet), prefer the incoming account name
+    // so the blurred chip reflects the destination, not the previous account.
+    const resolvedAccountName = isPending
+      ? (pendingFromState ?? sidebarFallback?.accountName)
+      : (sidebarFallback?.accountName ?? pendingFromState);
     return (
       <AppLayout
         accountId={decodedAccountId}
         databaseName={decodedDatabaseName}
-        accountName={sidebarFallback?.accountName}
+        accountName={resolvedAccountName}
         collections={sidebarFallback?.collections}
         availableAccounts={sidebarFallback?.availableAccounts}
         availableDbs={sidebarFallback?.availableDbs}
+        chipLoading={isPending}
       >
         <style>{`@keyframes qp-spin { to { transform: rotate(360deg); } }`}</style>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--bg)' }}>
