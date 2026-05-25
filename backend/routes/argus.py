@@ -251,6 +251,14 @@ def _evict_old_jobs() -> None:
         _JOBS.pop(jid, None)
 
 
+def _queue_has_capacity() -> bool:
+    """True when a new job can be accepted after eviction. Protects against a
+    stuck queue where every slot is held by a running job and no terminal jobs
+    can be evicted."""
+    _evict_old_jobs()
+    return len(_JOBS) < _MAX_JOBS
+
+
 def _accessible_account_ids(access_token: str) -> list[str]:
     """Cosmos accounts (full ARM resource IDs) visible to the caller."""
     try:
@@ -439,8 +447,13 @@ async def run_audit(req: AuditRequest, authorization: str = Header(...)):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
 
-    user_token = authorization.replace("Bearer ", "")
+    user_token = authorization[7:]
     caller_email = extract_email_from_token(user_token)
+    if not _queue_has_capacity():
+        raise HTTPException(
+            status_code=429,
+            detail="Audit queue is full; please retry shortly.",
+        )
     job_id = uuid.uuid4().hex
     _JOBS[job_id] = {
         "status": "queued",
@@ -453,7 +466,6 @@ async def run_audit(req: AuditRequest, authorization: str = Header(...)):
         "profile": req.profile,
         "created_by": caller_email,
     }
-    _evict_old_jobs()
     asyncio.create_task(_execute_job(job_id, req, user_token, caller_email))
     return JSONResponse(
         status_code=202,
@@ -462,9 +474,16 @@ async def run_audit(req: AuditRequest, authorization: str = Header(...)):
 
 
 @router.get("/runs/{job_id}")
-async def get_run(job_id: str):
+async def get_run(job_id: str, authorization: str = Header(...)):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    caller_email = extract_email_from_token(authorization[7:])
     job = _JOBS.get(job_id)
     if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    # Scope job-status reads to the caller who created the job. Returning 404
+    # (not 403) avoids leaking job existence to other tenants.
+    if job.get("created_by") and job["created_by"] != caller_email:
         raise HTTPException(status_code=404, detail="Job not found")
     return JSONResponse(
         content={
@@ -491,7 +510,7 @@ async def list_runs(
 ):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
-    user_token = authorization.replace("Bearer ", "")
+    user_token = authorization[7:]
     try:
         access_token = await run_in_threadpool(exchange_token_obo, user_token)
     except Exception as exc:
@@ -517,7 +536,7 @@ async def list_runs(
 async def get_report(report_id: str, authorization: str = Header(...)):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
-    user_token = authorization.replace("Bearer ", "")
+    user_token = authorization[7:]
     store = get_report_store()
     if store is None:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -594,7 +613,7 @@ class ProfileCreate(BaseModel):
 def _require_caller_email(authorization: str) -> str:
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid token format")
-    email = extract_email_from_token(authorization.replace("Bearer ", ""))
+    email = extract_email_from_token(authorization[7:])
     if not email:
         raise HTTPException(status_code=401, detail="Caller identity missing")
     return email
@@ -668,7 +687,7 @@ async def rate_finding(
     ``GET /argus/reports/{id}`` reflects it without an extra join.
     """
     email = _require_caller_email(authorization)
-    user_token = authorization.replace("Bearer ", "")
+    user_token = authorization[7:]
     store = get_report_store()
     if store is None:
         raise HTTPException(status_code=404, detail="Report not found")

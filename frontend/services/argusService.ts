@@ -289,8 +289,10 @@ export const rateArgusFinding = async (
 };
 
 export const getArgusJob = async (jobId: string): Promise<ArgusJob> => {
+  const token = await getToken();
   const response = await fetch(`${API_BASE_URL}/argus/runs/${encodeURIComponent(jobId)}`, {
     method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));

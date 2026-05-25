@@ -61,8 +61,7 @@ def _apply_querypal_columns(dsn: str) -> None:
         # The label itself lives in upstream argus_findings.user_label; these two
         # columns are QueryPal-specific so we don't fork upstream schema.sql.
         cur.execute(
-            "ALTER TABLE argus_findings "
-            "ADD COLUMN IF NOT EXISTS rated_by TEXT"
+            "ALTER TABLE argus_findings " "ADD COLUMN IF NOT EXISTS rated_by TEXT"
         )
         cur.execute(
             "ALTER TABLE argus_findings "

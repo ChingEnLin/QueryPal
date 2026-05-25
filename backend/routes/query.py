@@ -273,9 +273,7 @@ def list_models():
     try:
         client = genai.Client()
         available = {
-            m.name.replace("models/", "")
-            for m in client.models.list()
-            if m.name
+            m.name.replace("models/", "") for m in client.models.list() if m.name
         }
         filtered = [m for m in SUPPORTED_MODELS if m in available]
         # Fall back to the allowlist if the API listing is empty or filtered

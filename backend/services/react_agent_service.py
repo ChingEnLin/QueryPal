@@ -131,7 +131,9 @@ def generate_query_node(state: AgentState):
             model=state.get("model", "gemini-2.5-flash"),
             contents=prompt,
             config=types.GenerateContentConfig(
-                thinking_config=thinking_config_for(state.get("model", "gemini-2.5-flash"))
+                thinking_config=thinking_config_for(
+                    state.get("model", "gemini-2.5-flash")
+                )
             ),
         )
         code = extract_python_code(response.text)
@@ -215,7 +217,9 @@ def evaluate_node(state: AgentState):
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                thinking_config=thinking_config_for(state.get("model", "gemini-2.5-flash")),
+                thinking_config=thinking_config_for(
+                    state.get("model", "gemini-2.5-flash")
+                ),
             ),
         )
 

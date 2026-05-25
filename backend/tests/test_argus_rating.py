@@ -45,15 +45,9 @@ def _patch_common(
     """Patch out auth + storage so the route test runs without real deps."""
     calls: dict[str, Any] = {"rate_args": None}
 
-    monkeypatch.setattr(
-        "routes.argus.extract_email_from_token", lambda _t: email
-    )
-    monkeypatch.setattr(
-        "routes.argus.exchange_token_obo", lambda _t: "arm-token"
-    )
-    monkeypatch.setattr(
-        "routes.argus._accessible_account_ids", lambda _t: accessible
-    )
+    monkeypatch.setattr("routes.argus.extract_email_from_token", lambda _t: email)
+    monkeypatch.setattr("routes.argus.exchange_token_obo", lambda _t: "arm-token")
+    monkeypatch.setattr("routes.argus._accessible_account_ids", lambda _t: accessible)
     monkeypatch.setattr("routes.argus.get_report_store", lambda: store)
 
     def _rate(**kwargs: Any) -> bool:

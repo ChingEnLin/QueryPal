@@ -23,9 +23,7 @@ Respond in JSON with keys: insight, chartType, chartData, chartOptions.
     response = client.models.generate_content(
         model=model,
         contents=prompt,
-        config=types.GenerateContentConfig(
-            thinking_config=thinking_config_for(model)
-        ),
+        config=types.GenerateContentConfig(thinking_config=thinking_config_for(model)),
     )
     # Try to extract JSON from the response
     try:
