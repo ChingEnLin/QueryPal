@@ -5,6 +5,7 @@ import { MsalProvider } from '@azure/msal-react';
 import { msalInstance } from './authConfig';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { NotificationsProvider } from './contexts/NotificationsContext';
 import { USE_MSAL_AUTH } from './app.config';
 
 const rootElement = document.getElementById('root');
@@ -30,7 +31,9 @@ if (USE_MSAL_AUTH) {
       <React.StrictMode>
         <ThemeProvider>
           <MsalProvider instance={msalInstance}>
-            <App />
+            <NotificationsProvider>
+              <App />
+            </NotificationsProvider>
           </MsalProvider>
         </ThemeProvider>
       </React.StrictMode>
@@ -43,7 +46,9 @@ if (USE_MSAL_AUTH) {
       <React.StrictMode>
         <ThemeProvider>
           <MsalProvider instance={msalInstance}>
-            <App />
+            <NotificationsProvider>
+              <App />
+            </NotificationsProvider>
           </MsalProvider>
         </ThemeProvider>
       </React.StrictMode>
@@ -55,7 +60,9 @@ if (USE_MSAL_AUTH) {
     <React.StrictMode>
       <ThemeProvider>
         <AuthProvider>
-          <App />
+          <NotificationsProvider>
+            <App />
+          </NotificationsProvider>
         </AuthProvider>
       </ThemeProvider>
     </React.StrictMode>

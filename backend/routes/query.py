@@ -268,31 +268,36 @@ def evaluate_write(
     )
 
 
+# Curated allowlist of models we know work with our prompts, response_schema
+# usage, and tool-calling paths. Keep this short — every model here has been
+# manually verified against /nl2query, /analyze, /evaluate-write, and the
+# QueryArgus run path. Pro models route through thinking_config_for() so they
+# don't trip the "thinking_budget=0 invalid" error.
+SUPPORTED_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+]
+
+
 @router.get("/models", response_model=List[str])
 def list_models():
     """
-    Returns available Gemini model IDs filtered to generative models.
-    Intentionally unauthenticated — model names are non-sensitive and
-    this endpoint is called on page load before auth completes.
+    Returns the intersection of our supported-model allowlist and the
+    models actually available to the configured API key. Intentionally
+    unauthenticated — model names are non-sensitive and this endpoint is
+    called on page load before auth completes.
     """
     try:
         client = genai.Client()
-        models = list(client.models.list())
-        model_ids = [
-            m.name.replace("models/", "")
-            for m in models
-            if m.name
-            and "gemini" in m.name.lower()
-            and hasattr(m, "supported_actions")
-            and "generateContent" in (m.supported_actions or [])
-        ]
-        if not model_ids:
-            # Fallback: return all gemini models if supported_actions is absent
-            model_ids = [
-                m.name.replace("models/", "")
-                for m in models
-                if m.name and "gemini" in m.name.lower()
-            ]
-        return sorted(set(model_ids))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list models: {str(e)}")
+        available = {
+            m.name.replace("models/", "") for m in client.models.list() if m.name
+        }
+        filtered = [m for m in SUPPORTED_MODELS if m in available]
+        # Fall back to the allowlist if the API listing is empty or filtered
+        # nothing through (e.g. unexpected naming): better to show known-good
+        # options than an empty dropdown.
+        return filtered or SUPPORTED_MODELS
+    except Exception:
+        return SUPPORTED_MODELS

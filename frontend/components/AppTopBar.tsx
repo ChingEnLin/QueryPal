@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useTheme } from '../contexts/ThemeContext';
+import { useNotifications, AppNotification } from '../contexts/NotificationsContext';
 
 interface AppTopBarProps {
   accountName?: string;
@@ -23,7 +24,10 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [showNotifs, setShowNotifs] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const notifsRef = useRef<HTMLDivElement>(null);
+  const { notifications, unreadCount, activeRuns, markAllRead, dismiss, clearAll } = useNotifications();
 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
@@ -40,6 +44,44 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showUserMenu]);
+
+  useEffect(() => {
+    if (!showNotifs) return;
+    const handleClick = (e: MouseEvent) => {
+      if (notifsRef.current && !notifsRef.current.contains(e.target as Node)) {
+        setShowNotifs(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showNotifs]);
+
+  const handleNotifClick = (n: AppNotification) => {
+    setShowNotifs(false);
+    if (n.kind === 'argus_done' || n.kind === 'argus_error') {
+      navigate('/analytics', n.reportId ? { state: { reportId: n.reportId } } : undefined);
+    }
+  };
+
+  const openNotifs = () => {
+    setShowNotifs((v) => {
+      const next = !v;
+      if (next && unreadCount > 0) markAllRead();
+      return next;
+    });
+  };
+
+  const formatRelative = (ts: number): string => {
+    const diff = Math.max(0, Date.now() - ts);
+    const s = Math.floor(diff / 1000);
+    if (s < 45) return 'just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return `${d}d ago`;
+  };
 
   const handleAvatarClick = () => {
     setShowUserMenu(v => !v);
@@ -126,18 +168,164 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
       </button>
 
       {/* Notifications */}
-      <button
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: 'var(--muted)', display: 'flex', padding: 5, borderRadius: 6,
-        }}
-        title="Notifications"
-      >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M8 1.5A3.5 3.5 0 0111.5 5v3.5l1 1.5H3.5l1-1.5V5A3.5 3.5 0 018 1.5z"/>
-          <path d="M6.5 13a1.5 1.5 0 003 0"/>
-        </svg>
-      </button>
+      <div ref={notifsRef} style={{ position: 'relative' }}>
+        <button
+          onClick={openNotifs}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--muted)', display: 'flex', padding: 5, borderRadius: 6,
+            position: 'relative',
+          }}
+          title={
+            activeRuns.length > 0
+              ? `Notifications (${activeRuns.length} running)`
+              : 'Notifications'
+          }
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M8 1.5A3.5 3.5 0 0111.5 5v3.5l1 1.5H3.5l1-1.5V5A3.5 3.5 0 018 1.5z"/>
+            <path d="M6.5 13a1.5 1.5 0 003 0"/>
+          </svg>
+          {unreadCount > 0 && (
+            <span style={{
+              position: 'absolute', top: 1, right: 1,
+              minWidth: 14, height: 14, borderRadius: 7,
+              background: 'var(--status-err)', color: '#fff',
+              fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-body)',
+              display: 'grid', placeItems: 'center', padding: '0 3px',
+              border: '1px solid var(--bg)', lineHeight: 1,
+            }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
+          )}
+          {unreadCount === 0 && activeRuns.length > 0 && (
+            <span style={{
+              position: 'absolute', top: 4, right: 4,
+              width: 6, height: 6, borderRadius: 3,
+              background: 'var(--accent)',
+              border: '1px solid var(--bg)',
+            }} />
+          )}
+        </button>
+
+        {showNotifs && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 200,
+            background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)', width: 320, maxHeight: 420,
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '10px 12px 8px', borderBottom: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-body)' }}>
+                Notifications
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-body)' }}>
+                {activeRuns.length > 0 ? `${activeRuns.length} running` : ''}
+              </span>
+              {notifications.length > 0 && (
+                <button
+                  onClick={clearAll}
+                  style={{
+                    marginLeft: 'auto', background: 'none', border: 'none',
+                    color: 'var(--muted)', fontSize: 11, cursor: 'pointer',
+                    fontFamily: 'var(--font-body)', padding: 0,
+                  }}
+                  title="Clear all"
+                >Clear all</button>
+              )}
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {activeRuns.length > 0 && (
+                <div style={{
+                  padding: '8px 12px', borderBottom: '1px solid var(--border)',
+                  background: 'var(--soft)',
+                }}>
+                  <div style={{
+                    fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+                    color: 'var(--muted)', marginBottom: 4, fontFamily: 'var(--font-body)',
+                  }}>In progress</div>
+                  {activeRuns.map((r) => (
+                    <div key={r.jobId} style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0',
+                      fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-body)',
+                    }}>
+                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"
+                           stroke="var(--accent)" strokeWidth="1.5"
+                           style={{ animation: 'qp-spin 0.8s linear infinite', flexShrink: 0 }}>
+                        <circle cx="8" cy="8" r="6" strokeOpacity="0.3" />
+                        <path d="M8 2a6 6 0 0 1 6 6" />
+                      </svg>
+                      <span style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 11.5,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{r.collection}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--muted)' }}>
+                        {formatRelative(r.startedAt)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {notifications.length === 0 && activeRuns.length === 0 && (
+                <div style={{
+                  padding: '24px 12px', textAlign: 'center', color: 'var(--muted)',
+                  fontSize: 12, fontFamily: 'var(--font-body)',
+                }}>No notifications yet.</div>
+              )}
+
+              {notifications.map((n) => {
+                const isErr = n.kind === 'argus_error';
+                return (
+                  <div key={n.id}
+                    onClick={() => handleNotifClick(n)}
+                    style={{
+                      padding: '10px 12px', borderBottom: '1px solid var(--border)',
+                      cursor: 'pointer', display: 'flex', gap: 9, alignItems: 'flex-start',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                  >
+                    <span style={{
+                      width: 8, height: 8, borderRadius: 4, marginTop: 5, flexShrink: 0,
+                      background: isErr ? 'var(--status-err)' : 'var(--status-ok)',
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 12.5, color: 'var(--fg)', fontWeight: 500,
+                        fontFamily: 'var(--font-body)', marginBottom: 2,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{n.title}</div>
+                      <div style={{
+                        fontSize: 11.5, color: 'var(--muted)', fontFamily: 'var(--font-body)',
+                        lineHeight: 1.35,
+                      }}>{n.body}</div>
+                      <div style={{
+                        fontSize: 10.5, color: 'var(--muted)', marginTop: 3,
+                        fontFamily: 'var(--font-body)',
+                      }}>{formatRelative(n.createdAt)}</div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); dismiss(n.id); }}
+                      title="Dismiss"
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--muted)', padding: 2, borderRadius: 4, flexShrink: 0,
+                      }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M3 3l10 10M13 3L3 13"/>
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* User avatar + dropdown */}
       <div ref={menuRef} style={{ position: 'relative' }}>

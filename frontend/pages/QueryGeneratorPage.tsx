@@ -405,10 +405,16 @@ export interface QueryGeneratorPageProps {
   onConnectionChange?: (accountId: string | null, databaseName: string | null, accountName?: string | null, collections?: CollectionSummary[], availableAccounts?: CosmosDBAccount[], availableDbs?: DbInfo[]) => void;
   embedded?: boolean;
   preselectedAccountId?: string;
+  /** Sidebar click trigger. The token must change on every click so the page
+   *  re-applies the selection even when the same name is clicked twice. */
+  sidebarCollectionClick?: { name: string; modifier: boolean; token: number } | null;
+  /** Notify the wrapper of the full current selection so it can highlight every
+   *  selected collection in the sidebar (multi-select aware). */
+  onSelectedCollectionsChange?: (collectionNames: string[]) => void;
 }
 
 // --- Main Page Component ---
-const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, onConnectionChange, embedded = false, preselectedAccountId }) => {
+const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, onConnectionChange, embedded = false, preselectedAccountId, sidebarCollectionClick, onSelectedCollectionsChange }) => {
   const navigate = useNavigate();
 
   const [userInput, setUserInput] = useState<string>(() => {
@@ -1093,6 +1099,28 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       }
     });
   }, [connectedResource, selectedCollections, collectionDetailsMap, loadingCollections]);
+
+  // Sidebar-driven collection selection — mirrors the middle-panel buttons,
+  // including Cmd/Ctrl+click multi-select. Driven by a token so re-clicking the
+  // same collection (toggle off) still triggers the effect.
+  const lastSidebarToken = useRef<number | null>(null);
+  useEffect(() => {
+    if (!sidebarCollectionClick) return;
+    if (lastSidebarToken.current === sidebarCollectionClick.token) return;
+    lastSidebarToken.current = sidebarCollectionClick.token;
+    if (!connectedResource) return;
+    const fakeEvent = {
+      ctrlKey: sidebarCollectionClick.modifier,
+      metaKey: sidebarCollectionClick.modifier,
+    } as React.MouseEvent;
+    handleCollectionClick(sidebarCollectionClick.name, fakeEvent);
+  }, [sidebarCollectionClick, connectedResource, handleCollectionClick]);
+
+  // Report the full selection back so the sidebar can highlight every selected
+  // collection when picks come from the middle panel.
+  useEffect(() => {
+    onSelectedCollectionsChange?.(selectedCollections);
+  }, [selectedCollections, onSelectedCollectionsChange]);
 
   const handleAnalyzeRelationships = useCallback(async () => {
     if (!connectedResource || selectedCollections.length < 2) return;

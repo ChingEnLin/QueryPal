@@ -55,6 +55,23 @@ graph TB
 
 ---
 
+## QueryArgus persistence
+
+Audit reports persist to the same Cloud SQL Postgres instance the rest of QueryPal uses. The schema lives in the QueryArgus submodule (`backend/queryargus/src/queryargus/storage/schema.sql`) and is applied on backend startup via `ReportStore.init_schema()` — `CREATE TABLE IF NOT EXISTS`, idempotent, no migration tool required. A small additive `ALTER TABLE argus_reports ADD COLUMN IF NOT EXISTS created_by TEXT` runs immediately after so we can attribute runs to the caller without forking upstream DDL.
+
+Tables created:
+
+| Table | Purpose |
+|---|---|
+| `argus_reports` | One row per audit run. Full `AuditReport` lives in `raw_report` JSONB; common fields denormalised for indexed queries. `created_by` (QueryPal-added) holds the caller's email. |
+| `argus_findings` | Confirmed findings per report — for indexed filtering and the cross-run history aggregation. |
+| `argus_dismissed_findings` | Findings the evaluator rejected, with critique — feeds the planner's "do not re-propose" memory. |
+| `argus_evaluation_records` | Full audit trail of action/finding/run gate verdicts. |
+
+`GET /argus/runs` and `GET /argus/reports/{id}` scope reads by the caller's Azure-accessible Cosmos accounts (via OBO + `list_cosmos_resources`) — there is no separate ACL table; Azure RBAC is the source of truth. Cross-tenant fetches return 404 (not 403) so the existence of out-of-scope reports is not leaked.
+
+---
+
 ## Secret Management
 
 All sensitive configuration lives in **GCP Secret Manager** and is mounted into the backend container at startup via `--set-secrets`. Secrets are never passed as plain environment variables and never appear in `gcloud run describe` output.

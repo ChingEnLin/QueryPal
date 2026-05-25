@@ -9,11 +9,15 @@ interface AppSidebarProps {
   databaseName?: string;
   collections?: CollectionSummary[];
   activeCollection?: string;
-  onCollectionSelect?: (name: string) => void;
+  onCollectionSelect?: (name: string, ev?: { ctrlKey?: boolean; metaKey?: boolean }) => void;
+  activeCollections?: string[];
+  collectionSeverity?: Record<string, 'critical' | 'warning' | 'info' | 'clean'>;
+  collectionFindings?: Record<string, number>;
   availableDbs?: DbInfo[];
   onSwitchDatabase?: (db: DbInfo) => void;
   availableAccounts?: CosmosDBAccount[];
   onSwitchAccount?: (account: CosmosDBAccount) => void;
+  chipLoading?: boolean;
 }
 
 type NavItem =
@@ -68,16 +72,20 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   collections,
   activeCollection,
   onCollectionSelect,
+  activeCollections,
+  collectionSeverity,
+  collectionFindings,
   availableDbs,
   onSwitchDatabase,
   availableAccounts,
   onSwitchAccount,
+  chipLoading,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [showDbPicker, setShowDbPicker] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [collectionSort, setCollectionSort] = useState<'name_asc' | 'name_desc' | 'count_desc' | 'count_asc'>('name_asc');
+  const [collectionSort, setCollectionSort] = useState<'name_asc' | 'name_desc' | 'count_desc' | 'count_asc' | 'findings_desc' | 'findings_asc'>('name_asc');
   const chipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -134,7 +142,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         </Link>
 
         {/* Connection chip — always rendered so the brand section never changes height */}
-        <div ref={chipRef} style={{ position: 'relative' }}>
+        <div ref={chipRef} style={{ position: 'relative', filter: chipLoading ? 'blur(3px)' : undefined, pointerEvents: chipLoading ? 'none' : undefined, transition: 'filter 0.18s ease' }}>
           {!accountName ? (
             /* Placeholder keeps the same height as the real chip */
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 9px', background: 'var(--soft)', borderRadius: 7 }}>
@@ -309,6 +317,19 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             );
           }
 
+          if (item.label === 'Analytics' && !databaseName) {
+            return (
+              <span
+                key={item.label}
+                style={{ ...style, opacity: 0.4, cursor: 'not-allowed' }}
+                title="Loading database…"
+              >
+                {iconSpan}
+                {item.label}
+              </span>
+            );
+          }
+
           return (
             <Link
               key={resolvedHref}
@@ -348,6 +369,12 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               <option value="name_desc">Z → A</option>
               <option value="count_desc">Most docs</option>
               <option value="count_asc">Fewest docs</option>
+              {collectionFindings && (
+                <>
+                  <option value="findings_desc">Most findings</option>
+                  <option value="findings_asc">Fewest findings</option>
+                </>
+              )}
             </select>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
@@ -355,23 +382,44 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               if (collectionSort === 'name_asc') return a.name.localeCompare(b.name);
               if (collectionSort === 'name_desc') return b.name.localeCompare(a.name);
               if (collectionSort === 'count_desc') return b.count - a.count;
-              return a.count - b.count;
+              if (collectionSort === 'count_asc') return a.count - b.count;
+              const af = collectionFindings?.[a.name] ?? -1;
+              const bf = collectionFindings?.[b.name] ?? -1;
+              if (collectionSort === 'findings_desc') return bf - af || a.name.localeCompare(b.name);
+              return af - bf || a.name.localeCompare(b.name);
             })).map((col) => {
-              const active = activeCollection === col.name;
+              const active = activeCollection === col.name || (activeCollections?.includes(col.name) ?? false);
+              const status = collectionSeverity?.[col.name];
+              const railColor =
+                status === 'critical' ? '#c94250'
+                : status === 'warning' ? '#c98d42'
+                : status === 'info' ? '#6a85a8'
+                : status === 'clean' ? '#5a9a78'
+                : null;
+              const restBg = status === 'critical' ? '#fdf0f1' : 'transparent';
+              const hoverBg = status === 'critical' ? '#fbe5e8' : 'var(--soft)';
+              const statusLabel =
+                status === 'critical' ? 'Critical findings'
+                : status === 'warning' ? 'Warning findings'
+                : status === 'info' ? 'Info findings'
+                : status === 'clean' ? 'Audited — no findings'
+                : undefined;
               return (
                 <button
                   key={col.name}
-                  onClick={() => onCollectionSelect?.(col.name)}
+                  onClick={(e) => onCollectionSelect?.(col.name, { ctrlKey: e.ctrlKey, metaKey: e.metaKey })}
+                  title={statusLabel}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center',
                     padding: '5px 8px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                    background: active ? 'var(--accent-soft)' : 'transparent',
+                    background: active ? 'var(--accent-soft)' : restBg,
                     color: active ? 'var(--fg)' : 'var(--muted)',
                     fontSize: 12.5, fontFamily: 'var(--font-body)', marginBottom: 1,
                     textAlign: 'left', transition: 'background 0.1s',
+                    boxShadow: railColor ? `inset 2px 0 0 ${railColor}` : 'none',
                   }}
-                  onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
-                  onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                  onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = hoverBg; }}
+                  onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = restBg; }}
                 >
                   <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" style={{ marginRight: 7, flexShrink: 0, color: active ? 'var(--accent)' : 'var(--muted)' }}>
                     <ellipse cx="8" cy="4" rx="6" ry="2"/><path d="M2 4v8c0 1.1 2.7 2 6 2s6-.9 6-2V4M2 8c0 1.1 2.7 2 6 2s6-.9 6-2"/>
