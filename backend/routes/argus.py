@@ -552,9 +552,7 @@ async def get_run_events(
     if live is None:
         # Run hasn't reached the observer-attach point yet (still waiting on
         # Azure auth / connection-string), or job pre-dates this feature.
-        return JSONResponse(
-            content={"events": [], "next_cursor": 0, "aggregates": {}}
-        )
+        return JSONResponse(content={"events": [], "next_cursor": 0, "aggregates": {}})
     return JSONResponse(content=live.snapshot(since=cursor))
 
 

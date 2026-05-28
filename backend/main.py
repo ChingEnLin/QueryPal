@@ -8,18 +8,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from queryargus.observability.logging_observer import JsonFormatter
 from routes import query, azure, system, user_queries, data_documents, audit, argus
 
-_argus_handler = logging.StreamHandler()
-_argus_handler.setFormatter(JsonFormatter())
-_argus_logger = logging.getLogger("queryargus.run")
-_argus_logger.addHandler(_argus_handler)
-_argus_logger.setLevel(logging.INFO)
-_argus_logger.propagate = False
+
+def _install_argus_log_handler() -> None:
+    """Route the ``queryargus.run`` logger to stderr as one JSON line per event.
+
+    Called from lifespan rather than at module import so test runners (which
+    rely on ``caplog`` propagating records to the root logger) are unaffected
+    when something imports ``main`` during collection.
+    """
+    logger = logging.getLogger("queryargus.run")
+    if any(getattr(h, "_querypal_argus", False) for h in logger.handlers):
+        return  # idempotent — lifespan may run twice under some test harnesses
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    handler._querypal_argus = True  # type: ignore[attr-defined]
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from services.argus_store import get_report_store
 
+    _install_argus_log_handler()
     get_report_store()
     yield
 
