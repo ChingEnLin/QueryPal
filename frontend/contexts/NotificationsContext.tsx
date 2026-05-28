@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from 'react';
-import { getArgusJob } from '../services/argusService';
+import { getArgusJob, getArgusJobEvents, ArgusLiveAggregates } from '../services/argusService';
 
 export type NotificationKind = 'argus_done' | 'argus_error';
 
@@ -25,10 +25,17 @@ interface TrackedRun {
   startedAt: number;
 }
 
+export interface RunProgress {
+  aggregates: Partial<ArgusLiveAggregates>;
+  cursor: number;
+  updatedAt: number;
+}
+
 interface NotificationsContextType {
   notifications: AppNotification[];
   unreadCount: number;
   activeRuns: TrackedRun[];
+  runProgress: Record<string, RunProgress>;
   trackArgusRun: (run: TrackedRun) => void;
   markAllRead: () => void;
   markRead: (id: string) => void;
@@ -71,9 +78,11 @@ const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).sl
 export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<AppNotification[]>(() => readNotifs());
   const [activeRuns, setActiveRuns] = useState<TrackedRun[]>(() => readRuns());
+  const [runProgress, setRunProgress] = useState<Record<string, RunProgress>>({});
   const runsRef = useRef<TrackedRun[]>(activeRuns);
   runsRef.current = activeRuns;
   const pollingRef = useRef<Set<string>>(new Set());
+  const cursorRef = useRef<Record<string, number>>({});
 
   useEffect(() => { writeNotifs(notifications); }, [notifications]);
   useEffect(() => { writeRuns(activeRuns); }, [activeRuns]);
@@ -87,13 +96,38 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
 
   const removeRun = useCallback((jobId: string) => {
     setActiveRuns((prev) => prev.filter((r) => r.jobId !== jobId));
+    delete cursorRef.current[jobId];
+    setRunProgress((prev) => {
+      if (!(jobId in prev)) return prev;
+      const next = { ...prev };
+      delete next[jobId];
+      return next;
+    });
   }, []);
 
   const pollOnce = useCallback(async (run: TrackedRun) => {
     if (pollingRef.current.has(run.jobId)) return;
     pollingRef.current.add(run.jobId);
     try {
-      const job = await getArgusJob(run.jobId);
+      // Status + live events fetched in parallel. Events are best-effort:
+      // if the endpoint 404s (old backend, evicted job) we let the status
+      // call drive removal.
+      const cursor = cursorRef.current[run.jobId] ?? 0;
+      const [job, snapshot] = await Promise.all([
+        getArgusJob(run.jobId),
+        getArgusJobEvents(run.jobId, cursor).catch(() => null),
+      ]);
+      if (snapshot) {
+        cursorRef.current[run.jobId] = snapshot.next_cursor;
+        setRunProgress((prev) => ({
+          ...prev,
+          [run.jobId]: {
+            aggregates: snapshot.aggregates,
+            cursor: snapshot.next_cursor,
+            updatedAt: Date.now(),
+          },
+        }));
+      }
       if (job.status === 'done') {
         const findingsCount = job.report?.findings.length ?? 0;
         pushNotification({
@@ -165,7 +199,7 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
 
   return (
     <NotificationsContext.Provider value={{
-      notifications, unreadCount, activeRuns,
+      notifications, unreadCount, activeRuns, runProgress,
       trackArgusRun, markAllRead, markRead, dismiss, clearAll,
     }}>
       {children}

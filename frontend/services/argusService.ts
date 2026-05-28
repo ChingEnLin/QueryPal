@@ -24,6 +24,19 @@ export interface ArgusFinding {
   user_label?: ArgusUserLabel | null;
 }
 
+export interface ArgusModelCost {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  usd: number;
+}
+
+export interface ArgusRunCost {
+  usd_total: number;
+  by_model: ArgusModelCost[];
+  pricing_version: string;
+}
+
 export interface ArgusReport {
   report_id: string;
   collection: string;
@@ -48,6 +61,7 @@ export interface ArgusReport {
   counts: { critical: number; warning: number; info: number; dismissed: number };
   diff: { new: number; resolved: number; regressed: number };
   findings: ArgusFinding[];
+  cost: ArgusRunCost | null;
   created_by: string | null;
   history: unknown | null;
 }
@@ -284,6 +298,38 @@ export const rateArgusFinding = async (
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.detail || `Failed to rate finding (${response.status})`);
+  }
+  return response.json();
+};
+
+export interface ArgusLiveAggregates {
+  current_iter: number;
+  findings_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  last_action: string | null;
+  last_tool: string | null;
+  tool_errors: number;
+}
+
+export interface ArgusLiveSnapshot {
+  events: Array<{ event: string; ts: string; run_id?: string | null; [k: string]: unknown }>;
+  next_cursor: number;
+  aggregates: Partial<ArgusLiveAggregates>;
+}
+
+export const getArgusJobEvents = async (
+  jobId: string,
+  cursor: number,
+): Promise<ArgusLiveSnapshot> => {
+  const token = await getToken();
+  const response = await fetch(
+    `${API_BASE_URL}/argus/runs/${encodeURIComponent(jobId)}/events?cursor=${cursor}`,
+    { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch events (${response.status})`);
   }
   return response.json();
 };
