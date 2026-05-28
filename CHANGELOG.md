@@ -1,3 +1,9 @@
+## [2.12.0](https://github.com/ChingEnLin/QueryPal/compare/v2.11.0...v2.12.0) (2026-05-28)
+
+### Features
+
+* **argus:** structured observers + live progress polling ([#39](https://github.com/ChingEnLin/QueryPal/issues/39)) ([d0e02d7](https://github.com/ChingEnLin/QueryPal/commit/d0e02d7f2d66107c1e239b471b8987bfeef9b2af)), closes [#2](https://github.com/ChingEnLin/QueryPal/issues/2)
+
 ## [2.11.0](https://github.com/ChingEnLin/QueryPal/compare/v2.10.1...v2.11.0) (2026-05-25)
 
 ### Features
