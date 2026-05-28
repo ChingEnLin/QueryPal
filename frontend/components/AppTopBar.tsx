@@ -27,7 +27,7 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
   const [showNotifs, setShowNotifs] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const notifsRef = useRef<HTMLDivElement>(null);
-  const { notifications, unreadCount, activeRuns, markAllRead, dismiss, clearAll } = useNotifications();
+  const { notifications, unreadCount, activeRuns, runProgress, markAllRead, dismiss, clearAll } = useNotifications();
 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
@@ -246,26 +246,55 @@ const AppTopBar: React.FC<AppTopBarProps> = ({
                     fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em',
                     color: 'var(--muted)', marginBottom: 4, fontFamily: 'var(--font-body)',
                   }}>In progress</div>
-                  {activeRuns.map((r) => (
-                    <div key={r.jobId} style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0',
-                      fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-body)',
-                    }}>
-                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"
-                           stroke="var(--accent)" strokeWidth="1.5"
-                           style={{ animation: 'qp-spin 0.8s linear infinite', flexShrink: 0 }}>
-                        <circle cx="8" cy="8" r="6" strokeOpacity="0.3" />
-                        <path d="M8 2a6 6 0 0 1 6 6" />
-                      </svg>
-                      <span style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 11.5,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>{r.collection}</span>
-                      <span style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--muted)' }}>
-                        {formatRelative(r.startedAt)}
-                      </span>
-                    </div>
-                  ))}
+                  {activeRuns.map((r) => {
+                    const prog = runProgress[r.jobId];
+                    const agg = prog?.aggregates;
+                    const tokens = (agg?.input_tokens ?? 0) + (agg?.output_tokens ?? 0);
+                    const detail = agg
+                      ? [
+                          agg.current_iter ? `iter ${agg.current_iter}` : null,
+                          agg.findings_count ? `${agg.findings_count} finding${agg.findings_count === 1 ? '' : 's'}` : null,
+                          tokens ? `${tokens.toLocaleString()} tok` : null,
+                          agg.last_tool ? `→ ${agg.last_tool}` : (agg.last_action ? `→ ${agg.last_action}` : null),
+                        ].filter(Boolean).join(' · ')
+                      : '';
+                    return (
+                      <div key={r.jobId} style={{ padding: '4px 0' }}>
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-body)',
+                        }}>
+                          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"
+                               stroke="var(--accent)" strokeWidth="1.5"
+                               style={{ animation: 'qp-spin 0.8s linear infinite', flexShrink: 0 }}>
+                            <circle cx="8" cy="8" r="6" strokeOpacity="0.3" />
+                            <path d="M8 2a6 6 0 0 1 6 6" />
+                          </svg>
+                          <span style={{
+                            fontFamily: 'var(--font-mono)', fontSize: 11.5,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>{r.collection}</span>
+                          <span style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--muted)' }}>
+                            {formatRelative(r.startedAt)}
+                          </span>
+                        </div>
+                        {detail && (
+                          <div style={{
+                            marginLeft: 19, marginTop: 2,
+                            fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--font-mono)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {detail}
+                            {agg && agg.tool_errors && agg.tool_errors > 0 ? (
+                              <span style={{ marginLeft: 6, color: 'var(--status-err)' }}>
+                                · {agg.tool_errors} tool error{agg.tool_errors === 1 ? '' : 's'}
+                              </span>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 

@@ -1,10 +1,19 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from queryargus.observability.logging_observer import JsonFormatter
 from routes import query, azure, system, user_queries, data_documents, audit, argus
+
+_argus_handler = logging.StreamHandler()
+_argus_handler.setFormatter(JsonFormatter())
+_argus_logger = logging.getLogger("queryargus.run")
+_argus_logger.addHandler(_argus_handler)
+_argus_logger.setLevel(logging.INFO)
+_argus_logger.propagate = False
 
 
 @asynccontextmanager
