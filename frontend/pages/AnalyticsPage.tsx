@@ -470,6 +470,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'findings' | 'history' | 'trends'>('findings');
+  const [costUnit, setCostUnit] = useState<'tokens' | 'usd'>('tokens');
   const [history, setHistory] = useState<ArgusRunSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [openingReportId, setOpeningReportId] = useState<string | null>(null);
@@ -1263,7 +1264,40 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
             {new Date(report.run_at).toLocaleString()} · {report.duration_seconds.toFixed(1)}s
           </span>
           <span>·</span>
-          <span>{report.iterations} iterations · {report.total_tokens.toLocaleString()} tokens</span>
+          <span>{report.iterations} iterations</span>
+          <span>·</span>
+          <button
+            type="button"
+            onClick={() => setCostUnit(u => (u === 'tokens' ? 'usd' : 'tokens'))}
+            title={
+              report.cost
+                ? `Click to switch unit. Pricing v${report.cost.pricing_version}.\n` +
+                  report.cost.by_model
+                    .map(m => `${m.model}: ${(m.input_tokens + m.output_tokens).toLocaleString()} tok · $${m.usd.toFixed(4)}`)
+                    .join('\n')
+                : 'Cost not available — toggle disabled'
+            }
+            disabled={!report.cost}
+            style={{
+              background: 'var(--panel)',
+              border: '1px solid var(--border)',
+              color: 'var(--muted)',
+              fontSize: 11, fontFamily: 'var(--font-body)',
+              padding: '2px 10px', borderRadius: 999,
+              cursor: report.cost ? 'pointer' : 'not-allowed',
+              opacity: report.cost ? 1 : 0.55,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <span>
+              {costUnit === 'usd' && report.cost
+                ? `$${report.cost.usd_total.toFixed(4)}`
+                : `${report.total_tokens.toLocaleString()} tokens`}
+            </span>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 6h8l-2-2M13 10H5l2 2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           <span>·</span>
           <span>{report.model} · {report.profile}</span>
           {report.created_by && (
@@ -1449,6 +1483,93 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
         </div>
       )}
       <style>{`@keyframes qp-spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+};
+
+type TraceEvent = { iter: number; action: string; reason: string; gate?: string };
+
+const TraceView: React.FC<{ raw: string }> = ({ raw }) => {
+  const events = useMemo<TraceEvent[] | null>(() => {
+    if (!raw) return [];
+    const lines = raw.split('\n').filter(Boolean);
+    const parsed: TraceEvent[] = [];
+    for (const line of lines) {
+      try {
+        const obj = JSON.parse(line);
+        if (typeof obj?.iter === 'number' && typeof obj?.action === 'string') {
+          parsed.push(obj as TraceEvent);
+        } else {
+          return null;
+        }
+      } catch {
+        return null;
+      }
+    }
+    return parsed;
+  }, [raw]);
+
+  // Fallback: legacy plain-text trace (or malformed JSONL) — render as-is.
+  if (events === null) {
+    return (
+      <pre style={{
+        margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.7,
+        background: 'var(--soft)', border: '1px solid var(--border)',
+        borderRadius: 8, padding: '10px 12px',
+        whiteSpace: 'pre-wrap', overflow: 'auto', color: 'var(--muted)',
+      }}>{raw}</pre>
+    );
+  }
+
+  if (events.length === 0) {
+    return (
+      <div style={{
+        fontSize: 11, fontStyle: 'italic', color: 'var(--muted)',
+        background: 'var(--soft)', border: '1px solid var(--border)',
+        borderRadius: 8, padding: '10px 12px',
+      }}>(no trace lines matched this field)</div>
+    );
+  }
+
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 6,
+      background: 'var(--soft)', border: '1px solid var(--border)',
+      borderRadius: 8, padding: '8px 10px', overflow: 'auto',
+    }}>
+      {events.map((ev, idx) => (
+        <div key={idx} style={{
+          display: 'flex', gap: 8, alignItems: 'flex-start',
+          padding: '6px 8px', background: 'var(--panel)',
+          border: '1px solid var(--border)', borderRadius: 6,
+        }}>
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)',
+            background: 'var(--soft)', padding: '1px 6px', borderRadius: 4,
+            border: '1px solid var(--border)', flexShrink: 0, minWidth: 42, textAlign: 'center',
+          }}>iter {ev.iter}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              display: 'flex', gap: 6, alignItems: 'center', marginBottom: 2,
+              fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg)',
+            }}>
+              <span style={{ fontWeight: 600 }}>{ev.action}</span>
+              {ev.gate && (
+                <span style={{
+                  fontSize: 9.5, padding: '1px 5px', borderRadius: 3,
+                  background: 'rgba(34,148,94,0.12)', color: '#22945e',
+                  border: '1px solid rgba(34,148,94,0.3)', textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                }}>gate {ev.gate}</span>
+              )}
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-body)', fontSize: 11.5, color: 'var(--muted)',
+              lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            }}>{ev.reason}</div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
@@ -2007,12 +2128,7 @@ const ReportBody: React.FC<{
                 field was flagged the way it was.
               </InfoPopover>
             </div>
-            <pre style={{
-              margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.7,
-              background: 'var(--soft)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: '10px 12px',
-              whiteSpace: 'pre-wrap', overflow: 'auto', color: 'var(--muted)',
-            }}>{sel.trace || '(no trace lines matched this field)'}</pre>
+            <TraceView raw={sel.trace} />
           </div>
         </div>
       </aside>

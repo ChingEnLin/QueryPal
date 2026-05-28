@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -22,6 +23,9 @@ from queryargus.models.config import (
 from queryargus.models.connection import CosmosConnection
 from queryargus.models.finding import Finding
 from queryargus.models.report import AuditReport
+from queryargus.observability.cost import CostTracker
+from queryargus.observability.logging_observer import StructuredLogObserver
+from services.argus_live_events import LiveEventBuffer
 from services.argus_profiles_service import (
     ProfileNameConflict,
     create_profile,
@@ -71,6 +75,11 @@ _SEVERITY_UI = {
 _JOBS: dict[str, dict[str, Any]] = {}
 _MAX_JOBS = 50
 
+# StructuredLogObserver carries no per-run state besides the current run_id
+# (re-set in on_run_start), so a module-level singleton is safe across requests.
+# CostTracker must be constructed per-request — it accumulates token buckets.
+_LOG_OBSERVER = StructuredLogObserver()
+
 
 class AuditRequest(BaseModel):
     account_id: str
@@ -97,6 +106,11 @@ def _summary(description: str) -> str:
 
 
 def _finding_trace(report: AuditReport, finding: Finding) -> str:
+    """One JSON object per relevant agent step (JSONL).
+
+    The frontend parses each line and renders a structured block. Falls back
+    gracefully to plain-text display if a line fails to parse.
+    """
     field = finding.field
     lines: list[str] = []
     for i, action in enumerate(report.run_trace, start=1):
@@ -104,10 +118,14 @@ def _finding_trace(report: AuditReport, finding: Finding) -> str:
         is_write = action.action == "write_finding" and field in inp_repr
         if field not in inp_repr and not is_write:
             continue
-        lines.append(f"iter {i} · {action.action}")
-        lines.append(f"reason: {action.reasoning}")
+        entry: dict[str, Any] = {
+            "iter": i,
+            "action": action.action,
+            "reason": action.reasoning,
+        }
         if is_write:
-            lines.append("finding gate: PASS")
+            entry["gate"] = "PASS"
+        lines.append(json.dumps(entry, ensure_ascii=False, default=str))
     return "\n".join(lines)
 
 
@@ -235,6 +253,9 @@ def _serialize_report(
         "counts": counts,
         "diff": diff_counts,
         "findings": findings,
+        "cost": (
+            report.cost.model_dump(mode="json") if report.cost is not None else None
+        ),
         "created_by": created_by,
         "history": None,
     }
@@ -362,11 +383,14 @@ async def _execute_job(
             else:
                 judge_model_name = jm
             judge_llm = GeminiClient(model=judge_model_name)
+        live = LiveEventBuffer()
+        job["live"] = live
         agent = ArgusAgent.from_config(
             config=config,
             llm=llm,
             judge_llm=judge_llm,
             judge_model_name=judge_model_name,
+            observers=[_LOG_OBSERVER, CostTracker(), live],
         )
 
         history = None
@@ -498,6 +522,38 @@ async def get_run(job_id: str, authorization: str = Header(...)):
             "error": job["error"],
         }
     )
+
+
+@router.get("/runs/{job_id}/events")
+async def get_run_events(
+    job_id: str,
+    authorization: str = Header(...),
+    cursor: int = Query(default=0, ge=0),
+):
+    """Live event snapshot for a still-running job.
+
+    `cursor` is the value returned in the previous poll's `next_cursor`. The
+    response also carries rolled-up aggregates (current_iter, findings_count,
+    running token totals, last_action / last_tool) so the UI can render
+    progress without re-folding the event stream.
+
+    Reuses the same caller-scoping rule as `get_run`: cross-tenant attempts
+    return 404, not 403, to avoid leaking job existence.
+    """
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    caller_email = extract_email_from_token(authorization[7:])
+    job = _JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.get("created_by") and job["created_by"] != caller_email:
+        raise HTTPException(status_code=404, detail="Job not found")
+    live: Optional[LiveEventBuffer] = job.get("live")
+    if live is None:
+        # Run hasn't reached the observer-attach point yet (still waiting on
+        # Azure auth / connection-string), or job pre-dates this feature.
+        return JSONResponse(content={"events": [], "next_cursor": 0, "aggregates": {}})
+    return JSONResponse(content=live.snapshot(since=cursor))
 
 
 @router.get("/runs")
