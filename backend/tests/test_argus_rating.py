@@ -184,5 +184,5 @@ def test_rate_finding_requires_bearer_token(client) -> None:  # type: ignore[no-
         headers={"authorization": "Basic foo"},
         json={"label": "tp"},
     )
-    # _require_caller_email rejects non-Bearer formats with 401.
+    # require() (from services.rbac) rejects non-Bearer formats with 401.
     assert resp.status_code == 401

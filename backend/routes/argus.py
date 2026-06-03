@@ -502,7 +502,6 @@ async def run_audit(
 @router.get("/runs/{job_id}")
 async def get_run(
     job_id: str,
-    authorization: str = Header(...),
     caller: Caller = Depends(require("query:read")),
 ):
     caller_email = caller.email
@@ -531,7 +530,6 @@ async def get_run(
 @router.get("/runs/{job_id}/events")
 async def get_run_events(
     job_id: str,
-    authorization: str = Header(...),
     cursor: int = Query(default=0, ge=0),
     caller: Caller = Depends(require("query:read")),
 ):
@@ -672,7 +670,6 @@ class ProfileCreate(BaseModel):
 
 @router.get("/profiles")
 async def list_saved_profiles(
-    authorization: str = Header(...),
     caller: Caller = Depends(require("self:manage")),
 ):
     email = caller.email
@@ -683,7 +680,6 @@ async def list_saved_profiles(
 @router.post("/profiles")
 async def create_saved_profile(
     payload: ProfileCreate,
-    authorization: str = Header(...),
     caller: Caller = Depends(require("argus:write")),
 ):
     email = caller.email
@@ -711,7 +707,6 @@ async def create_saved_profile(
 @router.delete("/profiles/{profile_id}")
 async def delete_saved_profile(
     profile_id: str,
-    authorization: str = Header(...),
     caller: Caller = Depends(require("argus:write")),
 ):
     email = caller.email
