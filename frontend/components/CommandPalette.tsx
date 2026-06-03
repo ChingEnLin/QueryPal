@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
+import { useRoles } from '../hooks/useRoles';
 import { CollectionSummary, DbInfo, CosmosDBAccount } from '../types';
 
 interface CommandPaletteProps {
@@ -65,6 +66,8 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { logout } = useUnifiedAuth();
+  const { can } = useRoles();
+  const canAudit = can('audit:read');
 
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(0);
@@ -121,16 +124,18 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
       action: () => navigate('/analytics'),
     });
 
-    cmds.push({
-      id: 'nav-audit',
-      label: 'Audit Log',
-      description: 'Document change history',
-      group: 'Navigate',
-      keywords: 'history changes log',
-      shortcut: ['⌘', '⇧', '4'],
-      icon: <NavIcon d="M3 2h7l3 3v9H3zM6 7h5M6 9h5M6 11h3" />,
-      action: () => navigate('/audit'),
-    });
+    if (canAudit) {
+      cmds.push({
+        id: 'nav-audit',
+        label: 'Audit Log',
+        description: 'Document change history',
+        group: 'Navigate',
+        keywords: 'history changes log',
+        shortcut: ['⌘', '⇧', '4'],
+        icon: <NavIcon d="M3 2h7l3 3v9H3zM6 7h5M6 9h5M6 11h3" />,
+        action: () => navigate('/audit'),
+      });
+    }
 
     // Actions
     if (onNewQuery) {
@@ -263,7 +268,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
 
     return cmds;
-  }, [navigate, explorerHref, databaseName, accountId, theme, toggleTheme, logout, onNewQuery, availableDbs, availableAccounts, collections, onSwitchDatabase, onSwitchAccount, onCollectionSelect]);
+  }, [navigate, explorerHref, databaseName, accountId, theme, toggleTheme, logout, canAudit, onNewQuery, availableDbs, availableAccounts, collections, onSwitchDatabase, onSwitchAccount, onCollectionSelect]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return commands;
