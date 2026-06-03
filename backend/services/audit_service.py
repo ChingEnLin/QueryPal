@@ -66,6 +66,42 @@ def get_recent_activity(user_email: str, limit: int = 10) -> List[Dict[str, Any]
         return []
 
 
+def get_audit_events(days: int = 90, limit: int = 1000) -> List[Dict[str, Any]]:
+    """Returns recent write_audit_log rows (team-wide) with full diff_data.
+
+    Powers the audit dashboard: every write within the time window, regardless
+    of actor, newest first.
+    """
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT user_email, operation, database_name, collection_name,
+                   document_id, diff_data, timestamp_utc
+            FROM write_audit_log
+            WHERE timestamp_utc >= NOW() - make_interval(days => %s)
+            ORDER BY timestamp_utc DESC
+            LIMIT %s
+            """,
+            (days, limit),
+        )
+        columns = [desc[0] for desc in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            item = dict(zip(columns, row))
+            ts = item.get("timestamp_utc")
+            if hasattr(ts, "isoformat"):
+                item["timestamp_utc"] = ts.isoformat()
+            rows.append(item)
+        cur.close()
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"Error fetching audit events: {e}")
+        return []
+
+
 def process_audit_question(
     question: str, model: str = "gemini-2.5-flash"
 ) -> Dict[str, Any]:
