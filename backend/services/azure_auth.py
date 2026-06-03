@@ -1,5 +1,6 @@
 import base64
 import json
+from dataclasses import dataclass, field
 from os import environ as env
 import msal
 from typing import Optional
@@ -37,24 +38,39 @@ def exchange_token_obo(user_token: str) -> str:
     return result["access_token"]
 
 
-def extract_email_from_token(jwt: str) -> Optional[str]:
-    """Decode the JWT payload to pull the caller's email.
+@dataclass
+class TokenClaims:
+    email: Optional[str] = None
+    roles: list = field(default_factory=list)
+
+
+def extract_claims_from_token(jwt: str) -> TokenClaims:
+    """Decode the JWT payload to pull caller email and Entra App Roles.
 
     No signature check — Azure already validated this token during the OBO
-    exchange the caller just performed. We only need to read claims.
+    exchange the caller just performed. We only read claims.
     """
     try:
         parts = jwt.split(".")
         if len(parts) < 2:
-            return None
+            return TokenClaims()
         payload_b64 = parts[1]
-        # JWT base64url, no padding
         padding = "=" * (-len(payload_b64) % 4)
         payload = json.loads(base64.urlsafe_b64decode(payload_b64 + padding))
+        email = None
         for key in ("preferred_username", "email", "upn", "unique_name"):
             value = payload.get(key)
             if value:
-                return str(value)
+                email = str(value)
+                break
+        roles = payload.get("roles") or []
+        if not isinstance(roles, list):
+            roles = [str(roles)]
+        return TokenClaims(email=email, roles=[str(r) for r in roles])
     except Exception:
-        return None
-    return None
+        return TokenClaims()
+
+
+def extract_email_from_token(jwt: str) -> Optional[str]:
+    """Backward-compatible helper returning just the caller email."""
+    return extract_claims_from_token(jwt).email
