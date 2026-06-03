@@ -61,10 +61,15 @@ class AuditEventItem(BaseModel):
 
 @router.get("/events", response_model=List[AuditEventItem])
 def audit_events(
-    authorization: str = Header(...), days: int = 90, limit: int = 1000
+    authorization: str = Header(...),
+    days: int = 90,
+    limit: int = 1000,
+    account: Optional[str] = None,
 ):
     _require_caller_email(authorization)
-    return get_audit_events(days=min(days, 365), limit=min(limit, 5000))
+    return get_audit_events(
+        days=min(days, 365), limit=min(limit, 5000), account=account
+    )
 
 
 @router.post("/query", response_model=AuditQueryResponse)

@@ -66,25 +66,35 @@ def get_recent_activity(user_email: str, limit: int = 10) -> List[Dict[str, Any]
         return []
 
 
-def get_audit_events(days: int = 90, limit: int = 1000) -> List[Dict[str, Any]]:
-    """Returns recent write_audit_log rows (team-wide) with full diff_data.
+def get_audit_events(
+    days: int = 90, limit: int = 1000, account: str = None
+) -> List[Dict[str, Any]]:
+    """Returns recent write_audit_log rows with full diff_data, newest first.
 
     Powers the audit dashboard: every write within the time window, regardless
-    of actor, newest first.
+    of actor. When ``account`` is provided, results are scoped to that Cosmos
+    account (the audit log stores ``database_name`` as ``<account>.<database>``,
+    so we match on the account segment).
     """
     try:
         conn = get_connection()
         cur = conn.cursor()
+        where = "WHERE timestamp_utc >= NOW() - make_interval(days => %s)"
+        params: List[Any] = [days]
+        if account:
+            where += " AND split_part(database_name, '.', 1) = %s"
+            params.append(account)
+        params.append(limit)
         cur.execute(
-            """
+            f"""
             SELECT user_email, operation, database_name, collection_name,
                    document_id, diff_data, timestamp_utc
             FROM write_audit_log
-            WHERE timestamp_utc >= NOW() - make_interval(days => %s)
+            {where}
             ORDER BY timestamp_utc DESC
             LIMIT %s
             """,
-            (days, limit),
+            params,
         )
         columns = [desc[0] for desc in cur.description]
         rows = []

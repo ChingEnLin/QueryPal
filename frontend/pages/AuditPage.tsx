@@ -1,10 +1,31 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { API_BASE_URL, USE_MSAL_AUTH } from '../app.config';
 import AppLayout from '../components/AppLayout';
 import ChartDisplay, { VisualizationConfig } from '../components/ChartDisplay';
 import { MOCK_AUDIT_EVENTS } from '../services/mockAuditData';
+import { getDatabasesForAccount } from '../services/dbService';
+import { CosmosDBAccount, DbInfo, CollectionSummary } from '../types';
+
+/* ── session connection (shared shape written by the connect flow) ────────── */
+interface SessionConnection {
+    accountId?: string;
+    accountName?: string;
+    databaseName?: string;
+    collections?: CollectionSummary[];
+    availableAccounts?: CosmosDBAccount[];
+    availableDbs?: DbInfo[];
+}
+const readSessionConnection = (): SessionConnection | null => {
+    try {
+        const saved = sessionStorage.getItem('qp_connection');
+        return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+};
+const writeSessionConnection = (conn: SessionConnection) => {
+    sessionStorage.setItem('qp_connection', JSON.stringify(conn));
+};
 
 /* ── operation vocabulary ─────────────────────────────────────────────────── */
 type Operation = 'insert' | 'update' | 'delete';
@@ -495,6 +516,79 @@ function EventLog({ events, onOpen, now }: { events: AuditEvent[]; onOpen: (e: A
     );
 }
 
+/* ── history timeline (grouped-by-day chronological feed) ─────────────────── */
+function dayLabel(d: Date, now: number): string {
+    const day = new Date(d); day.setHours(0, 0, 0, 0);
+    const today = new Date(now); today.setHours(0, 0, 0, 0);
+    const diff = Math.round((today.getTime() - day.getTime()) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    if (diff < 7) return d.toLocaleDateString('en-GB', { weekday: 'long' });
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function HistoryTimeline({ events, onOpen, now }: { events: AuditEvent[]; onOpen: (e: AuditEvent) => void; now: number }) {
+    const groups = useMemo(() => {
+        const m = new Map<string, { key: string; label: string; date: Date; items: AuditEvent[] }>();
+        events.forEach((e) => {
+            const key = e.ts.toDateString();
+            const g = m.get(key) || { key, label: dayLabel(e.ts, now), date: e.ts, items: [] };
+            g.items.push(e);
+            m.set(key, g);
+        });
+        return [...m.values()];
+    }, [events, now]);
+
+    if (events.length === 0)
+        return <div className="qa-card" style={{ padding: '40px 14px', textAlign: 'center', color: 'var(--muted)', fontSize: 12.5, borderRadius: 'var(--radius-md)' }}>No events in this range.</div>;
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 760 }}>
+            {groups.map((g) => (
+                <div key={g.key}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 600 }}>{g.label}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}>
+                            {g.date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} · {g.items.length} write{g.items.length !== 1 ? 's' : ''}
+                        </span>
+                        <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        {g.items.map((e, idx) => {
+                            const o = OP[e.operation];
+                            return (
+                                <div key={e.id} onClick={() => onOpen(e)}
+                                    style={{ display: 'flex', gap: 12, cursor: 'pointer', padding: '8px 10px', borderRadius: 8, transition: 'background 0.12s ease' }}
+                                    onMouseEnter={(ev) => (ev.currentTarget.style.background = 'var(--soft)')}
+                                    onMouseLeave={(ev) => (ev.currentTarget.style.background = 'transparent')}>
+                                    {/* timeline rail */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 12 }}>
+                                        <span style={{ width: 9, height: 9, borderRadius: 99, background: o.color, marginTop: 4, boxShadow: '0 0 0 3px color-mix(in oklch, ' + o.color + ' 16%, var(--panel))' }} />
+                                        {idx < g.items.length - 1 && <span style={{ flex: 1, width: 1.5, background: 'var(--border)', marginTop: 3, minHeight: 14 }} />}
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0, paddingBottom: idx < g.items.length - 1 ? 10 : 0 }}>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                                            <span style={{ fontSize: 12.5, fontWeight: 500 }}>{e.person.name}</span>
+                                            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{o.verb} a document in</span>
+                                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{e.collection_name}</span>
+                                            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }} title={absTime(e.ts)}>{relTime(e.ts, now)}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5 }}>
+                                            <OpBadge op={e.operation} withLabel={false} />
+                                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--muted)' }} title={e.document_id}>{shortId(e.document_id)}</span>
+                                            {e.operation === 'update' && e.changedFields.length > 0 && <FieldChips fields={e.changedFields} />}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 /* ── Ask the log (NL → SQL via existing backend) ──────────────────────────── */
 interface AskResult { sql_query: string; results: any[]; summary: string; visualization?: VisualizationConfig }
 
@@ -568,7 +662,10 @@ const AuditPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
 
-    const [tab, setTab] = useState<'activity' | 'ask'>('activity');
+    const [conn, setConn] = useState<SessionConnection | null>(() => readSessionConnection());
+    const [accountSwitching, setAccountSwitching] = useState(false);
+
+    const [tab, setTab] = useState<'activity' | 'history' | 'ask'>('activity');
     const [range, setRange] = useState(7);
     const [opFilter, setOpFilter] = useState('all');
     const [userFilter, setUserFilter] = useState('all');
@@ -580,22 +677,35 @@ const AuditPage: React.FC = () => {
     // against historical/mock data; fall back to wall clock when empty.
     const now = useMemo(() => (allEvents[0]?.ts.getTime() ?? Date.now()), [allEvents]);
 
+    // The audit log is scoped to the selected Cosmos account. database_name is
+    // stored as "<account>.<database>", so we filter on the account segment.
+    const scopedAccount = conn?.accountName;
+
     useEffect(() => {
         let cancelled = false;
+        const toEvents = (raw: RawAuditEvent[]) =>
+            raw.map(deriveEvent).sort((a, b) => b.ts.getTime() - a.ts.getTime());
         const load = async () => {
             setLoading(true); setLoadError(null);
             try {
                 if (!USE_MSAL_AUTH) {
-                    if (!cancelled) setAllEvents(MOCK_AUDIT_EVENTS.map(deriveEvent).sort((a, b) => b.ts.getTime() - a.ts.getTime()));
+                    // Single fake account in dev: scope when names align, else show all.
+                    const scoped = scopedAccount
+                        ? MOCK_AUDIT_EVENTS.filter((e) => e.database_name.split('.')[0] === scopedAccount)
+                        : MOCK_AUDIT_EVENTS;
+                    const rows = scoped.length ? scoped : MOCK_AUDIT_EVENTS;
+                    if (!cancelled) setAllEvents(toEvents(rows));
                     return;
                 }
                 const token = await getToken();
-                const res = await fetch(`${API_BASE_URL}/audit/events?days=90&limit=1000`, {
+                const params = new URLSearchParams({ days: '90', limit: '1000' });
+                if (scopedAccount) params.set('account', scopedAccount);
+                const res = await fetch(`${API_BASE_URL}/audit/events?${params.toString()}`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 if (!res.ok) throw new Error('Failed to load audit events');
                 const raw: RawAuditEvent[] = await res.json();
-                if (!cancelled) setAllEvents(raw.map(deriveEvent).sort((a, b) => b.ts.getTime() - a.ts.getTime()));
+                if (!cancelled) setAllEvents(toEvents(raw));
             } catch (err: any) {
                 if (!cancelled) setLoadError(err.message || 'An error occurred');
             } finally {
@@ -604,7 +714,7 @@ const AuditPage: React.FC = () => {
         };
         load();
         return () => { cancelled = true; };
-    }, [getToken]);
+    }, [getToken, scopedAccount]);
 
     const windowed = useMemo(() => {
         const cutoff = now - range * 86400000;
@@ -645,28 +755,72 @@ const AuditPage: React.FC = () => {
         ...OP_ORDER.map((k) => ({ value: k, label: OP[k].label, dot: OP[k].color }))];
     const ranges: [number, string][] = [[1, '24h'], [7, '7d'], [30, '30d'], [90, '90d']];
 
-    // Parse account/database from the newest event's "account.database" string for the shell.
+    // Prefer the live session connection (enables the chip switcher + Explorer
+    // button); fall back to parsing the newest event's "account.database" string.
     const dbParts = (allEvents[0]?.database_name || '').split('.');
-    const accountName = dbParts[0] || undefined;
-    const databaseName = dbParts.slice(1).join('.') || undefined;
+    const accountId = conn?.accountId;
+    const accountName = conn?.accountName ?? dbParts[0] ?? undefined;
+    const databaseName = conn?.databaseName ?? dbParts.slice(1).join('.') ?? undefined;
+
+    const handleSwitchDatabase = useCallback((db: DbInfo) => {
+        if (!conn) return;
+        const next: SessionConnection = { ...conn, databaseName: db.name, collections: db.collections };
+        writeSessionConnection(next);
+        setConn(next);
+    }, [conn]);
+
+    const handleSwitchAccount = useCallback(async (account: CosmosDBAccount) => {
+        if (!conn || account.id === conn.accountId) return;
+        setAccountSwitching(true);
+        try {
+            const databases = await getDatabasesForAccount(account.id);
+            if (!databases.length) return;
+            const firstDb = databases[0];
+            const next: SessionConnection = {
+                accountId: account.id,
+                accountName: account.name,
+                databaseName: firstDb.name,
+                collections: firstDb.collections,
+                availableAccounts: conn.availableAccounts,
+                availableDbs: databases,
+            };
+            writeSessionConnection(next);
+            setConn(next);
+        } catch (e) {
+            console.error('Failed to switch account:', e);
+        } finally {
+            setAccountSwitching(false);
+        }
+    }, [conn]);
+
     const hasFilters = opFilter !== 'all' || userFilter !== 'all' || collFilter !== 'all' || !!search;
 
     return (
-        <AppLayout accountName={accountName} databaseName={databaseName}>
+        <AppLayout
+            accountId={accountId}
+            accountName={accountName}
+            databaseName={databaseName}
+            collections={conn?.collections}
+            availableAccounts={conn?.availableAccounts}
+            availableDbs={conn?.availableDbs}
+            onSwitchDatabase={handleSwitchDatabase}
+            onSwitchAccount={handleSwitchAccount}
+            chipLoading={accountSwitching}
+        >
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, fontFamily: 'var(--font-body)' }}>
                 {/* page header */}
                 <div style={{ padding: '20px 28px 0', display: 'flex', alignItems: 'flex-end', gap: 16 }}>
                     <div style={{ flex: 1 }}>
                         <div style={{ fontFamily: 'var(--font-display)', fontSize: 23, letterSpacing: '-0.02em' }}>Audit log</div>
                         <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>
-                            Every write{databaseName ? <> to <span style={{ fontFamily: 'var(--font-mono)' }}>{databaseName}</span></> : ''} — who changed what, and when.
+                            Every write{accountName ? <> to <span style={{ fontFamily: 'var(--font-mono)' }}>{accountName}</span></> : ''} — who changed what, and when.
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 10 }}>
                                 <span className="qa-dot ok" style={{ animation: 'ad-pulse 2s infinite' }} /> live
                             </span>
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: 2, background: 'var(--soft)', padding: 3, borderRadius: 8 }}>
-                        {([['activity', 'Activity'], ['ask', 'Ask the log']] as const).map(([k, l]) => (
+                        {([['activity', 'Activity'], ['history', 'History'], ['ask', 'Ask the log']] as const).map(([k, l]) => (
                             <button key={k} onClick={() => setTab(k)} style={{ border: 'none', cursor: 'pointer', padding: '5px 13px', fontSize: 12.5, borderRadius: 6, fontFamily: 'inherit', fontWeight: tab === k ? 500 : 400,
                                 background: tab === k ? 'var(--panel)' : 'transparent', boxShadow: tab === k ? '0 0 0 1px var(--border)' : 'none', color: tab === k ? 'var(--fg)' : 'var(--muted)' }}>{l}</button>
                         ))}
@@ -675,6 +829,22 @@ const AuditPage: React.FC = () => {
 
                 {tab === 'ask' ? (
                     <div style={{ flex: 1, overflowY: 'auto', padding: '22px 28px' }}><AskPanel getToken={getToken} /></div>
+                ) : tab === 'history' ? (
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '18px 28px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ display: 'flex', gap: 2, background: 'var(--soft)', padding: 3, borderRadius: 8 }}>
+                                {ranges.map(([d, l]) => (
+                                    <button key={d} onClick={() => setRange(d)} style={{ border: 'none', cursor: 'pointer', padding: '4px 12px', fontSize: 12, borderRadius: 6, fontFamily: 'inherit', fontWeight: range === d ? 500 : 400,
+                                        background: range === d ? 'var(--panel)' : 'transparent', boxShadow: range === d ? '0 0 0 1px var(--border)' : 'none', color: range === d ? 'var(--fg)' : 'var(--muted)' }}>{l}</button>
+                                ))}
+                            </div>
+                            <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{counts.total} writes, newest first</span>
+                        </div>
+                        {loadError && (
+                            <div style={{ padding: '12px 16px', borderRadius: 10, background: 'color-mix(in oklch, var(--status-err) 12%, var(--bg))', border: '1px solid color-mix(in oklch, var(--status-err) 25%, var(--border))', color: 'var(--status-err)', fontSize: 13 }}>{loadError}</div>
+                        )}
+                        <HistoryTimeline events={windowed} onOpen={setSelected} now={now} />
+                    </div>
                 ) : (
                     <div style={{ flex: 1, overflowY: 'auto', padding: '18px 28px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                         {/* range selector */}
