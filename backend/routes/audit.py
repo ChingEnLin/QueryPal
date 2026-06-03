@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Header, Body, HTTPException
+from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from services.audit_service import process_audit_question, get_recent_activity
 from services.gemini_service import VisualizationConfig
-from services.user_queries_service import get_user_id_from_token
+from services.rbac import require, Caller
 
 router = APIRouter()
 
@@ -31,18 +31,16 @@ class RecentActivityItem(BaseModel):
 
 @router.post("/query", response_model=AuditQueryResponse)
 def query_audit_log(
-    body: AuditQueryRequest = Body(...), authorization: str = Header(...)
+    body: AuditQueryRequest = Body(...),
+    caller: Caller = Depends(require("audit:read")),
 ):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
     response = process_audit_question(body.question, model=body.model)
     return AuditQueryResponse(**response)
 
 
 @router.get("/recent", response_model=List[RecentActivityItem])
-def recent_activity(authorization: str = Header(...), limit: int = 10):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-    user_email = get_user_id_from_token(authorization.replace("Bearer ", ""))
-    return get_recent_activity(user_email=user_email, limit=min(limit, 50))
+def recent_activity(
+    limit: int = 10,
+    caller: Caller = Depends(require("audit:read")),
+):
+    return get_recent_activity(user_email=caller.email, limit=min(limit, 50))
