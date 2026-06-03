@@ -41,7 +41,7 @@ def exchange_token_obo(user_token: str) -> str:
 @dataclass
 class TokenClaims:
     email: Optional[str] = None
-    roles: list = field(default_factory=list)
+    roles: list[str] = field(default_factory=list)
 
 
 def extract_claims_from_token(jwt: str) -> TokenClaims:
