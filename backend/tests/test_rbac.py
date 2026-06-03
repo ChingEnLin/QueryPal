@@ -64,3 +64,56 @@ def test_empty_roles_use_default(monkeypatch):
 def test_empty_default_grants_nothing(monkeypatch):
     monkeypatch.setattr("services.rbac.DEFAULT_ROLE", "")
     assert resolve_permissions([]) == set()
+
+
+from fastapi import Depends, FastAPI
+from fastapi.testclient import TestClient
+
+from services.rbac import require, Caller as RbacCaller
+
+
+def _app_with_guard(permission: str) -> TestClient:
+    app = FastAPI()
+
+    @app.get("/guarded")
+    def guarded(caller: RbacCaller = Depends(require(permission))):
+        return {"email": caller.email}
+
+    return TestClient(app)
+
+
+def test_require_allows_sufficient_role():
+    client = _app_with_guard("data:write")
+    token = make_jwt({"email": "a@b.com", "roles": ["Analyst"]})
+    resp = client.get("/guarded", headers={"authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    assert resp.json() == {"email": "a@b.com"}
+
+
+def test_require_forbids_insufficient_role():
+    client = _app_with_guard("data:write")
+    token = make_jwt({"email": "a@b.com", "roles": ["Viewer"]})
+    resp = client.get("/guarded", headers={"authorization": f"Bearer {token}"})
+    assert resp.status_code == 403
+    assert "data:write" in resp.json()["detail"]
+
+
+def test_require_401_without_bearer():
+    client = _app_with_guard("query:read")
+    resp = client.get("/guarded", headers={"authorization": "Basic foo"})
+    assert resp.status_code == 401
+
+
+def test_require_401_without_identity():
+    client = _app_with_guard("query:read")
+    token = make_jwt({"roles": ["Viewer"]})  # no email claim
+    resp = client.get("/guarded", headers={"authorization": f"Bearer {token}"})
+    assert resp.status_code == 401
+
+
+def test_require_default_role_allows_read(monkeypatch):
+    monkeypatch.setattr("services.rbac.DEFAULT_ROLE", "Viewer")
+    client = _app_with_guard("query:read")
+    token = make_jwt({"email": "a@b.com"})  # no roles claim
+    resp = client.get("/guarded", headers={"authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
