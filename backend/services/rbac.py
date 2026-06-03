@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from os import environ as env
-from typing import Callable
+from typing import Callable, Optional
 
 from fastapi import Header, HTTPException
 
@@ -50,7 +50,9 @@ def build_caller(authorization: str) -> Caller:
 
 
 def require(permission: str) -> Callable[..., Caller]:
-    def _dependency(authorization: str = Header(...)) -> Caller:
+    def _dependency(authorization: Optional[str] = Header(None)) -> Caller:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Invalid token format")
         caller = build_caller(authorization)
         if permission not in caller.permissions:
             raise HTTPException(

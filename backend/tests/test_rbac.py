@@ -1,8 +1,12 @@
 import base64
 import json
 
+from fastapi import Depends, FastAPI
+from fastapi.testclient import TestClient
+
 from services.azure_auth import extract_claims_from_token, extract_email_from_token
 from services.rbac import resolve_permissions, ROLE_PERMISSIONS
+from services.rbac import require, Caller as RbacCaller
 
 
 def make_jwt(claims: dict) -> str:
@@ -66,12 +70,6 @@ def test_empty_default_grants_nothing(monkeypatch):
     assert resolve_permissions([]) == set()
 
 
-from fastapi import Depends, FastAPI
-from fastapi.testclient import TestClient
-
-from services.rbac import require, Caller as RbacCaller
-
-
 def _app_with_guard(permission: str) -> TestClient:
     app = FastAPI()
 
@@ -117,3 +115,9 @@ def test_require_default_role_allows_read(monkeypatch):
     token = make_jwt({"email": "a@b.com"})  # no roles claim
     resp = client.get("/guarded", headers={"authorization": f"Bearer {token}"})
     assert resp.status_code == 200
+
+
+def test_require_401_without_header():
+    client = _app_with_guard("query:read")
+    resp = client.get("/guarded")
+    assert resp.status_code == 401
