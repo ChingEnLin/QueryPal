@@ -7,6 +7,7 @@ import { loginRequest } from '../authConfig';
 export interface UnifiedUser {
     name?: string;
     email?: string;
+    roles?: string[];
 }
 
 export const useUnifiedAuth = () => {
@@ -47,8 +48,10 @@ const useMsalAuth = () => {
         }
     }, [instance, account]);
 
+    const roles = ((account?.idTokenClaims as { roles?: string[] } | undefined)?.roles) ?? [];
+
     return {
-        user: account ? { name: account.name, email: account.username } : null,
+        user: account ? { name: account.name, email: account.username, roles } : null,
         logout,
         getToken,
         isAuthenticated: !!account
@@ -71,7 +74,7 @@ const useBypassAuth = () => {
     }, []);
 
     return {
-        user,
+        user: user ? { ...user, roles: ['Admin'] } : null,
         logout: contextLogout,
         getToken,
         isAuthenticated
