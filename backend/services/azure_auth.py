@@ -35,8 +35,8 @@ def _verify_and_decode(token: str) -> dict:
     When SKIP_JWT_VERIFICATION is True (dev/test), falls back to raw base64
     decode without signature check. In all other cases, verifies the RS256
     signature against Azure's JWKS and validates audience + tenant.
-    Raises HTTPException(401) on auth failures, HTTPException(500) on server
-    misconfiguration — never returns partial data.
+    Raises HTTPException(401) on all failures (auth or misconfiguration) —
+    never returns partial data.
     """
     if SKIP_JWT_VERIFICATION:
         parts = token.split(".")
@@ -49,9 +49,9 @@ def _verify_and_decode(token: str) -> dict:
             raise HTTPException(status_code=401, detail="Token validation failed")
 
     if not TENANT_ID:
-        raise HTTPException(status_code=500, detail="Server misconfigured: missing TENANT_ID")
+        raise HTTPException(status_code=401, detail="Token validation failed")
     if not CLIENT_ID:
-        raise HTTPException(status_code=500, detail="Server misconfigured: missing CLIENT_ID")
+        raise HTTPException(status_code=401, detail="Token validation failed")
 
     try:
         client = _get_jwks_client()
