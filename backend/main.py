@@ -30,9 +30,11 @@ def _install_argus_log_handler() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from services.argus_store import get_report_store
+    from services.users_service import ensure_users_table
 
     _install_argus_log_handler()
     get_report_store()
+    ensure_users_table()
     yield
 
 

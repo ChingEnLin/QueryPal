@@ -5,6 +5,7 @@ from typing import Callable, Optional
 from fastapi import Header, HTTPException
 
 from services.azure_auth import extract_claims_from_token
+from services.users_service import upsert_user
 
 VIEWER = {"query:read", "self:manage"}
 ANALYST = VIEWER | {"data:write", "argus:write"}
@@ -44,13 +45,15 @@ def build_caller(authorization: str) -> Caller:
     claims = extract_claims_from_token(authorization[7:])
     if not claims.email:
         raise HTTPException(status_code=401, detail="Caller identity missing")
-    return Caller(
+    caller = Caller(
         email=claims.email,
         roles=claims.roles,
         permissions=resolve_permissions(claims.roles),
         oid=claims.oid,
         display_name=claims.display_name,
     )
+    upsert_user(oid=caller.oid, email=caller.email, display_name=caller.display_name)
+    return caller
 
 
 def require(permission: str) -> Callable[..., Caller]:
