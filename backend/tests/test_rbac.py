@@ -32,13 +32,12 @@ def test_verify_and_decode_bypass_rejects_malformed(monkeypatch):
 
 def test_bad_signature_raises_401_when_verification_enabled(monkeypatch):
     # With SKIP_JWT_VERIFICATION=False and no real TENANT_ID in the test env,
-    # _get_jwks_client raises ValueError which is caught → HTTPException(401).
-    # This proves forged tokens are rejected when the bypass flag is off.
+    # the guard raises HTTPException(500) — server misconfiguration, not auth failure.
     monkeypatch.setattr("services.azure_auth.SKIP_JWT_VERIFICATION", False)
     token = make_jwt({"email": "a@b.com", "roles": ["Admin"]})
     with pytest.raises(HTTPException) as exc:
         _verify_and_decode(token)
-    assert exc.value.status_code == 401
+    assert exc.value.status_code == 500  # missing TENANT_ID → server misconfiguration
 
 
 def test_extract_claims_reads_email_and_roles():
