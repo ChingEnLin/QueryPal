@@ -56,6 +56,18 @@ def audit_events(
     )
 
 
+@router.get("/events/mine", response_model=List[AuditEventItem])
+def my_audit_events(
+    days: int = 90,
+    limit: int = 1000,
+    account: Optional[str] = None,
+    caller: Caller = Depends(require("self:manage")),
+):
+    return get_audit_events(
+        days=min(days, 365), limit=min(limit, 1000), account=account, user_email=caller.email
+    )
+
+
 @router.post("/query", response_model=AuditQueryResponse)
 def query_audit_log(
     body: AuditQueryRequest = Body(...),

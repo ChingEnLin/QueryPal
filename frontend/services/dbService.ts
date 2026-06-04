@@ -70,7 +70,7 @@ export function invalidateDbCache(): void {
 /**
  * Helper function to get access token with proper error handling
  */
-const getAuthenticatedToken = async (): Promise<string> => {
+export const getAuthenticatedToken = async (): Promise<string> => {
   try {
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length === 0) {

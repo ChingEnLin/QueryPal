@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
+import { useRoles } from '../hooks/useRoles';
 import { API_BASE_URL, USE_MSAL_AUTH } from '../app.config';
 import AppLayout from '../components/AppLayout';
 import ChartDisplay, { VisualizationConfig } from '../components/ChartDisplay';
@@ -658,6 +659,9 @@ function AskPanel({ getToken }: { getToken: () => Promise<string | null> }) {
 /* ── main dashboard ───────────────────────────────────────────────────────── */
 const AuditPage: React.FC = () => {
     const { getToken } = useUnifiedAuth();
+    const { can } = useRoles();
+    const isAdmin = can('audit:read');
+    const isAnalyst = !isAdmin && can('self:manage');
     const [allEvents, setAllEvents] = useState<AuditEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -698,7 +702,8 @@ const AuditPage: React.FC = () => {
                 const token = await getToken();
                 const params = new URLSearchParams({ days: '90', limit: '1000' });
                 if (scopedAccount) params.set('account', scopedAccount);
-                const res = await fetch(`${API_BASE_URL}/audit/events?${params.toString()}`, {
+                const endpoint = isAdmin ? 'events' : 'events/mine';
+                const res = await fetch(`${API_BASE_URL}/audit/${endpoint}?${params.toString()}`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 if (!res.ok) throw new Error('Failed to load audit events');
@@ -793,6 +798,26 @@ const AuditPage: React.FC = () => {
 
     const hasFilters = opFilter !== 'all' || userFilter !== 'all' || collFilter !== 'all' || !!search;
 
+    if (!isAdmin && !isAnalyst) {
+        return (
+            <AppLayout accountId={accountId} accountName={accountName} databaseName={databaseName}
+                collections={conn?.collections} availableAccounts={conn?.availableAccounts}
+                availableDbs={conn?.availableDbs} onSwitchDatabase={handleSwitchDatabase}
+                onSwitchAccount={handleSwitchAccount} chipLoading={accountSwitching}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, color: 'var(--muted)', fontFamily: 'var(--font-body)' }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--fg)' }}>Access restricted</div>
+                    <div style={{ fontSize: 12.5, maxWidth: 280, textAlign: 'center', lineHeight: 1.5 }}>
+                        The audit log is only available to Analysts and Admins.
+                    </div>
+                </div>
+            </AppLayout>
+        );
+    }
+
     return (
         <AppLayout
             accountId={accountId}
@@ -811,15 +836,18 @@ const AuditPage: React.FC = () => {
                     <div style={{ flex: 1 }}>
                         <div style={{ fontFamily: 'var(--font-display)', fontSize: 23, letterSpacing: '-0.02em' }}>Audit log</div>
                         <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>
-                            Every write{accountName ? <> to <span style={{ fontFamily: 'var(--font-mono)' }}>{accountName}</span></> : ''} — who changed what, and when.
+                            {isAdmin
+                                ? <>Every write{accountName ? <> to <span style={{ fontFamily: 'var(--font-mono)' }}>{accountName}</span></> : ''} — who changed what, and when.</>
+                                : <>Your write activity{accountName ? <> on <span style={{ fontFamily: 'var(--font-mono)' }}>{accountName}</span></> : ''}.</>
+                            }
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 10 }}>
                                 <span className="qa-dot ok" style={{ animation: 'ad-pulse 2s infinite' }} /> live
                             </span>
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: 2, background: 'var(--soft)', padding: 3, borderRadius: 8 }}>
-                        {([['activity', 'Activity'], ['history', 'History'], ['ask', 'Ask the log']] as const).map(([k, l]) => (
-                            <button key={k} onClick={() => setTab(k)} style={{ border: 'none', cursor: 'pointer', padding: '5px 13px', fontSize: 12.5, borderRadius: 6, fontFamily: 'inherit', fontWeight: tab === k ? 500 : 400,
+                        {([['activity', 'Activity'], ['history', 'History'], ...(isAdmin ? [['ask', 'Ask the log']] : [])] as const).map(([k, l]) => (
+                            <button key={k} onClick={() => setTab(k as typeof tab)} style={{ border: 'none', cursor: 'pointer', padding: '5px 13px', fontSize: 12.5, borderRadius: 6, fontFamily: 'inherit', fontWeight: tab === k ? 500 : 400,
                                 background: tab === k ? 'var(--panel)' : 'transparent', boxShadow: tab === k ? '0 0 0 1px var(--border)' : 'none', color: tab === k ? 'var(--fg)' : 'var(--muted)' }}>{l}</button>
                         ))}
                     </div>
@@ -853,7 +881,12 @@ const AuditPage: React.FC = () => {
                                         background: range === d ? 'var(--panel)' : 'transparent', boxShadow: range === d ? '0 0 0 1px var(--border)' : 'none', color: range === d ? 'var(--fg)' : 'var(--muted)' }}>{l}</button>
                                 ))}
                             </div>
-                            <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{counts.total} writes by {counts.users} actors across {counts.docs} documents</span>
+                            <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+                                {isAdmin
+                                    ? `${counts.total} writes by ${counts.users} actors across ${counts.docs} documents`
+                                    : `${counts.total} writes across ${counts.docs} documents`
+                                }
+                            </span>
                         </div>
 
                         {loadError && (
@@ -861,12 +894,12 @@ const AuditPage: React.FC = () => {
                         )}
 
                         {/* KPI strip */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isAdmin ? 5 : 4}, 1fr)`, gap: 12 }}>
                             <StatCard label="Total writes" value={counts.total} sub={`/ ${range}d`} spark={<Sparkline points={dailyTotals} color="var(--accent)" />} />
                             <StatCard label="Updates" value={counts.update} accent={OP.update.color} sub="modified" />
                             <StatCard label="Inserts" value={counts.insert} accent={OP.insert.color} sub="created" />
                             <StatCard label="Deletes" value={counts.delete} accent={OP.delete.color} sub="removed" />
-                            <StatCard label="Active actors" value={counts.users} sub="incl. CI" />
+                            {isAdmin && <StatCard label="Active actors" value={counts.users} sub="incl. CI" />}
                         </div>
 
                         {/* chart */}
@@ -875,7 +908,7 @@ const AuditPage: React.FC = () => {
                         {/* filter bar */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                             <Dropdown label="Op" value={opFilter} options={opOpts} onChange={setOpFilter} />
-                            <Dropdown label="User" value={userFilter} options={userOpts} onChange={setUserFilter} />
+                            {isAdmin && <Dropdown label="User" value={userFilter} options={userOpts} onChange={setUserFilter} />}
                             <Dropdown label="Collection" value={collFilter} options={collOpts} onChange={setCollFilter} />
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 30, padding: '0 10px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 7, minWidth: 200 }}>
                                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.4"><circle cx="7" cy="7" r="4.5" /><path d="M11 11l3 3" /></svg>

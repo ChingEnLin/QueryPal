@@ -67,14 +67,13 @@ def get_recent_activity(user_email: str, limit: int = 10) -> List[Dict[str, Any]
 
 
 def get_audit_events(
-    days: int = 90, limit: int = 1000, account: str = None
+    days: int = 90, limit: int = 1000, account: str = None, user_email: str = None
 ) -> List[Dict[str, Any]]:
     """Returns recent write_audit_log rows with full diff_data, newest first.
 
-    Powers the audit dashboard: every write within the time window, regardless
-    of actor. When ``account`` is provided, results are scoped to that Cosmos
-    account (the audit log stores ``database_name`` as ``<account>.<database>``,
-    so we match on the account segment).
+    When ``user_email`` is provided, results are scoped to that actor only
+    (used for the Analyst self-view). When ``account`` is provided, results
+    are scoped to that Cosmos account.
     """
     try:
         conn = get_connection()
@@ -84,6 +83,9 @@ def get_audit_events(
         if account:
             where += " AND split_part(database_name, '.', 1) = %s"
             params.append(account)
+        if user_email:
+            where += " AND user_email = %s"
+            params.append(user_email)
         params.append(limit)
         cur.execute(
             f"""
