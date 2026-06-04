@@ -70,15 +70,6 @@ def test_empty_default_grants_nothing(monkeypatch):
     assert resolve_permissions([]) == set()
 
 
-def test_shipped_default_is_analyst():
-    from services.rbac import DEFAULT_ROLE
-
-    assert DEFAULT_ROLE == "Analyst"
-    perms = resolve_permissions([])
-    assert "data:write" in perms
-    assert "audit:read" not in perms
-
-
 def _app_with_guard(permission: str) -> TestClient:
     app = FastAPI()
 

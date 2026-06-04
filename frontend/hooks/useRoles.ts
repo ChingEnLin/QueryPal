@@ -10,7 +10,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   Admin: ADMIN,
 };
 
-const DEFAULT_ROLE = 'Analyst';
+const DEFAULT_ROLE = 'Viewer';
 
 export function permissionsFor(roles: string[]): Set<string> {
   const effective = roles.length ? roles : [DEFAULT_ROLE];
