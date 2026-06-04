@@ -106,33 +106,26 @@ class TokenClaims:
     roles: list[str] = field(default_factory=list)
 
 
-def extract_claims_from_token(jwt: str) -> TokenClaims:
-    """Decode the JWT payload to pull caller email and Entra App Roles.
+def extract_claims_from_token(token: str) -> TokenClaims:
+    """Verify JWT signature then extract caller email and Entra App Roles.
 
-    No signature check — Azure already validated this token during the OBO
-    exchange the caller just performed. We only read claims.
+    Raises HTTPException(401) if the token is invalid or signature fails.
     """
-    try:
-        parts = jwt.split(".")
-        if len(parts) < 2:
-            return TokenClaims()
-        payload_b64 = parts[1]
-        padding = "=" * (-len(payload_b64) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(payload_b64 + padding))
-        email = None
-        for key in ("preferred_username", "email", "upn", "unique_name"):
-            value = payload.get(key)
-            if value:
-                email = str(value)
-                break
-        roles = payload.get("roles") or []
-        if not isinstance(roles, list):
-            roles = [str(roles)]
-        return TokenClaims(email=email, roles=[str(r) for r in roles])
-    except Exception:
-        return TokenClaims()
+    payload = _verify_and_decode(token)
+    email = next(
+        (
+            str(payload[k])
+            for k in ("preferred_username", "email", "upn", "unique_name")
+            if k in payload
+        ),
+        None,
+    )
+    roles = payload.get("roles") or []
+    if not isinstance(roles, list):
+        roles = [str(roles)]
+    return TokenClaims(email=email, roles=[str(r) for r in roles])
 
 
-def extract_email_from_token(jwt: str) -> Optional[str]:
+def extract_email_from_token(token: str) -> Optional[str]:
     """Backward-compatible helper returning just the caller email."""
-    return extract_claims_from_token(jwt).email
+    return extract_claims_from_token(token).email

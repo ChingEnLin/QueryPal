@@ -60,9 +60,9 @@ def test_extract_email_from_token_still_works():
 
 
 def test_extract_claims_malformed_token():
-    claims = extract_claims_from_token("not-a-jwt")
-    assert claims.email is None
-    assert claims.roles == []
+    with pytest.raises(HTTPException) as exc:
+        extract_claims_from_token("not-a-jwt")
+    assert exc.value.status_code == 401
 
 
 def test_viewer_permissions():
