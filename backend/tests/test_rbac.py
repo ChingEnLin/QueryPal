@@ -1,10 +1,11 @@
 import base64
 import json
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
+import pytest
 
-from services.azure_auth import extract_claims_from_token, extract_email_from_token
+from services.azure_auth import extract_claims_from_token, extract_email_from_token, _verify_and_decode
 from services.rbac import resolve_permissions, ROLE_PERMISSIONS
 from services.rbac import require, Caller as RbacCaller
 
@@ -12,6 +13,32 @@ from services.rbac import require, Caller as RbacCaller
 def make_jwt(claims: dict) -> str:
     payload = base64.urlsafe_b64encode(json.dumps(claims).encode()).rstrip(b"=").decode()
     return f"header.{payload}.sig"
+
+
+def test_verify_and_decode_bypass_returns_payload(monkeypatch):
+    monkeypatch.setattr("services.azure_auth.SKIP_JWT_VERIFICATION", True)
+    token = make_jwt({"email": "a@b.com", "roles": ["Admin"]})
+    payload = _verify_and_decode(token)
+    assert payload["email"] == "a@b.com"
+    assert payload["roles"] == ["Admin"]
+
+
+def test_verify_and_decode_bypass_rejects_malformed(monkeypatch):
+    monkeypatch.setattr("services.azure_auth.SKIP_JWT_VERIFICATION", True)
+    with pytest.raises(HTTPException) as exc:
+        _verify_and_decode("not-a-jwt")
+    assert exc.value.status_code == 401
+
+
+def test_bad_signature_raises_401_when_verification_enabled(monkeypatch):
+    # With SKIP_JWT_VERIFICATION=False and no real TENANT_ID in the test env,
+    # _get_jwks_client raises ValueError which is caught → HTTPException(401).
+    # This proves forged tokens are rejected when the bypass flag is off.
+    monkeypatch.setattr("services.azure_auth.SKIP_JWT_VERIFICATION", False)
+    token = make_jwt({"email": "a@b.com", "roles": ["Admin"]})
+    with pytest.raises(HTTPException) as exc:
+        _verify_and_decode(token)
+    assert exc.value.status_code == 401
 
 
 def test_extract_claims_reads_email_and_roles():

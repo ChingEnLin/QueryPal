@@ -4,11 +4,67 @@ from dataclasses import dataclass, field
 from os import environ as env
 import msal
 from typing import Optional
+import jwt
+from jwt import PyJWKClient, PyJWTError
+from fastapi import HTTPException
 
 TENANT_ID = env.get("AZURE_TENANT_ID")
 CLIENT_ID = env.get("AZURE_CLIENT_ID")
 CLIENT_SECRET = env.get("AZURE_CLIENT_SECRET")
 ARM_SCOPE = env.get("ARM_SCOPE")
+
+SKIP_JWT_VERIFICATION: bool = env.get("SKIP_JWT_VERIFICATION", "").lower() == "true"
+
+_jwks_client: Optional[PyJWKClient] = None
+
+
+def _get_jwks_client() -> PyJWKClient:
+    global _jwks_client
+    if _jwks_client is None:
+        if not TENANT_ID:
+            raise ValueError("AZURE_TENANT_ID not configured")
+        _jwks_client = PyJWKClient(
+            f"https://login.microsoftonline.com/{TENANT_ID}/discovery/v2.0/keys"
+        )
+    return _jwks_client
+
+
+def _verify_and_decode(token: str) -> dict:
+    """Verify JWT signature and return the decoded payload.
+
+    When SKIP_JWT_VERIFICATION is True (dev/test), falls back to raw base64
+    decode without signature check. In all other cases, verifies the RS256
+    signature against Azure's JWKS and validates audience + tenant.
+    Raises HTTPException(401) on any failure — never returns partial data.
+    """
+    if SKIP_JWT_VERIFICATION:
+        parts = token.split(".")
+        if len(parts) < 2:
+            raise HTTPException(status_code=401, detail="Invalid token format")
+        try:
+            padding = "=" * (-len(parts[1]) % 4)
+            return json.loads(base64.urlsafe_b64decode(parts[1] + padding))
+        except Exception:
+            raise HTTPException(status_code=401, detail="Token validation failed")
+
+    try:
+        client = _get_jwks_client()
+        signing_key = client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=CLIENT_ID,
+            options={"verify_iss": False},
+        )
+        if not TENANT_ID or TENANT_ID not in payload.get("iss", ""):
+            raise HTTPException(status_code=401, detail="Token issuer invalid")
+        return payload
+    except HTTPException:
+        raise
+    except (PyJWTError, Exception):
+        raise HTTPException(status_code=401, detail="Token validation failed")
+
 
 _app: Optional[msal.ConfidentialClientApplication] = None
 
