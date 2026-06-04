@@ -804,3 +804,56 @@ export async function getDocumentHistory(resource: SelectedResource, collectionN
 
   return response.json();
 }
+
+// --- Admin / Role Management ---
+
+export interface RoleAssignment {
+  assignment_id: string;
+  role_name: string;
+}
+
+export interface AdminUser {
+  oid: string;
+  email: string;
+  display_name: string | null;
+  first_seen: string;
+  last_seen: string;
+  roles: RoleAssignment[];
+}
+
+export async function getAdminUsers(): Promise<AdminUser[]> {
+  if (!USE_MSAL_AUTH) {
+    return Promise.resolve([
+      { oid: 'mock-oid-1', email: 'alice@example.com', display_name: 'Alice', first_seen: '2026-06-01T10:00:00Z', last_seen: '2026-06-04T12:00:00Z', roles: [{ assignment_id: 'asgn-1', role_name: 'Admin' }] },
+      { oid: 'mock-oid-2', email: 'bob@example.com', display_name: 'Bob', first_seen: '2026-06-02T08:00:00Z', last_seen: '2026-06-03T16:00:00Z', roles: [] },
+    ]);
+  }
+  const accessToken = await getAuthenticatedToken();
+  const response = await fetch(`${API_BASE_URL}/admin/users`, {
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+  });
+  if (!response.ok) throw new Error('Failed to fetch admin users');
+  return response.json();
+}
+
+export async function assignUserRole(oid: string, role: string): Promise<void> {
+  if (!USE_MSAL_AUTH) return;
+  const accessToken = await getAuthenticatedToken();
+  const response = await fetch(`${API_BASE_URL}/admin/users/${oid}/roles`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  });
+  if (response.status === 409) throw new Error('Role already assigned');
+  if (!response.ok) throw new Error('Failed to assign role');
+}
+
+export async function removeUserRole(oid: string, assignmentId: string): Promise<void> {
+  if (!USE_MSAL_AUTH) return;
+  const accessToken = await getAuthenticatedToken();
+  const response = await fetch(`${API_BASE_URL}/admin/users/${oid}/roles/${assignmentId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+  });
+  if (!response.ok) throw new Error('Failed to remove role');
+}
