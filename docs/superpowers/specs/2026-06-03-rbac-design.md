@@ -87,13 +87,15 @@ Notes:
 
 ## Rollout Safety
 
-- Env var `RBAC_DEFAULT_ROLE` (default `Viewer`). When a token has **no** `roles`
+- Env var `RBAC_DEFAULT_ROLE` (default `Analyst`). When a token has **no** `roles`
   claim — i.e. before users have been assigned App Roles in the portal — the
   caller is treated as having the default role rather than being locked out.
-- Write/admin permissions still require an **explicit** role assignment; the
-  default never grants more than Viewer.
-- This lets the code ship before portal role assignment is complete. Once all
-  users are assigned, `RBAC_DEFAULT_ROLE` can be set to empty to enforce
+- The `Analyst` default grants read **and** write (`data:write`, `argus:write`)
+  but never `audit:read` or `system:admin` — those always require an explicit
+  Admin assignment.
+- This lets the code ship before portal role assignment is complete without
+  breaking existing write workflows. Once all users are assigned,
+  `RBAC_DEFAULT_ROLE` can be lowered to `Viewer` or set to empty to enforce
   default-deny.
 
 ## Frontend Changes

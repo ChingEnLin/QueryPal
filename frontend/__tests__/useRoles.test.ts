@@ -17,8 +17,9 @@ describe('rbac permissions', () => {
     expect(canWith(['Admin'], 'system:admin')).toBe(true);
   });
 
-  it('no roles defaults to viewer permissions', () => {
+  it('no roles defaults to analyst permissions', () => {
     expect(permissionsFor([]).has('query:read')).toBe(true);
-    expect(permissionsFor([]).has('data:write')).toBe(false);
+    expect(permissionsFor([]).has('data:write')).toBe(true);
+    expect(permissionsFor([]).has('audit:read')).toBe(false);
   });
 });

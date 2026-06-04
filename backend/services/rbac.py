@@ -18,7 +18,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
 
 # Role applied when a token carries no `roles` claim (rollout safety).
 # Set RBAC_DEFAULT_ROLE="" to enforce default-deny once all users are assigned.
-DEFAULT_ROLE = env.get("RBAC_DEFAULT_ROLE", "Viewer")
+DEFAULT_ROLE = env.get("RBAC_DEFAULT_ROLE", "Analyst")
 
 
 def resolve_permissions(roles: list[str]) -> set[str]:
