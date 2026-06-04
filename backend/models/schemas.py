@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -93,3 +95,21 @@ class EvaluateWriteRequest(BaseModel):
 
 class EvaluateWriteResponse(BaseModel):
     evaluation: str
+
+
+class RoleAssignment(BaseModel):
+    assignment_id: str
+    role_name: str
+
+
+class UserWithRoles(BaseModel):
+    oid: str
+    email: str
+    display_name: Optional[str] = None
+    first_seen: str
+    last_seen: str
+    roles: list[RoleAssignment] = []
+
+
+class AssignRoleRequest(BaseModel):
+    role: str
