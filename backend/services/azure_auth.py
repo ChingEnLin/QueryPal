@@ -5,7 +5,7 @@ from os import environ as env
 import msal
 from typing import Optional
 import jwt
-from jwt import PyJWKClient, PyJWTError
+from jwt import PyJWKClient
 from fastapi import HTTPException
 
 TENANT_ID = env.get("AZURE_TENANT_ID")
@@ -49,9 +49,9 @@ def _verify_and_decode(token: str) -> dict:
             raise HTTPException(status_code=401, detail="Token validation failed")
 
     if not TENANT_ID:
-        raise HTTPException(status_code=401, detail="Token validation failed")
+        raise HTTPException(status_code=500, detail="Server misconfigured: missing TENANT_ID")
     if not CLIENT_ID:
-        raise HTTPException(status_code=401, detail="Token validation failed")
+        raise HTTPException(status_code=500, detail="Server misconfigured: missing CLIENT_ID")
 
     try:
         client = _get_jwks_client()

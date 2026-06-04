@@ -31,12 +31,48 @@ def test_verify_and_decode_bypass_rejects_malformed(monkeypatch):
 
 
 def test_bad_signature_raises_401_when_verification_enabled(monkeypatch):
-    # With SKIP_JWT_VERIFICATION=False and no real TENANT_ID in the test env,
-    # _verify_and_decode raises HTTPException(401) — same response as a bad signature.
+    # TENANT_ID is None in test env → HTTPException(500) server misconfiguration.
+    # Proves the verification path is active when bypass flag is off.
     monkeypatch.setattr("services.azure_auth.SKIP_JWT_VERIFICATION", False)
     token = make_jwt({"email": "a@b.com", "roles": ["Admin"]})
     with pytest.raises(HTTPException) as exc:
         _verify_and_decode(token)
+    assert exc.value.status_code == 500
+
+
+def test_tampered_token_rejected_by_rs256(monkeypatch):
+    from unittest.mock import MagicMock, patch
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.backends import default_backend
+    import jwt as pyjwt
+
+    # Two different RSA key pairs: token signed by attacker_key, JWKS returns real_key's public key
+    real_key = rsa.generate_private_key(65537, 2048, default_backend())
+    attacker_key = rsa.generate_private_key(65537, 2048, default_backend())
+
+    monkeypatch.setattr("services.azure_auth.SKIP_JWT_VERIFICATION", False)
+    monkeypatch.setattr("services.azure_auth.TENANT_ID", "test-tenant-id")
+    monkeypatch.setattr("services.azure_auth.CLIENT_ID", "test-client-id")
+
+    # Token signed with attacker's private key
+    token = pyjwt.encode(
+        {
+            "email": "a@b.com",
+            "roles": ["Admin"],
+            "iss": "https://login.microsoftonline.com/test-tenant-id/v2.0",
+            "aud": "test-client-id",
+        },
+        attacker_key,
+        algorithm="RS256",
+    )
+
+    # JWKS returns the *real* key (not the attacker's)
+    mock_signing_key = MagicMock()
+    mock_signing_key.key = real_key.public_key()
+    with patch("services.azure_auth._get_jwks_client") as mock_client:
+        mock_client.return_value.get_signing_key_from_jwt.return_value = mock_signing_key
+        with pytest.raises(HTTPException) as exc:
+            _verify_and_decode(token)
     assert exc.value.status_code == 401
 
 
