@@ -60,7 +60,7 @@ def _verify_and_decode(token: str) -> dict:
             token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=CLIENT_ID,
+            audience=[CLIENT_ID, f"api://{CLIENT_ID}"],
             options={"verify_iss": False},
         )
         if TENANT_ID not in payload.get("iss", ""):

@@ -60,7 +60,7 @@ def test_tampered_token_rejected_by_rs256(monkeypatch):
             "email": "a@b.com",
             "roles": ["Admin"],
             "iss": "https://login.microsoftonline.com/test-tenant-id/v2.0",
-            "aud": "test-client-id",
+            "aud": "api://test-client-id",
         },
         attacker_key,
         algorithm="RS256",
