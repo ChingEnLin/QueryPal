@@ -104,10 +104,12 @@ def exchange_token_obo(user_token: str) -> str:
 class TokenClaims:
     email: Optional[str] = None
     roles: list[str] = field(default_factory=list)
+    oid: Optional[str] = None
+    display_name: Optional[str] = None
 
 
 def extract_claims_from_token(token: str) -> TokenClaims:
-    """Verify JWT signature then extract caller email and Entra App Roles.
+    """Verify JWT signature then extract caller identity and Entra App Roles.
 
     Raises HTTPException(401) if the token is invalid or signature fails.
     """
@@ -123,7 +125,12 @@ def extract_claims_from_token(token: str) -> TokenClaims:
     roles = payload.get("roles") or []
     if not isinstance(roles, list):
         roles = [str(roles)]
-    return TokenClaims(email=email, roles=[str(r) for r in roles])
+    return TokenClaims(
+        email=email,
+        roles=[str(r) for r in roles],
+        oid=payload.get("oid"),
+        display_name=payload.get("name"),
+    )
 
 
 def extract_email_from_token(token: str) -> Optional[str]:

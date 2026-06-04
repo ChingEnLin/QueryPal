@@ -101,6 +101,24 @@ def test_extract_claims_malformed_token():
     assert exc.value.status_code == 401
 
 
+def test_extract_claims_reads_oid():
+    token = make_jwt({"preferred_username": "a@b.com", "oid": "abc-123", "roles": []})
+    claims = extract_claims_from_token(token)
+    assert claims.oid == "abc-123"
+
+
+def test_extract_claims_oid_missing_returns_none():
+    token = make_jwt({"preferred_username": "a@b.com"})
+    claims = extract_claims_from_token(token)
+    assert claims.oid is None
+
+
+def test_extract_claims_reads_display_name():
+    token = make_jwt({"preferred_username": "a@b.com", "name": "Alice Tester", "oid": "abc-123"})
+    claims = extract_claims_from_token(token)
+    assert claims.display_name == "Alice Tester"
+
+
 def test_viewer_permissions():
     assert resolve_permissions(["Viewer"]) == {"query:read", "self:manage"}
 

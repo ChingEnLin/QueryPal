@@ -34,6 +34,8 @@ class Caller:
     email: str
     roles: list[str] = field(default_factory=list)
     permissions: set[str] = field(default_factory=set)
+    oid: Optional[str] = None
+    display_name: Optional[str] = None
 
 
 def build_caller(authorization: str) -> Caller:
@@ -46,6 +48,8 @@ def build_caller(authorization: str) -> Caller:
         email=claims.email,
         roles=claims.roles,
         permissions=resolve_permissions(claims.roles),
+        oid=claims.oid,
+        display_name=claims.display_name,
     )
 
 
