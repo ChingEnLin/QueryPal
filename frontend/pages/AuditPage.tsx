@@ -673,9 +673,7 @@ const AuditPage: React.FC = () => {
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState<AuditEvent | null>(null);
 
-    // Anchor "now" to the newest event so relative times read naturally even
-    // against historical/mock data; fall back to wall clock when empty.
-    const now = useMemo(() => (allEvents[0]?.ts.getTime() ?? Date.now()), [allEvents]);
+    const now = Date.now();
 
     // The audit log is scoped to the selected Cosmos account. database_name is
     // stored as "<account>.<database>", so we filter on the account segment.
