@@ -186,3 +186,25 @@ html.dark {
 /* ── Spinner ────────────────────────────────────────────────── */
 
 @keyframes qp-spin { to { transform: rotate(360deg); } }
+
+/* ── Audit dashboard (AuditPage) ────────────────────────────── */
+
+@keyframes ad-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ad-slide {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes ad-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+.ad-row {
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s ease;
+}
+.ad-row:last-child { border-bottom: none; }
+.ad-row:hover { background: var(--soft); }

@@ -1,11 +1,31 @@
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Header, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-from services.audit_service import process_audit_question, get_recent_activity
+from services.audit_service import (
+    process_audit_question,
+    get_recent_activity,
+    get_audit_events,
+)
 from services.gemini_service import VisualizationConfig
 from services.rbac import require, Caller
+from services.azure_auth import extract_email_from_token
 
 router = APIRouter()
+
+
+def _require_caller_email(authorization: str) -> str:
+    """Resolve the caller's identity from the bearer token.
+
+    The token was already validated by Entra ID during the caller's OBO
+    exchange, so we only decode claims here. A missing/identity-less token is
+    rejected rather than waved through on the "Bearer " prefix alone.
+    """
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    email = extract_email_from_token(authorization[7:])
+    if not email:
+        raise HTTPException(status_code=401, detail="Caller identity missing")
+    return email
 
 
 class AuditQueryRequest(BaseModel):
@@ -27,6 +47,29 @@ class RecentActivityItem(BaseModel):
     document_id: str
     user_email: str
     timestamp_utc: str
+
+
+class AuditEventItem(BaseModel):
+    user_email: str
+    operation: str
+    database_name: str
+    collection_name: str
+    document_id: Optional[str] = None
+    diff_data: Optional[Any] = None
+    timestamp_utc: str
+
+
+@router.get("/events", response_model=List[AuditEventItem])
+def audit_events(
+    authorization: str = Header(...),
+    days: int = 90,
+    limit: int = 1000,
+    account: Optional[str] = None,
+):
+    _require_caller_email(authorization)
+    return get_audit_events(
+        days=min(days, 365), limit=min(limit, 5000), account=account
+    )
 
 
 @router.post("/query", response_model=AuditQueryResponse)
