@@ -30,9 +30,8 @@ def test_get_sp_info_returns_oid_and_roles(mock_get, mock_token):
     mock_resp.json.return_value = _mock_sp_response()
     mock_get.return_value = mock_resp
 
-    import importlib
     import services.graph_service as gs
-    importlib.reload(gs)  # clear module-level cache
+    gs._sp_info_cache = None  # clear module-level cache
 
     info = gs.get_sp_info()
     assert info["sp_oid"] == "sp-oid-999"
@@ -54,9 +53,8 @@ def test_list_role_assignments_returns_map(mock_get, mock_token):
 
     mock_get.side_effect = [mock_sp, mock_asgn]
 
-    import importlib
     import services.graph_service as gs
-    importlib.reload(gs)
+    gs._sp_info_cache = None
 
     result = gs.list_role_assignments()
     assert "user-oid-a" in result
@@ -77,9 +75,8 @@ def test_assign_role_posts_to_graph(mock_get, mock_post, mock_token):
     mock_resp.ok = True
     mock_post.return_value = mock_resp
 
-    import importlib
     import services.graph_service as gs
-    importlib.reload(gs)
+    gs._sp_info_cache = None
 
     gs.assign_role(user_oid="user-oid-b", role_name="Admin")
 
@@ -105,9 +102,8 @@ def test_remove_role_deletes_from_graph(mock_get, mock_delete, mock_token):
     mock_resp.ok = True
     mock_delete.return_value = mock_resp
 
-    import importlib
     import services.graph_service as gs
-    importlib.reload(gs)
+    gs._sp_info_cache = None
 
     gs.remove_role(assignment_id="asgn-1")
 

@@ -18,18 +18,14 @@ _sp_info_cache: Optional[dict] = None
 
 
 def _get_graph_token() -> str:
-    tenant = env.get("AZURE_TENANT_ID")
-    client = env.get("AZURE_CLIENT_ID")
-    secret = env.get("AZURE_CLIENT_SECRET")
-    if not all([tenant, client, secret]):
-        logger.warning("Azure credentials not configured; Graph API calls will likely fail")
-        return ""
-    msal_app = msal.ConfidentialClientApplication(
-        client_id=client,
-        client_credential=secret,
-        authority=f"https://login.microsoftonline.com/{tenant}",
+    if not all([TENANT_ID, CLIENT_ID, CLIENT_SECRET]):
+        raise HTTPException(status_code=500, detail="Server misconfigured: Azure credentials missing")
+    app = msal.ConfidentialClientApplication(
+        client_id=CLIENT_ID,
+        client_credential=CLIENT_SECRET,
+        authority=f"https://login.microsoftonline.com/{TENANT_ID}",
     )
-    result = msal_app.acquire_token_for_client(scopes=GRAPH_SCOPE)
+    result = app.acquire_token_for_client(scopes=GRAPH_SCOPE)
     if "access_token" not in result:
         raise HTTPException(status_code=500, detail=f"Graph token acquisition failed: {result.get('error_description')}")
     return result["access_token"]
