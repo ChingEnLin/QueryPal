@@ -96,6 +96,26 @@ def test_assign_role_returns_404_for_unknown_user(client, admin_header):
     assert resp.status_code == 404
 
 
+def test_assign_role_returns_409_for_duplicate(client, admin_header):
+    from fastapi import HTTPException as FastAPIHTTPException
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_cursor.__enter__ = lambda s: mock_cursor
+    mock_cursor.__exit__ = MagicMock(return_value=False)
+    mock_conn.cursor.return_value = mock_cursor
+    mock_cursor.fetchone.return_value = ("user-oid-b",)
+
+    with patch("routes.admin.get_connection", return_value=mock_conn), \
+         patch("routes.admin.assign_role", side_effect=FastAPIHTTPException(status_code=409, detail="Role already assigned")), \
+         patch("services.users_service.upsert_user"):
+        resp = client.post(
+            "/admin/users/user-oid-b/roles",
+            json={"role": "Analyst"},
+            headers=admin_header,
+        )
+    assert resp.status_code == 409
+
+
 def test_remove_role_returns_204(client, admin_header):
     with patch("routes.admin.remove_role") as mock_remove, \
          patch("services.users_service.upsert_user"):

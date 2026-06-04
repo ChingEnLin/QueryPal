@@ -1,5 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Body, Response
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 from models.schemas import UserWithRoles, RoleAssignment, AssignRoleRequest
 from services.pg_connection import get_connection
@@ -50,6 +54,7 @@ def add_user_role(
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="User not found")
 
+    logger.info("role_assigned by=%s target=%s role=%s", caller.oid, oid, body.role)
     assign_role(user_oid=oid, role_name=body.role)
     return {"status": "assigned"}
 
@@ -60,4 +65,6 @@ def delete_user_role(
     assignment_id: str,
     caller: Caller = Depends(require("system:admin")),
 ):
+    logger.info("role_removed by=%s assignment=%s", caller.oid, assignment_id)
     remove_role(assignment_id=assignment_id)
+    return Response(status_code=204)
