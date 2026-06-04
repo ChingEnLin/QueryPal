@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 
 def test_ensure_users_table_creates_table():
