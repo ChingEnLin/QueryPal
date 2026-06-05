@@ -34,9 +34,10 @@ export default function AdminPage() {
     if (!role) return;
     try {
       setActionError((prev) => ({ ...prev, [oid]: '' }));
-      await assignUserRole(oid, role);
-      const updated = await getAdminUsers();
-      setUsers(updated);
+      const newAssignment = await assignUserRole(oid, role);
+      setUsers((prev) => prev.map((u) =>
+        u.oid === oid ? { ...u, roles: [...u.roles, newAssignment] } : u
+      ));
       setPendingRole((prev) => ({ ...prev, [oid]: '' }));
     } catch (e: any) {
       setActionError((prev) => ({ ...prev, [oid]: e.message }));
@@ -47,8 +48,9 @@ export default function AdminPage() {
     try {
       setActionError((prev) => ({ ...prev, [oid]: '' }));
       await removeUserRole(oid, assignmentId);
-      const updated = await getAdminUsers();
-      setUsers(updated);
+      setUsers((prev) => prev.map((u) =>
+        u.oid === oid ? { ...u, roles: u.roles.filter((r) => r.assignment_id !== assignmentId) } : u
+      ));
     } catch (e: any) {
       setActionError((prev) => ({ ...prev, [oid]: e.message }));
     }

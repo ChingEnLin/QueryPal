@@ -836,8 +836,8 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
   return response.json();
 }
 
-export async function assignUserRole(oid: string, role: string): Promise<void> {
-  if (!USE_MSAL_AUTH) return;
+export async function assignUserRole(oid: string, role: string): Promise<RoleAssignment> {
+  if (!USE_MSAL_AUTH) return { assignment_id: `mock-${Date.now()}`, role_name: role };
   const accessToken = await getAuthenticatedToken();
   const response = await fetch(`${API_BASE_URL}/admin/users/${oid}/roles`, {
     method: 'POST',
@@ -846,6 +846,7 @@ export async function assignUserRole(oid: string, role: string): Promise<void> {
   });
   if (response.status === 409) throw new Error('Role already assigned');
   if (!response.ok) throw new Error('Failed to assign role');
+  return response.json();
 }
 
 export async function removeUserRole(oid: string, assignmentId: string): Promise<void> {

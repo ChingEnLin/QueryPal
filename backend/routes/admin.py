@@ -55,8 +55,8 @@ def add_user_role(
             raise HTTPException(status_code=404, detail="User not found")
 
     logger.info("role_assigned by=%s target=%s role=%s", caller.oid, oid, body.role)
-    assign_role(user_oid=oid, role_name=body.role)
-    return {"status": "assigned"}
+    assignment = assign_role(user_oid=oid, role_name=body.role)
+    return assignment
 
 
 @router.delete("/users/{oid}/roles/{assignment_id}", status_code=204)

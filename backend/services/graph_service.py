@@ -78,7 +78,8 @@ def list_role_assignments() -> dict[str, list[dict]]:
     return result
 
 
-def assign_role(user_oid: str, role_name: str) -> None:
+def assign_role(user_oid: str, role_name: str) -> dict:
+    """Returns {assignment_id, role_name} for the new assignment."""
     info = get_sp_info()
     role_id = info["role_name_to_id"].get(role_name)
     if not role_id:
@@ -97,6 +98,7 @@ def assign_role(user_oid: str, role_name: str) -> None:
         raise HTTPException(status_code=409, detail="Role already assigned")
     if not resp.ok:
         raise HTTPException(status_code=500, detail=f"Graph assign failed: {resp.text}")
+    return {"assignment_id": resp.json()["id"], "role_name": role_name}
 
 
 def remove_role(assignment_id: str) -> None:
