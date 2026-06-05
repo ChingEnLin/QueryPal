@@ -72,7 +72,11 @@ def extract_collection_name(query_str: str) -> str:
 
 
 @router.post("/nl2query")
-def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...), caller: Caller = Depends(require("query:read"))):
+def nl2query(
+    prompt: QueryPrompt = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
+):
     try:
         user_token = authorization.replace("Bearer ", "")
         access_token = exchange_token_obo(user_token)
@@ -137,7 +141,9 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...), 
 
 @router.post("/infer-relationships", response_model=SchemaRelationshipsResponse)
 def infer_relationships(
-    request: SchemaRelationshipsRequest = Body(...), authorization: str = Header(...), caller: Caller = Depends(require("query:read"))
+    request: SchemaRelationshipsRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
 ):
     try:
         user_token = authorization.replace("Bearer ", "")
@@ -159,7 +165,11 @@ def infer_relationships(
 
 
 @router.post("/execute")
-def execute(query: ExecuteInput = Body(...), authorization: str = Header(...), caller: Caller = Depends(require("query:read"))):
+def execute(
+    query: ExecuteInput = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
+):
     user_token = authorization.replace("Bearer ", "")
     access_token = exchange_token_obo(user_token)
     connection_string = get_connection_string(query.account_id, access_token)
@@ -217,7 +227,9 @@ def execute(query: ExecuteInput = Body(...), authorization: str = Header(...), c
 
 
 @router.post("/debug", response_model=DebugSuggestionResponse)
-def debug(body: DebugQueryRequest = Body(...), caller: Caller = Depends(require("query:read"))):
+def debug(
+    body: DebugQueryRequest = Body(...), caller: Caller = Depends(require("query:read"))
+):
     """
     Sends a failed query and error message to Gemini for debugging suggestion.
     """
@@ -227,7 +239,9 @@ def debug(body: DebugQueryRequest = Body(...), caller: Caller = Depends(require(
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-def analyze(body: AnalyzeRequest = Body(...), caller: Caller = Depends(require("query:read"))):
+def analyze(
+    body: AnalyzeRequest = Body(...), caller: Caller = Depends(require("query:read"))
+):
     """
     Sends a query result to the AI for analysis and visualization suggestions.
     """
@@ -236,7 +250,9 @@ def analyze(body: AnalyzeRequest = Body(...), caller: Caller = Depends(require("
 
 @router.post("/evaluate-write", response_model=EvaluateWriteResponse)
 def evaluate_write(
-    body: EvaluateWriteRequest = Body(...), authorization: str = Header(...), caller: Caller = Depends(require("data:write"))
+    body: EvaluateWriteRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("data:write")),
 ):
     """
     Evaluates the result of a write operation against the user's original intent.

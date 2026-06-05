@@ -31,14 +31,16 @@ def list_admin_users(caller: Caller = Depends(require("system:admin"))):
             RoleAssignment(assignment_id=a["assignment_id"], role_name=a["role_name"])
             for a in assignments.get(oid, [])
         ]
-        result.append(UserWithRoles(
-            oid=oid,
-            email=email,
-            display_name=display_name,
-            first_seen=str(first_seen),
-            last_seen=str(last_seen),
-            roles=user_roles,
-        ))
+        result.append(
+            UserWithRoles(
+                oid=oid,
+                email=email,
+                display_name=display_name,
+                first_seen=str(first_seen),
+                last_seen=str(last_seen),
+                roles=user_roles,
+            )
+        )
     return result
 
 

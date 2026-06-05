@@ -18,9 +18,15 @@ def client():
 @pytest.fixture
 def mock_auth_header():
     """Mock authorization header — structurally valid unsigned JWT for tests."""
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"preferred_username": "test@example.com", "roles": ["Analyst"]}).encode()
-    ).rstrip(b"=").decode()
+    payload = (
+        base64.urlsafe_b64encode(
+            json.dumps(
+                {"preferred_username": "test@example.com", "roles": ["Analyst"]}
+            ).encode()
+        )
+        .rstrip(b"=")
+        .decode()
+    )
     return {"authorization": f"Bearer header.{payload}.sig"}
 
 

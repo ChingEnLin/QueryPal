@@ -3,21 +3,35 @@ from unittest.mock import patch, MagicMock
 
 def _mock_sp_response():
     return {
-        "value": [{
-            "id": "sp-oid-999",
-            "appRoles": [
-                {"id": "role-admin-id", "displayName": "Admin", "value": "Admin"},
-                {"id": "role-analyst-id", "displayName": "Analyst", "value": "Analyst"},
-                {"id": "role-viewer-id", "displayName": "Viewer", "value": "Viewer"},
-            ]
-        }]
+        "value": [
+            {
+                "id": "sp-oid-999",
+                "appRoles": [
+                    {"id": "role-admin-id", "displayName": "Admin", "value": "Admin"},
+                    {
+                        "id": "role-analyst-id",
+                        "displayName": "Analyst",
+                        "value": "Analyst",
+                    },
+                    {
+                        "id": "role-viewer-id",
+                        "displayName": "Viewer",
+                        "value": "Viewer",
+                    },
+                ],
+            }
+        ]
     }
 
 
 def _mock_assignments_response():
     return {
         "value": [
-            {"id": "asgn-1", "principalId": "user-oid-a", "appRoleId": "role-analyst-id"},
+            {
+                "id": "asgn-1",
+                "principalId": "user-oid-a",
+                "appRoleId": "role-analyst-id",
+            },
         ]
     }
 
@@ -31,6 +45,7 @@ def test_get_sp_info_returns_oid_and_roles(mock_get, mock_token):
     mock_get.return_value = mock_resp
 
     import services.graph_service as gs
+
     gs._sp_info_cache = None  # clear module-level cache
 
     info = gs.get_sp_info()
@@ -42,7 +57,7 @@ def test_get_sp_info_returns_oid_and_roles(mock_get, mock_token):
 @patch("services.graph_service._get_graph_token", return_value="fake-token")
 @patch("services.graph_service.requests.get")
 def test_list_role_assignments_returns_map(mock_get, mock_token):
-    # First call: SP info, second call: assignments
+    # First call: SP info, second call: assignments (no nextLink → single page)
     mock_sp = MagicMock()
     mock_sp.ok = True
     mock_sp.json.return_value = _mock_sp_response()
@@ -54,12 +69,51 @@ def test_list_role_assignments_returns_map(mock_get, mock_token):
     mock_get.side_effect = [mock_sp, mock_asgn]
 
     import services.graph_service as gs
+
     gs._sp_info_cache = None
 
     result = gs.list_role_assignments()
     assert "user-oid-a" in result
     assert result["user-oid-a"][0]["role_name"] == "Analyst"
     assert result["user-oid-a"][0]["assignment_id"] == "asgn-1"
+
+
+@patch("services.graph_service._get_graph_token", return_value="fake-token")
+@patch("services.graph_service.requests.get")
+def test_list_role_assignments_follows_pagination(mock_get, mock_token):
+    mock_sp = MagicMock()
+    mock_sp.ok = True
+    mock_sp.json.return_value = _mock_sp_response()
+
+    page1 = MagicMock()
+    page1.ok = True
+    page1.json.return_value = {
+        "value": [
+            {
+                "id": "asgn-1",
+                "principalId": "user-oid-a",
+                "appRoleId": "role-analyst-id",
+            }
+        ],
+        "@odata.nextLink": "https://graph.microsoft.com/v1.0/next-page",
+    }
+    page2 = MagicMock()
+    page2.ok = True
+    page2.json.return_value = {
+        "value": [
+            {"id": "asgn-2", "principalId": "user-oid-b", "appRoleId": "role-admin-id"}
+        ],
+    }
+
+    mock_get.side_effect = [mock_sp, page1, page2]
+
+    import services.graph_service as gs
+
+    gs._sp_info_cache = None
+
+    result = gs.list_role_assignments()
+    assert result["user-oid-a"][0]["role_name"] == "Analyst"
+    assert result["user-oid-b"][0]["role_name"] == "Admin"
 
 
 @patch("services.graph_service._get_graph_token", return_value="fake-token")
@@ -76,6 +130,7 @@ def test_assign_role_posts_to_graph(mock_get, mock_post, mock_token):
     mock_post.return_value = mock_resp
 
     import services.graph_service as gs
+
     gs._sp_info_cache = None
 
     gs.assign_role(user_oid="user-oid-b", role_name="Admin")
@@ -103,6 +158,7 @@ def test_remove_role_deletes_from_graph(mock_get, mock_delete, mock_token):
     mock_delete.return_value = mock_resp
 
     import services.graph_service as gs
+
     gs._sp_info_cache = None
 
     gs.remove_role(assignment_id="asgn-1")

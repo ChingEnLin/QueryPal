@@ -6,7 +6,16 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from queryargus.observability.logging_observer import JsonFormatter
-from routes import query, azure, system, user_queries, data_documents, audit, argus, admin
+from routes import (
+    query,
+    azure,
+    system,
+    user_queries,
+    data_documents,
+    audit,
+    argus,
+    admin,
+)
 
 
 def _install_argus_log_handler() -> None:

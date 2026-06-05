@@ -5,13 +5,19 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 import pytest
 
-from services.azure_auth import extract_claims_from_token, extract_email_from_token, _verify_and_decode
+from services.azure_auth import (
+    extract_claims_from_token,
+    extract_email_from_token,
+    _verify_and_decode,
+)
 from services.rbac import resolve_permissions, ROLE_PERMISSIONS
 from services.rbac import require, Caller as RbacCaller
 
 
 def make_jwt(claims: dict) -> str:
-    payload = base64.urlsafe_b64encode(json.dumps(claims).encode()).rstrip(b"=").decode()
+    payload = (
+        base64.urlsafe_b64encode(json.dumps(claims).encode()).rstrip(b"=").decode()
+    )
     return f"header.{payload}.sig"
 
 
@@ -70,7 +76,9 @@ def test_tampered_token_rejected_by_rs256(monkeypatch):
     mock_signing_key = MagicMock()
     mock_signing_key.key = real_key.public_key()
     with patch("services.azure_auth._get_jwks_client") as mock_client:
-        mock_client.return_value.get_signing_key_from_jwt.return_value = mock_signing_key
+        mock_client.return_value.get_signing_key_from_jwt.return_value = (
+            mock_signing_key
+        )
         with pytest.raises(HTTPException) as exc:
             _verify_and_decode(token)
     assert exc.value.status_code == 401
@@ -114,7 +122,9 @@ def test_extract_claims_oid_missing_returns_none():
 
 
 def test_extract_claims_reads_display_name():
-    token = make_jwt({"preferred_username": "a@b.com", "name": "Alice Tester", "oid": "abc-123"})
+    token = make_jwt(
+        {"preferred_username": "a@b.com", "name": "Alice Tester", "oid": "abc-123"}
+    )
     claims = extract_claims_from_token(token)
     assert claims.display_name == "Alice Tester"
 

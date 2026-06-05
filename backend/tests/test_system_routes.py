@@ -38,9 +38,7 @@ def test_clear_documents_cache(client):
         patch("routes.system.ALL_DOCUMENTS_CACHES", [Mock(), Mock()]) as mock_caches,
         _patch_claims(["Admin"]),
     ):
-        response = client.post(
-            "/system/clear_documents_cache", headers=ADMIN_HEADERS
-        )
+        response = client.post("/system/clear_documents_cache", headers=ADMIN_HEADERS)
 
         assert response.status_code == 200
         data = response.json()

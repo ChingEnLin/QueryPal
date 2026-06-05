@@ -9,6 +9,7 @@ def test_ensure_users_table_creates_table():
 
     with patch("services.users_service.get_connection", return_value=mock_conn):
         from services.users_service import ensure_users_table
+
         ensure_users_table()
 
     executed_sql = mock_cursor.execute.call_args[0][0]
@@ -24,6 +25,7 @@ def test_upsert_user_executes_insert():
 
     with patch("services.users_service.get_connection", return_value=mock_conn):
         from services.users_service import upsert_user
+
         upsert_user(oid="abc-123", email="a@b.com", display_name="Alice")
 
     mock_cursor.execute.assert_called_once()
@@ -35,5 +37,6 @@ def test_upsert_user_executes_insert():
 def test_upsert_user_skips_when_oid_none():
     with patch("services.users_service.get_connection") as mock_get:
         from services.users_service import upsert_user
+
         upsert_user(oid=None, email="a@b.com", display_name=None)
     mock_get.assert_not_called()

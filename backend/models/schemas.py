@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -112,4 +112,4 @@ class UserWithRoles(BaseModel):
 
 
 class AssignRoleRequest(BaseModel):
-    role: str
+    role: Literal["Admin", "Analyst", "Viewer"]

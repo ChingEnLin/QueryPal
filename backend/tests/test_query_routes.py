@@ -19,7 +19,10 @@ def test_nl2query(client):
     with (
         patch("routes.query.run_query_generator") as mock_generate,
         patch("routes.query.exchange_token_obo") as mock_exchange,
-        patch("services.rbac.extract_claims_from_token", return_value=TokenClaims(email="user@test.com", roles=["Analyst"])),
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
     ):
         mock_generate.return_value = {"generated_code": "db.users.find({})"}
 
@@ -86,7 +89,10 @@ def test_execute_query_success(client):
         patch("routes.query.get_connection_string") as mock_get_conn,
         patch("routes.query.execute_mongo_query") as mock_execute,
         patch("routes.query.transform_mongo_result") as mock_transform,
-        patch("services.rbac.extract_claims_from_token", return_value=TokenClaims(email="user@test.com", roles=["Analyst"])),
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
     ):
 
         # Setup mocks
@@ -125,7 +131,10 @@ def test_execute_query_mongo_error(client):
         patch("routes.query.exchange_token_obo") as mock_exchange,
         patch("routes.query.get_connection_string") as mock_get_conn,
         patch("routes.query.execute_mongo_query") as mock_execute,
-        patch("services.rbac.extract_claims_from_token", return_value=TokenClaims(email="user@test.com", roles=["Analyst"])),
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
     ):
 
         # Setup mocks
@@ -156,7 +165,10 @@ def test_debug_query(client):
     """Test debug query functionality."""
     with (
         patch("routes.query.generate_suggestion_from_query_error") as mock_debug,
-        patch("services.rbac.extract_claims_from_token", return_value=TokenClaims(email="user@test.com", roles=["Analyst"])),
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
     ):
         mock_debug.return_value = {"suggestion": "Check collection name"}
 
@@ -165,7 +177,9 @@ def test_debug_query(client):
         )
 
         headers = {"authorization": "Bearer valid-token"}
-        response = client.post("/query/debug", json=debug_request.model_dump(), headers=headers)
+        response = client.post(
+            "/query/debug", json=debug_request.model_dump(), headers=headers
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -180,7 +194,10 @@ def test_analyze_query(client):
     """Test query result analysis."""
     with (
         patch("routes.query.analyze_query_result") as mock_analyze,
-        patch("services.rbac.extract_claims_from_token", return_value=TokenClaims(email="user@test.com", roles=["Analyst"])),
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
     ):
         mock_analyze.return_value = {
             "insight": "Data analysis insight",
@@ -194,7 +211,9 @@ def test_analyze_query(client):
         )
 
         headers = {"authorization": "Bearer valid-token"}
-        response = client.post("/query/analyze", json=analyze_request.model_dump(), headers=headers)
+        response = client.post(
+            "/query/analyze", json=analyze_request.model_dump(), headers=headers
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -219,7 +238,10 @@ def test_evaluate_write(client):
         patch("routes.query.exchange_token_obo") as mock_exchange,
         patch("routes.query.evaluate_write_result") as mock_evaluate,
         patch("routes.query.get_connection_string") as mock_conn,
-        patch("services.rbac.extract_claims_from_token", return_value=TokenClaims(email="user@test.com", roles=["Analyst"])),
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
     ):
         mock_exchange.return_value = "access-token"
         mock_conn.return_value = "conn-string"
@@ -259,7 +281,10 @@ def test_execute_query_write_logging(client):
         patch("routes.query.execute_mongo_query") as mock_execute,
         patch("routes.query.log_write_operation") as mock_log,
         patch("routes.query.transform_mongo_result") as mock_transform,
-        patch("services.rbac.extract_claims_from_token", return_value=TokenClaims(email="test@example.com", roles=["Analyst"])),
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="test@example.com", roles=["Analyst"]),
+        ),
     ):
         # Setup mocks
         mock_exchange.return_value = "access-token"

@@ -49,9 +49,13 @@ def _verify_and_decode(token: str) -> dict:
             raise HTTPException(status_code=401, detail="Token validation failed")
 
     if not TENANT_ID:
-        raise HTTPException(status_code=500, detail="Server misconfigured: missing TENANT_ID")
+        raise HTTPException(
+            status_code=500, detail="Server misconfigured: missing TENANT_ID"
+        )
     if not CLIENT_ID:
-        raise HTTPException(status_code=500, detail="Server misconfigured: missing CLIENT_ID")
+        raise HTTPException(
+            status_code=500, detail="Server misconfigured: missing CLIENT_ID"
+        )
 
     try:
         client = _get_jwks_client()
@@ -63,7 +67,11 @@ def _verify_and_decode(token: str) -> dict:
             audience=[CLIENT_ID, f"api://{CLIENT_ID}"],
             options={"verify_iss": False},
         )
-        if TENANT_ID not in payload.get("iss", ""):
+        valid_issuers = {
+            f"https://login.microsoftonline.com/{TENANT_ID}/v2.0",
+            f"https://sts.windows.net/{TENANT_ID}/",
+        }
+        if payload.get("iss") not in valid_issuers:
             raise HTTPException(status_code=401, detail="Token issuer invalid")
         return payload
     except HTTPException:

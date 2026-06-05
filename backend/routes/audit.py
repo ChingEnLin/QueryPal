@@ -12,7 +12,6 @@ from services.rbac import require, Caller
 router = APIRouter()
 
 
-
 class AuditQueryRequest(BaseModel):
     question: str
     model: str = "gemini-2.5-flash"
@@ -64,7 +63,10 @@ def my_audit_events(
     caller: Caller = Depends(require("self:manage")),
 ):
     return get_audit_events(
-        days=min(days, 365), limit=min(limit, 1000), account=account, user_email=caller.email
+        days=min(days, 365),
+        limit=min(limit, 1000),
+        account=account,
+        user_email=caller.email,
     )
 
 
