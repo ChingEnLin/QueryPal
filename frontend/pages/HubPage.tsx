@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useTheme } from '../contexts/ThemeContext';
+import UserMenuButton from '../components/UserMenuButton';
 import { getAzureCosmosAccounts } from '../services/dbService';
 import { CosmosDBAccount } from '../types';
 import { API_BASE_URL } from '../app.config';
@@ -140,7 +141,7 @@ function formatRelativeTime(iso: string): string {
 }
 
 const HubPage: React.FC = () => {
-  const { user, logout, getToken } = useUnifiedAuth();
+  const { user, getToken } = useUnifiedAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -177,10 +178,6 @@ const HubPage: React.FC = () => {
   const firstName = user?.name?.split(' ')[0] || 'there';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-
-  const initials = user?.name
-    ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
-    : 'U';
 
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<'open' | 'explorer' | null>(null);
@@ -255,24 +252,7 @@ const HubPage: React.FC = () => {
               </svg>
             )}
           </button>
-          {/* User avatar */}
-          <div
-            style={{
-              width: 28, height: 28, borderRadius: '50%',
-              background: 'var(--accent-soft)', color: 'var(--accent)',
-              display: 'grid', placeItems: 'center',
-              fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-body)',
-            }}
-            title={user?.name || user?.email}
-          >
-            {initials}
-          </div>
-          <button
-            onClick={logout}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 12, fontFamily: 'var(--font-body)' }}
-          >
-            Sign out
-          </button>
+          <UserMenuButton />
         </div>
       </header>
 

@@ -36,6 +36,7 @@ import CreateDocumentDialog from '../components/CreateDocumentDialog';
 import DocumentHistoryDialog from '../components/DocumentHistoryDialog';
 import DiffOverwriteDialog from '../components/DiffOverwriteDialog';
 import { useTheme } from '../contexts/ThemeContext';
+import { useRoles } from '../hooks/useRoles';
 
 
 /**
@@ -167,6 +168,8 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
   onCollectionChange,
 }) => {
   const navigate = useNavigate();
+  const { can } = useRoles();
+  const canWrite = can('data:write');
 
   // --- Account & DB State ---
   const [currentAccount, setCurrentAccount] = useState<CosmosDBAccount>(() => availableAccounts.find(a => a.id === resource.accountId)!);
@@ -864,10 +867,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                     </button>
                     <button
                       onClick={() => { const { _id, ...rest } = doc; setCreateDocInitial(rest); setIsCreateDialogOpen(true); }}
-                      style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex' }}
-                      title="Copy as new document"
+                      disabled={!canWrite}
+                      style={{ padding: 5, borderRadius: 5, background: 'none', border: 'none', cursor: !canWrite ? 'not-allowed' : 'pointer', color: 'var(--muted)', display: 'flex', opacity: !canWrite ? 0.4 : 1 }}
+                      title={!canWrite ? 'Write operations require Analyst or Admin role' : 'Copy as new document'}
                       aria-label="Copy as new document"
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
+                      onMouseEnter={(e) => { if (canWrite) (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
@@ -1271,11 +1275,11 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <button
                         onClick={handleOpenCreateDialog}
-                        disabled={!selectedCollection || isLoading || isFetchingSchema}
-                        style={{ padding: 5, borderRadius: 5, background: isCreateDialogOpen ? 'var(--accent-soft)' : 'none', border: 'none', cursor: !selectedCollection ? 'not-allowed' : 'pointer', color: isCreateDialogOpen ? 'var(--accent)' : 'var(--muted)', display: 'flex', opacity: !selectedCollection ? 0.5 : 1 }}
-                        title="Create new document"
+                        disabled={!selectedCollection || isLoading || isFetchingSchema || !canWrite}
+                        style={{ padding: 5, borderRadius: 5, background: isCreateDialogOpen ? 'var(--accent-soft)' : 'none', border: 'none', cursor: (!selectedCollection || !canWrite) ? 'not-allowed' : 'pointer', color: isCreateDialogOpen ? 'var(--accent)' : 'var(--muted)', display: 'flex', opacity: (!selectedCollection || !canWrite) ? 0.5 : 1 }}
+                        title={!canWrite ? 'Write operations require Analyst or Admin role' : 'Create new document'}
                         aria-label="Create new document"
-                        onMouseEnter={(e) => { if (selectedCollection) (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
+                        onMouseEnter={(e) => { if (selectedCollection && canWrite) (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
                         onMouseLeave={(e) => { if (!isCreateDialogOpen) (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
@@ -1584,10 +1588,10 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                               {/* Edit */}
                               <button
                                 onClick={() => setOpenDocuments(prev => prev.map(od => od.id === openDoc.id ? { ...od, editMode: true } : od))}
-                                disabled={isLoading}
-                                title="Edit document"
-                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
-                                onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; } }}
+                                disabled={isLoading || !canWrite}
+                                title={!canWrite ? 'Write operations require Analyst or Admin role' : 'Edit document'}
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: (isLoading || !canWrite) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: (isLoading || !canWrite) ? 0.4 : 1 }}
+                                onMouseEnter={(e) => { if (!isLoading && canWrite) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; } }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                               >
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1595,10 +1599,10 @@ const DataExplorerPage: React.FC<DataExplorerPageProps> = ({
                               {/* Duplicate */}
                               <button
                                 onClick={() => { const { _id, ...rest } = openDoc.doc; setCreateDocInitial(rest); setIsCreateDialogOpen(true); }}
-                                disabled={isLoading}
-                                title="Insert copy as new document"
-                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: isLoading ? 0.4 : 1 }}
-                                onMouseEnter={(e) => { if (!isLoading) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; } }}
+                                disabled={isLoading || !canWrite}
+                                title={!canWrite ? 'Write operations require Analyst or Admin role' : 'Insert copy as new document'}
+                                style={{ padding: '5px 6px', borderRadius: 6, border: 'none', cursor: (isLoading || !canWrite) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', background: 'transparent', color: 'var(--muted)', opacity: (isLoading || !canWrite) ? 0.4 : 1 }}
+                                onMouseEnter={(e) => { if (!isLoading && canWrite) { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; } }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
                               >
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>

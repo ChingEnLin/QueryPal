@@ -1,6 +1,7 @@
 """Tests for query routes."""
 
 from unittest.mock import patch
+from services.azure_auth import TokenClaims
 from models.schemas import (
     QueryPrompt,
     ExecuteInput,
@@ -18,6 +19,10 @@ def test_nl2query(client):
     with (
         patch("routes.query.run_query_generator") as mock_generate,
         patch("routes.query.exchange_token_obo") as mock_exchange,
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
     ):
         mock_generate.return_value = {"generated_code": "db.users.find({})"}
 
@@ -58,7 +63,7 @@ def test_execute_query_missing_authorization(client):
 
     response = client.post("/query/execute", json=execute_input.model_dump())
 
-    assert response.status_code == 422  # Unprocessable Entity (missing header)
+    assert response.status_code == 401  # Missing authorization header
 
 
 def test_execute_query_invalid_token_format(client):
@@ -84,6 +89,10 @@ def test_execute_query_success(client):
         patch("routes.query.get_connection_string") as mock_get_conn,
         patch("routes.query.execute_mongo_query") as mock_execute,
         patch("routes.query.transform_mongo_result") as mock_transform,
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
     ):
 
         # Setup mocks
@@ -122,6 +131,10 @@ def test_execute_query_mongo_error(client):
         patch("routes.query.exchange_token_obo") as mock_exchange,
         patch("routes.query.get_connection_string") as mock_get_conn,
         patch("routes.query.execute_mongo_query") as mock_execute,
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
     ):
 
         # Setup mocks
@@ -150,14 +163,23 @@ def test_execute_query_mongo_error(client):
 
 def test_debug_query(client):
     """Test debug query functionality."""
-    with patch("routes.query.generate_suggestion_from_query_error") as mock_debug:
+    with (
+        patch("routes.query.generate_suggestion_from_query_error") as mock_debug,
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
+    ):
         mock_debug.return_value = {"suggestion": "Check collection name"}
 
         debug_request = DebugQueryRequest(
             query="db.users.find({})", error_message="Collection not found"
         )
 
-        response = client.post("/query/debug", json=debug_request.model_dump())
+        headers = {"authorization": "Bearer valid-token"}
+        response = client.post(
+            "/query/debug", json=debug_request.model_dump(), headers=headers
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -170,7 +192,13 @@ def test_debug_query(client):
 
 def test_analyze_query(client):
     """Test query result analysis."""
-    with patch("routes.query.analyze_query_result") as mock_analyze:
+    with (
+        patch("routes.query.analyze_query_result") as mock_analyze,
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
+    ):
         mock_analyze.return_value = {
             "insight": "Data analysis insight",
             "chartType": "bar",
@@ -182,7 +210,10 @@ def test_analyze_query(client):
             query_result=[{"name": "John", "age": 30}, {"name": "Jane", "age": 25}]
         )
 
-        response = client.post("/query/analyze", json=analyze_request.model_dump())
+        headers = {"authorization": "Bearer valid-token"}
+        response = client.post(
+            "/query/analyze", json=analyze_request.model_dump(), headers=headers
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -207,6 +238,10 @@ def test_evaluate_write(client):
         patch("routes.query.exchange_token_obo") as mock_exchange,
         patch("routes.query.evaluate_write_result") as mock_evaluate,
         patch("routes.query.get_connection_string") as mock_conn,
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
     ):
         mock_exchange.return_value = "access-token"
         mock_conn.return_value = "conn-string"
@@ -244,9 +279,12 @@ def test_execute_query_write_logging(client):
         patch("routes.query.exchange_token_obo") as mock_exchange,
         patch("routes.query.get_connection_string") as mock_get_conn,
         patch("routes.query.execute_mongo_query") as mock_execute,
-        patch("routes.query.get_user_id_from_token") as mock_get_user,
         patch("routes.query.log_write_operation") as mock_log,
         patch("routes.query.transform_mongo_result") as mock_transform,
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="test@example.com", roles=["Analyst"]),
+        ),
     ):
         # Setup mocks
         mock_exchange.return_value = "access-token"
@@ -258,7 +296,6 @@ def test_execute_query_write_logging(client):
         )
         mock_execute.return_value = update_result
         mock_transform.return_value = {"matched_count": 1, "modified_count": 1}
-        mock_get_user.return_value = "test@example.com"
 
         execute_input = ExecuteInput(
             account_id="test-account",
@@ -311,9 +348,17 @@ def test_list_models_intersects_allowlist(client):
         MockModel(None),
     ]
 
-    with patch("routes.query.genai") as mock_genai:
+    with (
+        patch("routes.query.genai") as mock_genai,
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
+    ):
         mock_genai.Client.return_value.models.list.return_value = mock_models
-        response = client.get("/query/models")
+        response = client.get(
+            "/query/models", headers={"authorization": "Bearer valid-token"}
+        )
 
     assert response.status_code == 200
     data = response.json()
@@ -327,9 +372,17 @@ def test_list_models_falls_back_when_api_errors(client):
     """Test /models returns the allowlist when the API listing fails."""
     from routes.query import SUPPORTED_MODELS
 
-    with patch("routes.query.genai") as mock_genai:
+    with (
+        patch("routes.query.genai") as mock_genai,
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
+    ):
         mock_genai.Client.side_effect = RuntimeError("API down")
-        response = client.get("/query/models")
+        response = client.get(
+            "/query/models", headers={"authorization": "Bearer valid-token"}
+        )
 
     assert response.status_code == 200
     assert response.json() == SUPPORTED_MODELS

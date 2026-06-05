@@ -12,6 +12,7 @@ interface QueryDisplayProps {
   onNavigateHistory: (direction: 'prev' | 'next') => void;
   isTransferable?: boolean;
   onOpenInExplorer?: () => void;
+  canWrite?: boolean;
 }
 
 const WRITE_OPERATION_REGEX = /\.(insert_one|insert_many|update_one|update_many|replace_one|delete_one|delete_many|bulk_write|drop|drop_index|drop_indexes|create_index|create_indexes|rename_collection)\s*\(/i;
@@ -32,7 +33,7 @@ const detectQueryType = (code: string): string => {
 const QueryDisplay: React.FC<QueryDisplayProps> = ({
   code, onCodeChange, onRunQuery, onSaveQuery,
   isExecuting, historyCount, historyIndex, onNavigateHistory,
-  isTransferable, onOpenInExplorer,
+  isTransferable, onOpenInExplorer, canWrite = true,
 }) => {
   const [copied, setCopied] = useState(false);
   const [allowWrite, setAllowWrite] = useState(false);
@@ -51,7 +52,8 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({
     }).catch(err => console.error('Failed to copy:', err));
   };
 
-  const isRunDisabled = isExecuting || (isWriteOperation && !allowWrite);
+  const writeBlocked = isWriteOperation && !canWrite;
+  const isRunDisabled = isExecuting || writeBlocked || (isWriteOperation && !allowWrite);
 
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -157,7 +159,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({
         </button>
       </div>
 
-      {/* Write acknowledge */}
+      {/* Write acknowledge / permission gate */}
       {isWriteOperation && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10, marginTop: 8,
@@ -165,28 +167,39 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({
           background: 'color-mix(in oklch, #c94250 8%, var(--bg))',
           border: '1px solid color-mix(in oklch, #c94250 22%, var(--border))',
         }}>
-          <span style={{ fontSize: 12, color: '#c94250', flex: 1 }}>
-            Write operation detected — acknowledge to enable Run
-          </span>
-          <div
-            onClick={() => setAllowWrite(!allowWrite)}
-            role="switch"
-            aria-checked={allowWrite}
-            id="allow-write-toggle"
-            title="Toggle to acknowledge write operation"
-            style={{
-              width: 36, height: 20, borderRadius: 99, cursor: 'pointer', flexShrink: 0,
-              background: allowWrite ? 'var(--accent)' : 'var(--border)',
-              position: 'relative', transition: 'background 0.2s',
-            }}
-          >
-            <span style={{
-              position: 'absolute', top: 2,
-              left: allowWrite ? 18 : 2,
-              width: 16, height: 16, borderRadius: 99,
-              background: 'white', transition: 'left 0.2s',
-            }} />
-          </div>
+          {writeBlocked ? (
+            <span style={{ fontSize: 12, color: '#c94250', flex: 1, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              Write operations are disabled for your role. Contact an Admin to request access.
+            </span>
+          ) : (
+            <>
+              <span style={{ fontSize: 12, color: '#c94250', flex: 1 }}>
+                Write operation detected — acknowledge to enable Run
+              </span>
+              <div
+                onClick={() => setAllowWrite(!allowWrite)}
+                role="switch"
+                aria-checked={allowWrite}
+                id="allow-write-toggle"
+                title="Toggle to acknowledge write operation"
+                style={{
+                  width: 36, height: 20, borderRadius: 99, cursor: 'pointer', flexShrink: 0,
+                  background: allowWrite ? 'var(--accent)' : 'var(--border)',
+                  position: 'relative', transition: 'background 0.2s',
+                }}
+              >
+                <span style={{
+                  position: 'absolute', top: 2,
+                  left: allowWrite ? 18 : 2,
+                  width: 16, height: 16, borderRadius: 99,
+                  background: 'white', transition: 'left 0.2s',
+                }} />
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -206,6 +219,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({
           disabled={isRunDisabled}
           className="qa-btn primary"
           aria-label={isExecuting ? 'Running' : 'Run query'}
+          title={writeBlocked ? 'Write operations require Analyst or Admin role' : undefined}
           style={{ fontSize: 12 }}
         >
           {isExecuting ? 'Running' : 'Run'}

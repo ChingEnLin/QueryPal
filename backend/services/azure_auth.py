@@ -1,13 +1,84 @@
 import base64
 import json
+from dataclasses import dataclass, field
 from os import environ as env
 import msal
 from typing import Optional
+import jwt
+from jwt import PyJWKClient
+from fastapi import HTTPException
 
 TENANT_ID = env.get("AZURE_TENANT_ID")
 CLIENT_ID = env.get("AZURE_CLIENT_ID")
 CLIENT_SECRET = env.get("AZURE_CLIENT_SECRET")
 ARM_SCOPE = env.get("ARM_SCOPE")
+
+SKIP_JWT_VERIFICATION: bool = env.get("SKIP_JWT_VERIFICATION", "").lower() == "true"
+
+_jwks_client: Optional[PyJWKClient] = None
+
+
+def _get_jwks_client() -> PyJWKClient:
+    global _jwks_client
+    if _jwks_client is None:
+        if not TENANT_ID:
+            raise ValueError("AZURE_TENANT_ID not configured")
+        _jwks_client = PyJWKClient(
+            f"https://login.microsoftonline.com/{TENANT_ID}/discovery/v2.0/keys"
+        )
+    return _jwks_client
+
+
+def _verify_and_decode(token: str) -> dict:
+    """Verify JWT signature and return the decoded payload.
+
+    When SKIP_JWT_VERIFICATION is True (dev/test), falls back to raw base64
+    decode without signature check. In all other cases, verifies the RS256
+    signature against Azure's JWKS and validates audience + tenant.
+    Raises HTTPException(401) on all failures (auth or misconfiguration) —
+    never returns partial data.
+    """
+    if SKIP_JWT_VERIFICATION:
+        parts = token.split(".")
+        if len(parts) < 2:
+            raise HTTPException(status_code=401, detail="Invalid token format")
+        try:
+            padding = "=" * (-len(parts[1]) % 4)
+            return json.loads(base64.urlsafe_b64decode(parts[1] + padding))
+        except Exception:
+            raise HTTPException(status_code=401, detail="Token validation failed")
+
+    if not TENANT_ID:
+        raise HTTPException(
+            status_code=500, detail="Server misconfigured: missing TENANT_ID"
+        )
+    if not CLIENT_ID:
+        raise HTTPException(
+            status_code=500, detail="Server misconfigured: missing CLIENT_ID"
+        )
+
+    try:
+        client = _get_jwks_client()
+        signing_key = client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=[CLIENT_ID, f"api://{CLIENT_ID}"],
+            options={"verify_iss": False},
+        )
+        valid_issuers = {
+            f"https://login.microsoftonline.com/{TENANT_ID}/v2.0",
+            f"https://sts.windows.net/{TENANT_ID}/",
+        }
+        if payload.get("iss") not in valid_issuers:
+            raise HTTPException(status_code=401, detail="Token issuer invalid")
+        return payload
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token validation failed")
+
 
 _app: Optional[msal.ConfidentialClientApplication] = None
 
@@ -37,24 +108,39 @@ def exchange_token_obo(user_token: str) -> str:
     return result["access_token"]
 
 
-def extract_email_from_token(jwt: str) -> Optional[str]:
-    """Decode the JWT payload to pull the caller's email.
+@dataclass
+class TokenClaims:
+    email: Optional[str] = None
+    roles: list[str] = field(default_factory=list)
+    oid: Optional[str] = None
+    display_name: Optional[str] = None
 
-    No signature check — Azure already validated this token during the OBO
-    exchange the caller just performed. We only need to read claims.
+
+def extract_claims_from_token(token: str) -> TokenClaims:
+    """Verify JWT signature then extract caller identity and Entra App Roles.
+
+    Raises HTTPException(401) if the token is invalid or signature fails.
     """
-    try:
-        parts = jwt.split(".")
-        if len(parts) < 2:
-            return None
-        payload_b64 = parts[1]
-        # JWT base64url, no padding
-        padding = "=" * (-len(payload_b64) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(payload_b64 + padding))
-        for key in ("preferred_username", "email", "upn", "unique_name"):
-            value = payload.get(key)
-            if value:
-                return str(value)
-    except Exception:
-        return None
-    return None
+    payload = _verify_and_decode(token)
+    email = next(
+        (
+            str(payload[k])
+            for k in ("preferred_username", "email", "upn", "unique_name")
+            if k in payload
+        ),
+        None,
+    )
+    roles = payload.get("roles") or []
+    if not isinstance(roles, list):
+        roles = [str(roles)]
+    return TokenClaims(
+        email=email,
+        roles=[str(r) for r in roles],
+        oid=payload.get("oid"),
+        display_name=payload.get("name"),
+    )
+
+
+def extract_email_from_token(token: str) -> Optional[str]:
+    """Backward-compatible helper returning just the caller email."""
+    return extract_claims_from_token(token).email

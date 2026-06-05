@@ -45,7 +45,12 @@ def _patch_common(
     """Patch out auth + storage so the route test runs without real deps."""
     calls: dict[str, Any] = {"rate_args": None}
 
-    monkeypatch.setattr("routes.argus.extract_email_from_token", lambda _t: email)
+    from services.azure_auth import TokenClaims
+
+    monkeypatch.setattr(
+        "services.rbac.extract_claims_from_token",
+        lambda _t: TokenClaims(email=email, roles=["Analyst"]),
+    )
     monkeypatch.setattr("routes.argus.exchange_token_obo", lambda _t: "arm-token")
     monkeypatch.setattr("routes.argus._accessible_account_ids", lambda _t: accessible)
     monkeypatch.setattr("routes.argus.get_report_store", lambda: store)
@@ -179,5 +184,5 @@ def test_rate_finding_requires_bearer_token(client) -> None:  # type: ignore[no-
         headers={"authorization": "Basic foo"},
         json={"label": "tp"},
     )
-    # _require_caller_email rejects non-Bearer formats with 401.
+    # require() (from services.rbac) rejects non-Bearer formats with 401.
     assert resp.status_code == 401

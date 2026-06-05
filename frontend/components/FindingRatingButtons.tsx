@@ -13,7 +13,8 @@ export const FindingRatingButtons: React.FC<{
   findingId: string;
   value: ArgusUserLabel | null | undefined;
   onChange?: (label: ArgusUserLabel) => void;
-}> = ({ reportId, findingId, value, onChange }) => {
+  disabled?: boolean;
+}> = ({ reportId, findingId, value, onChange, disabled }) => {
   const [busy, setBusy] = useState<ArgusUserLabel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [local, setLocal] = useState<ArgusUserLabel | null>(value ?? null);
@@ -22,7 +23,7 @@ export const FindingRatingButtons: React.FC<{
   React.useEffect(() => { setLocal(value ?? null); }, [value, findingId]);
 
   const submit = async (label: ArgusUserLabel) => {
-    if (busy || local === label) return;
+    if (busy || local === label || disabled) return;
     const previous = local;
     setBusy(label);
     setError(null);
@@ -47,8 +48,8 @@ export const FindingRatingButtons: React.FC<{
         key={label}
         type="button"
         onClick={() => submit(label)}
-        disabled={!!busy}
-        title={isTp ? 'Mark this finding as a true positive' : 'Mark this finding as a false positive'}
+        disabled={!!busy || disabled}
+        title={disabled ? 'Requires Analyst or Admin role' : isTp ? 'Mark this finding as a true positive' : 'Mark this finding as a false positive'}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
           padding: '3px 8px', borderRadius: 999, fontSize: 11,
@@ -56,8 +57,8 @@ export const FindingRatingButtons: React.FC<{
           border: `1px solid ${selected ? accent : 'var(--border)'}`,
           background: selected ? `color-mix(in oklch, ${accent} 12%, var(--panel))` : 'var(--panel)',
           color: selected ? accent : 'var(--muted)',
-          cursor: busy ? 'progress' : 'pointer',
-          opacity: busy && busy !== label ? 0.6 : 1,
+          cursor: disabled ? 'default' : busy ? 'progress' : 'pointer',
+          opacity: disabled || (busy && busy !== label) ? 0.4 : 1,
           transition: 'background 0.12s, color 0.12s, border-color 0.12s',
         }}
       >

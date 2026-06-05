@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -40,7 +40,8 @@ from services.argus_store import (
     set_finding_rating,
     set_report_created_by,
 )
-from services.azure_auth import exchange_token_obo, extract_email_from_token
+from services.azure_auth import exchange_token_obo
+from services.rbac import Caller, require
 from services.azure_cosmos_resources import (
     get_connection_string,
     list_cosmos_resources,
@@ -467,12 +468,13 @@ async def _execute_job(
 
 
 @router.post("/run")
-async def run_audit(req: AuditRequest, authorization: str = Header(...)):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
+async def run_audit(
+    req: AuditRequest,
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("argus:write")),
+):
     user_token = authorization[7:]
-    caller_email = extract_email_from_token(user_token)
+    caller_email = caller.email
     if not _queue_has_capacity():
         raise HTTPException(
             status_code=429,
@@ -498,10 +500,11 @@ async def run_audit(req: AuditRequest, authorization: str = Header(...)):
 
 
 @router.get("/runs/{job_id}")
-async def get_run(job_id: str, authorization: str = Header(...)):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-    caller_email = extract_email_from_token(authorization[7:])
+async def get_run(
+    job_id: str,
+    caller: Caller = Depends(require("query:read")),
+):
+    caller_email = caller.email
     job = _JOBS.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -527,8 +530,8 @@ async def get_run(job_id: str, authorization: str = Header(...)):
 @router.get("/runs/{job_id}/events")
 async def get_run_events(
     job_id: str,
-    authorization: str = Header(...),
     cursor: int = Query(default=0, ge=0),
+    caller: Caller = Depends(require("query:read")),
 ):
     """Live event snapshot for a still-running job.
 
@@ -540,9 +543,7 @@ async def get_run_events(
     Reuses the same caller-scoping rule as `get_run`: cross-tenant attempts
     return 404, not 403, to avoid leaking job existence.
     """
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-    caller_email = extract_email_from_token(authorization[7:])
+    caller_email = caller.email
     job = _JOBS.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -563,9 +564,8 @@ async def list_runs(
     database: Optional[str] = Query(default=None),
     collection: Optional[str] = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
+    caller: Caller = Depends(require("query:read")),
 ):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
     user_token = authorization[7:]
     try:
         access_token = await run_in_threadpool(exchange_token_obo, user_token)
@@ -589,9 +589,11 @@ async def list_runs(
 
 
 @router.get("/reports/{report_id}")
-async def get_report(report_id: str, authorization: str = Header(...)):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
+async def get_report(
+    report_id: str,
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
+):
     user_token = authorization[7:]
     store = get_report_store()
     if store is None:
@@ -666,27 +668,21 @@ class ProfileCreate(BaseModel):
     argus_overrides: dict[str, Any] = {}
 
 
-def _require_caller_email(authorization: str) -> str:
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-    email = extract_email_from_token(authorization[7:])
-    if not email:
-        raise HTTPException(status_code=401, detail="Caller identity missing")
-    return email
-
-
 @router.get("/profiles")
-async def list_saved_profiles(authorization: str = Header(...)):
-    email = _require_caller_email(authorization)
+async def list_saved_profiles(
+    caller: Caller = Depends(require("self:manage")),
+):
+    email = caller.email
     rows = await run_in_threadpool(list_profiles, email)
     return JSONResponse(content={"profiles": rows})
 
 
 @router.post("/profiles")
 async def create_saved_profile(
-    payload: ProfileCreate, authorization: str = Header(...)
+    payload: ProfileCreate,
+    caller: Caller = Depends(require("argus:write")),
 ):
-    email = _require_caller_email(authorization)
+    email = caller.email
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Name is required")
@@ -709,8 +705,11 @@ async def create_saved_profile(
 
 
 @router.delete("/profiles/{profile_id}")
-async def delete_saved_profile(profile_id: str, authorization: str = Header(...)):
-    email = _require_caller_email(authorization)
+async def delete_saved_profile(
+    profile_id: str,
+    caller: Caller = Depends(require("argus:write")),
+):
+    email = caller.email
     ok = await run_in_threadpool(
         delete_profile, profile_id=profile_id, user_email=email
     )
@@ -734,6 +733,7 @@ async def rate_finding(
     finding_id: str,
     payload: FindingRating,
     authorization: str = Header(...),
+    caller: Caller = Depends(require("argus:write")),
 ):
     """Record a human verdict (TP / FP) on a single persisted finding.
 
@@ -742,7 +742,7 @@ async def rate_finding(
     existence. The label is also written into ``raw_report`` JSONB so the next
     ``GET /argus/reports/{id}`` reflects it without an extra join.
     """
-    email = _require_caller_email(authorization)
+    email = caller.email
     user_token = authorization[7:]
     store = get_report_store()
     if store is None:

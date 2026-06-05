@@ -7,6 +7,7 @@ import AnalyticsPageWrapper from './pages/AnalyticsPageWrapper';
 import NotFoundPage from './pages/NotFoundPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import AuditPage from './pages/AuditPage';
+import AdminPage from './pages/AdminPage';
 
 export const router = createBrowserRouter([
   {
@@ -70,6 +71,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <DataExplorerPageWrapper />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/admin",
+    element: (
+      <ProtectedRoute>
+        <AdminPage />
       </ProtectedRoute>
     ),
   },

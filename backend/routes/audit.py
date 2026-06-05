@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Header, Body, HTTPException
+from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-from services.audit_service import process_audit_question, get_recent_activity
+from services.audit_service import (
+    process_audit_question,
+    get_recent_activity,
+    get_audit_events,
+)
 from services.gemini_service import VisualizationConfig
-from services.user_queries_service import get_user_id_from_token
+from services.rbac import require, Caller
 
 router = APIRouter()
 
@@ -29,20 +33,55 @@ class RecentActivityItem(BaseModel):
     timestamp_utc: str
 
 
+class AuditEventItem(BaseModel):
+    user_email: str
+    operation: str
+    database_name: str
+    collection_name: str
+    document_id: Optional[str] = None
+    diff_data: Optional[Any] = None
+    timestamp_utc: str
+
+
+@router.get("/events", response_model=List[AuditEventItem])
+def audit_events(
+    days: int = 90,
+    limit: int = 1000,
+    account: Optional[str] = None,
+    caller: Caller = Depends(require("audit:read")),
+):
+    return get_audit_events(
+        days=min(days, 365), limit=min(limit, 5000), account=account
+    )
+
+
+@router.get("/events/mine", response_model=List[AuditEventItem])
+def my_audit_events(
+    days: int = 90,
+    limit: int = 1000,
+    account: Optional[str] = None,
+    caller: Caller = Depends(require("self:manage")),
+):
+    return get_audit_events(
+        days=min(days, 365),
+        limit=min(limit, 1000),
+        account=account,
+        user_email=caller.email,
+    )
+
+
 @router.post("/query", response_model=AuditQueryResponse)
 def query_audit_log(
-    body: AuditQueryRequest = Body(...), authorization: str = Header(...)
+    body: AuditQueryRequest = Body(...),
+    caller: Caller = Depends(require("audit:read")),
 ):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
     response = process_audit_question(body.question, model=body.model)
     return AuditQueryResponse(**response)
 
 
 @router.get("/recent", response_model=List[RecentActivityItem])
-def recent_activity(authorization: str = Header(...), limit: int = 10):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-    user_email = get_user_id_from_token(authorization.replace("Bearer ", ""))
-    return get_recent_activity(user_email=user_email, limit=min(limit, 50))
+def recent_activity(
+    limit: int = 10,
+    caller: Caller = Depends(require("self:manage")),
+):
+    return get_recent_activity(user_email=caller.email, limit=min(limit, 50))
