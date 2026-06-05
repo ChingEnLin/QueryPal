@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
+import { useRoles } from '../hooks/useRoles';
 
 const UserMenuButton: React.FC = () => {
   const { user, logout } = useUnifiedAuth();
+  const { can } = useRoles();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
@@ -93,6 +95,29 @@ const UserMenuButton: React.FC = () => {
               Saved queries
             </button>
           </div>
+
+          {/* Admin link */}
+          {can('system:admin') && (
+            <div style={{ padding: '0 6px' }}>
+              <button
+                onClick={() => { setShowUserMenu(false); navigate('/admin'); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                  padding: '7px 10px', borderRadius: 7, border: 'none',
+                  background: 'transparent', color: 'var(--fg)',
+                  fontSize: 12.5, fontFamily: 'var(--font-body)', cursor: 'pointer', textAlign: 'left',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" style={{ color: 'var(--muted)', flexShrink: 0 }}>
+                  <circle cx="8" cy="5" r="3"/>
+                  <path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/>
+                </svg>
+                Role management
+              </button>
+            </div>
+          )}
 
           {/* Divider */}
           <div style={{ height: 1, background: 'var(--border)', margin: '0 6px' }} />
