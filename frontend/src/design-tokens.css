@@ -55,12 +55,14 @@ html.dark {
   white-space: nowrap;
 }
 .qa-btn:hover { background: var(--soft); }
+.qa-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 .qa-btn.primary {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
 .qa-btn.primary:hover { opacity: 0.9; }
+.qa-btn.primary:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 
 .qa-chip {
   display: inline-flex;
