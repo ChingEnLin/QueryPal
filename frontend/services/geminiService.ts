@@ -3,6 +3,7 @@ import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
 import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery, mockDebuggingResult, mockAnalysisResult } from './mockData';
 import { msalInstance, loginRequest } from '../authConfig';
 import { getAuthErrorMessage } from '../utils/authErrorHandler';
+import { getAuthenticatedToken } from './dbService';
 
 /**
  * Sends the user's natural language prompt to the backend for processing by the Gemini API.
@@ -19,7 +20,10 @@ export const getAvailableModels = async (): Promise<string[]> => {
         return ['gemini-2.5-flash', 'gemini-2.0-flash'];
     }
     try {
-        const response = await fetch(`${API_BASE_URL}/query/models`);
+        const token = await getAuthenticatedToken();
+        const response = await fetch(`${API_BASE_URL}/query/models`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
         if (!response.ok) return ['gemini-2.5-flash'];
         return await response.json();
     } catch {

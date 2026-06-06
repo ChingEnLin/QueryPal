@@ -66,6 +66,54 @@ def get_recent_activity(user_email: str, limit: int = 10) -> List[Dict[str, Any]
         return []
 
 
+def get_audit_events(
+    days: int = 90, limit: int = 1000, account: str = None, user_email: str = None
+) -> List[Dict[str, Any]]:
+    """Returns recent write_audit_log rows with full diff_data, newest first.
+
+    When ``user_email`` is provided, results are scoped to that actor only
+    (used for the Analyst self-view). When ``account`` is provided, results
+    are scoped to that Cosmos account.
+    """
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        where = "WHERE timestamp_utc >= NOW() - make_interval(days => %s)"
+        params: List[Any] = [days]
+        if account:
+            where += " AND split_part(database_name, '.', 1) = %s"
+            params.append(account)
+        if user_email:
+            where += " AND user_email = %s"
+            params.append(user_email)
+        params.append(limit)
+        cur.execute(
+            f"""
+            SELECT user_email, operation, database_name, collection_name,
+                   document_id, diff_data, timestamp_utc
+            FROM write_audit_log
+            {where}
+            ORDER BY timestamp_utc DESC
+            LIMIT %s
+            """,
+            params,
+        )
+        columns = [desc[0] for desc in cur.description]
+        rows = []
+        for row in cur.fetchall():
+            item = dict(zip(columns, row))
+            ts = item.get("timestamp_utc")
+            if hasattr(ts, "isoformat"):
+                item["timestamp_utc"] = ts.isoformat()
+            rows.append(item)
+        cur.close()
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"Error fetching audit events: {e}")
+        return []
+
+
 def process_audit_question(
     question: str, model: str = "gemini-2.5-flash"
 ) -> Dict[str, Any]:

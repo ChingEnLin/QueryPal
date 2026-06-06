@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, Body, HTTPException
+from fastapi import APIRouter, Depends, Header, Body, HTTPException
 from typing import List
 from services.azure_auth import exchange_token_obo
 from services.azure_cosmos_resources import (
@@ -29,7 +29,7 @@ from models.analyze import AnalyzeRequest, AnalyzeResponse
 from services.analyze_service import analyze_query_result
 from services.evaluate_write_service import evaluate_write_result
 from services.data_documents_service import log_write_operation
-from services.user_queries_service import get_user_id_from_token
+from services.rbac import require, Caller
 from pymongo.results import (
     UpdateResult,
     InsertOneResult,
@@ -72,10 +72,11 @@ def extract_collection_name(query_str: str) -> str:
 
 
 @router.post("/nl2query")
-def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
+def nl2query(
+    prompt: QueryPrompt = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
+):
     try:
         user_token = authorization.replace("Bearer ", "")
         access_token = exchange_token_obo(user_token)
@@ -140,11 +141,10 @@ def nl2query(prompt: QueryPrompt = Body(...), authorization: str = Header(...)):
 
 @router.post("/infer-relationships", response_model=SchemaRelationshipsResponse)
 def infer_relationships(
-    request: SchemaRelationshipsRequest = Body(...), authorization: str = Header(...)
+    request: SchemaRelationshipsRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
 ):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
     try:
         user_token = authorization.replace("Bearer ", "")
         access_token = exchange_token_obo(user_token)
@@ -165,10 +165,11 @@ def infer_relationships(
 
 
 @router.post("/execute")
-def execute(query: ExecuteInput = Body(...), authorization: str = Header(...)):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
+def execute(
+    query: ExecuteInput = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
+):
     user_token = authorization.replace("Bearer ", "")
     access_token = exchange_token_obo(user_token)
     connection_string = get_connection_string(query.account_id, access_token)
@@ -184,7 +185,7 @@ def execute(query: ExecuteInput = Body(...), authorization: str = Header(...)):
         result, (UpdateResult, InsertOneResult, InsertManyResult, DeleteResult)
     ):
         try:
-            user_email = get_user_id_from_token(user_token)
+            user_email = caller.email
 
             operation = "query_generator"
             if isinstance(result, UpdateResult):
@@ -226,7 +227,9 @@ def execute(query: ExecuteInput = Body(...), authorization: str = Header(...)):
 
 
 @router.post("/debug", response_model=DebugSuggestionResponse)
-def debug(body: DebugQueryRequest = Body(...)):
+def debug(
+    body: DebugQueryRequest = Body(...), caller: Caller = Depends(require("query:read"))
+):
     """
     Sends a failed query and error message to Gemini for debugging suggestion.
     """
@@ -236,7 +239,9 @@ def debug(body: DebugQueryRequest = Body(...)):
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-def analyze(body: AnalyzeRequest = Body(...)):
+def analyze(
+    body: AnalyzeRequest = Body(...), caller: Caller = Depends(require("query:read"))
+):
     """
     Sends a query result to the AI for analysis and visualization suggestions.
     """
@@ -245,15 +250,14 @@ def analyze(body: AnalyzeRequest = Body(...)):
 
 @router.post("/evaluate-write", response_model=EvaluateWriteResponse)
 def evaluate_write(
-    body: EvaluateWriteRequest = Body(...), authorization: str = Header(...)
+    body: EvaluateWriteRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("data:write")),
 ):
     """
     Evaluates the result of a write operation against the user's original intent.
     Requires authentication via Bearer token.
     """
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
     user_token = authorization.replace("Bearer ", "")
     access_token = exchange_token_obo(user_token)
     try:
@@ -288,7 +292,7 @@ SUPPORTED_MODELS = [
 
 
 @router.get("/models", response_model=List[str])
-def list_models():
+def list_models(caller: Caller = Depends(require("query:read"))):
     """
     Returns the intersection of our supported-model allowlist and the
     models actually available to the configured API key. Intentionally

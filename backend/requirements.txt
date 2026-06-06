@@ -12,6 +12,7 @@ psycopg2-binary
 requests
 pymongo
 msal
+PyJWT[crypto]
 langgraph
 langchain-google-genai
 langchain-core

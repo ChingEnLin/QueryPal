@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, Body, HTTPException
+from fastapi import APIRouter, Header, Body, Depends
 from services.azure_auth import exchange_token_obo
 from services.azure_cosmos_resources import (
     list_cosmos_resources,
@@ -6,16 +6,17 @@ from services.azure_cosmos_resources import (
     get_cosmosdb_info_from_conn_str,
     get_collection_info_with_conn_str,
 )
+from services.rbac import require, Caller
 from models.schemas import AccountDetailsRequest, CollectionInfoRequest
 
 router = APIRouter()
 
 
 @router.get("/cosmos_accounts")
-def get_cosmos_resources(authorization: str = Header(...)):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
+def get_cosmos_resources(
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
+):
     user_token = authorization.replace("Bearer ", "")
     access_token = exchange_token_obo(user_token)
     return list_cosmos_resources(access_token)
@@ -23,11 +24,10 @@ def get_cosmos_resources(authorization: str = Header(...)):
 
 @router.post("/account_details")
 def get_account_details(
-    data: AccountDetailsRequest = Body(...), authorization: str = Header(...)
+    data: AccountDetailsRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
 ):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
     user_token = authorization.replace("Bearer ", "")
     access_token = exchange_token_obo(user_token)
     connection_string = get_connection_string(data.account_id, access_token)
@@ -36,10 +36,10 @@ def get_account_details(
 
 @router.post("/collection_info")
 def get_collection_info(
-    data: CollectionInfoRequest = Body(...), authorization: str = Header(...)
+    data: CollectionInfoRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
 ):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token format")
     user_token = authorization.replace("Bearer ", "")
     access_token = exchange_token_obo(user_token)
     connection_string = get_connection_string(data.account_id, access_token)

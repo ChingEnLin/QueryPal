@@ -22,6 +22,7 @@ import { ArgusTrendsPanel } from '../components/ArgusTrendsPanel';
 import { useNotifications } from '../contexts/NotificationsContext';
 import { FindingRatingButtons } from '../components/FindingRatingButtons';
 import { getAvailableModels } from '../services/geminiService';
+import { useRoles } from '../hooks/useRoles';
 
 const DEFAULT_MAX_ITER = 20;
 const DEFAULT_SAMPLE_SIZE = 200;
@@ -454,6 +455,8 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
 }) => {
   const hasConnection = !!(accountId && databaseName);
   const { trackArgusRun } = useNotifications();
+  const { can } = useRoles();
+  const canWrite = can('argus:write');
   const setCollection = onCollectionChange;
   const [profile, setProfile] = useState<ArgusProfile>('fast');
   const [selectedModel, setSelectedModel] = useState<string>(
@@ -948,9 +951,10 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
           </button>
           <button
             className="qa-btn primary"
-            disabled={!hasConnection || !collection || loading}
+            disabled={!hasConnection || !collection || loading || !canWrite}
             onClick={runAudit}
-            style={{ gap: 6, opacity: !hasConnection || !collection || loading ? 0.6 : 1 }}
+            title={!canWrite ? 'Requires Analyst or Admin role' : undefined}
+            style={{ gap: 6, opacity: !hasConnection || !collection || loading || !canWrite ? 0.6 : 1 }}
           >
             {loading ? (
               <>
@@ -1394,6 +1398,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
           openingReportId={openingReportId}
           onSelectHistorical={loadHistoricalReport}
           onRateFinding={handleRateFinding}
+          canWrite={canWrite}
         />
       ) : report ? (
         <EmptyState title="No findings" body="QueryArgus completed without flagging any data-quality issues in this collection." />
@@ -1612,7 +1617,8 @@ const ReportBody: React.FC<{
   openingReportId: string | null;
   onSelectHistorical: (reportId: string) => void;
   onRateFinding: (findingId: string, label: 'tp' | 'fp') => void;
-}> = ({ report, findings, sel, selId, onSelect, activeTab, onTabChange, history, historyLoading, openingReportId, onSelectHistorical, onRateFinding }) => {
+  canWrite: boolean;
+}> = ({ report, findings, sel, selId, onSelect, activeTab, onTabChange, history, historyLoading, openingReportId, onSelectHistorical, onRateFinding, canWrite }) => {
   const { counts } = report;
   const score = report.quality_score ?? 0;
   const scoreBand = score >= 80 ? 'Good' : score >= 60 ? 'Moderate' : 'Poor';
@@ -2091,6 +2097,7 @@ const ReportBody: React.FC<{
               findingId={sel.id}
               value={sel.user_label ?? null}
               onChange={(label) => onRateFinding(sel.id, label)}
+              disabled={!canWrite}
             />
           </div>
         </div>

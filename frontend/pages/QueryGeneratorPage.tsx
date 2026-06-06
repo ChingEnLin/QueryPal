@@ -10,6 +10,7 @@ import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResou
 import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult, mockSavedQueries } from '../services/mockData';
 import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
 import QueryDisplay from '../components/QueryDisplay';
+import { useRoles } from '../hooks/useRoles';
 import QueryResult from '../components/QueryResult';
 import Loader from '../components/Loader';
 import Tutorial from '../components/Tutorial';
@@ -416,6 +417,7 @@ export interface QueryGeneratorPageProps {
 // --- Main Page Component ---
 const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, onLogout, onNavigateToExplorer, onConnectionChange, embedded = false, preselectedAccountId, sidebarCollectionClick, onSelectedCollectionsChange }) => {
   const navigate = useNavigate();
+  const { can } = useRoles();
 
   const [userInput, setUserInput] = useState<string>(() => {
     try {
@@ -2556,7 +2558,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
           {(!isLoading && !error && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep && !isDemoModeForSaveStep) && (
             editableCode ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} isTransferable={!!handover} onOpenInExplorer={handleOpenInExplorer} />
+                <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} isTransferable={!!handover} onOpenInExplorer={handleOpenInExplorer} canWrite={can('data:write')} />
                 <QueryResult isExecuting={isExecuting} executionError={executionError} executionResult={executionResult} onDebug={handleDebugQuery} isDebugging={isDebugging} debuggingResult={debuggingResult} debugError={debugError} sourceCollection={querySourceCollection} onSetIntermediateContext={handleSetIntermediateContext} intermediateContext={intermediateContext} onAnalyze={handleAnalyzeQuery} isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError} onEvaluateWrite={handleEvaluateWrite} isEvaluatingWrite={isEvaluatingWrite} writeEvaluationResult={writeEvaluationResult} writeEvaluationError={writeEvaluationError} />
               </div>
             ) : (
