@@ -1,3 +1,18 @@
+## [2.14.0](https://github.com/ChingEnLin/QueryPal/compare/v2.13.0...v2.14.0) (2026-06-06)
+
+### Features
+
+* **rbac:** JWT verification, role-based access control, and admin role management UI ([#41](https://github.com/ChingEnLin/QueryPal/issues/41)) ([adb1667](https://github.com/ChingEnLin/QueryPal/commit/adb16672f5c065a60df8766fadc05971a0c20d88))
+* **ux:** hub recents, ⌘K palette, saved-query search, write-op guards ([#43](https://github.com/ChingEnLin/QueryPal/issues/43)) ([81ea908](https://github.com/ChingEnLin/QueryPal/commit/81ea908ed2f855b9e1f401cda4baac0c0d465ea6))
+
+### Maintenance
+
+* resolve merge conflicts for dev → production ([21fbfc4](https://github.com/ChingEnLin/QueryPal/commit/21fbfc4d4ecab67b3da29c5e95d9ab320712af52))
+
+### Documentation
+
+* update README, architecture, and development docs with recent features ([8ef232d](https://github.com/ChingEnLin/QueryPal/commit/8ef232d39269304d8afbfb078ef0a4c2e6f0f1e4))
+
 ## [2.13.0](https://github.com/ChingEnLin/QueryPal/compare/v2.12.0...v2.13.0) (2026-06-06)
 
 ### Features
