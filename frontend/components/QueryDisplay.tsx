@@ -219,7 +219,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({
           disabled={isRunDisabled}
           className="qa-btn primary"
           aria-label={isExecuting ? 'Running' : 'Run query'}
-          title={writeBlocked ? 'Write operations require Analyst or Admin role' : undefined}
+          title={writeBlocked ? 'Write operations require Analyst or Admin role' : (isWriteOperation && !allowWrite) ? 'Acknowledge the write operation above to enable Run' : undefined}
           style={{ fontSize: 12 }}
         >
           {isExecuting ? 'Running' : 'Run'}

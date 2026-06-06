@@ -7,6 +7,23 @@
 - Docker & Docker Compose
 - Google Cloud SDK (for deployment)
 
+### Git submodules
+
+QueryPal uses `queryargus` as a git submodule under `backend/queryargus/`. After cloning, initialise it:
+
+```bash
+git submodule update --init --recursive
+```
+
+The submodule must be installed separately (its `pyproject.toml` pins `google-genai<1` which conflicts with the main requirements, so `--no-deps` is used):
+
+```bash
+cd backend
+pip install --no-deps -e ./queryargus
+```
+
+This is required before running the backend locally or the test suite.
+
 ---
 
 ## Running Locally

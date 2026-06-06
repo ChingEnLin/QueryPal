@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useRoles } from '../hooks/useRoles';
 import { API_BASE_URL, USE_MSAL_AUTH } from '../app.config';
 import AppLayout from '../components/AppLayout';
 import ChartDisplay, { VisualizationConfig } from '../components/ChartDisplay';
 import { MOCK_AUDIT_EVENTS } from '../services/mockAuditData';
-import { getDatabasesForAccount } from '../services/dbService';
+import { getDatabasesForAccount, getAzureCosmosAccounts } from '../services/dbService';
 import { CosmosDBAccount, DbInfo, CollectionSummary } from '../types';
 
 /* ── session connection (shared shape written by the connect flow) ────────── */
@@ -304,8 +305,25 @@ function ValueCell({ value }: { value: any }) {
     return <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg)', wordBreak: 'break-word' }}>{typeof value === 'string' ? `"${value}"` : String(value)}</span>;
 }
 
-function DiffDrawer({ event, onClose, now }: { event: AuditEvent | null; onClose: () => void; now: number }) {
+function DiffDrawer({ event, onClose, now, availableAccounts }: {
+    event: AuditEvent | null; onClose: () => void; now: number;
+    availableAccounts: CosmosDBAccount[];
+}) {
+    const navigate = useNavigate();
     if (!event) return null;
+
+    // event.database_name is stored as "accountName.databaseName"
+    const dbParts = event.database_name.split('.');
+    const eventAccountName = dbParts[0];
+    const eventDatabaseName = dbParts.slice(1).join('.');
+    const resolvedAccountId = availableAccounts.find((a) => a.name === eventAccountName)?.id;
+
+    const canOpen =
+        event.operation !== 'delete' &&
+        event.document_id !== '—' &&
+        !!event.document_id &&
+        !!resolvedAccountId &&
+        !!eventDatabaseName;
     const o = OP[event.operation];
     const sysFields = ['datetime_creation', 'datetime_last_modified'];
     const diff = event.diff_data && typeof event.diff_data === 'object' ? event.diff_data : {};
@@ -382,7 +400,22 @@ function DiffDrawer({ event, onClose, now }: { event: AuditEvent | null; onClose
                 </div>
 
                 <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
-                    <button className="qa-btn" style={{ gap: 6 }}>
+                    <button
+                        className="qa-btn"
+                        disabled={!canOpen}
+                        title={
+                            event.operation === 'delete' ? 'Document was deleted' :
+                            (event.document_id === '—' || !event.document_id) ? 'Document ID unknown' :
+                            !resolvedAccountId ? 'Account not found in your connections' :
+                            undefined
+                        }
+                        style={{ gap: 6, opacity: canOpen ? 1 : 0.45, cursor: canOpen ? 'pointer' : 'not-allowed' }}
+                        onClick={() => {
+                            if (!canOpen) return;
+                            navigate(`/data-explorer/${encodeURIComponent(resolvedAccountId!)}/${encodeURIComponent(eventDatabaseName)}/document/${encodeURIComponent(event.document_id)}`);
+                            onClose();
+                        }}
+                    >
                         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 8l3 3 7-7" /></svg>
                         Open document
                     </button>
@@ -663,6 +696,7 @@ const AuditPage: React.FC = () => {
     const isAdmin = can('audit:read');
     const isAnalyst = !isAdmin && can('self:manage');
     const [allEvents, setAllEvents] = useState<AuditEvent[]>([]);
+    const [cosmosAccounts, setCosmosAccounts] = useState<CosmosDBAccount[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -697,18 +731,23 @@ const AuditPage: React.FC = () => {
                         : MOCK_AUDIT_EVENTS;
                     const rows = scoped.length ? scoped : MOCK_AUDIT_EVENTS;
                     if (!cancelled) setAllEvents(toEvents(rows));
+                    const accs = await getAzureCosmosAccounts();
+                    if (!cancelled) setCosmosAccounts(accs);
                     return;
                 }
                 const token = await getToken();
                 const params = new URLSearchParams({ days: '90', limit: '1000' });
                 if (scopedAccount) params.set('account', scopedAccount);
                 const endpoint = isAdmin ? 'events' : 'events/mine';
-                const res = await fetch(`${API_BASE_URL}/audit/${endpoint}?${params.toString()}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                const [res, accs] = await Promise.all([
+                    fetch(`${API_BASE_URL}/audit/${endpoint}?${params.toString()}`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }),
+                    getAzureCosmosAccounts(),
+                ]);
                 if (!res.ok) throw new Error('Failed to load audit events');
                 const raw: RawAuditEvent[] = await res.json();
-                if (!cancelled) setAllEvents(toEvents(raw));
+                if (!cancelled) { setAllEvents(toEvents(raw)); setCosmosAccounts(accs); }
             } catch (err: any) {
                 if (!cancelled) setLoadError(err.message || 'An error occurred');
             } finally {
@@ -934,7 +973,7 @@ const AuditPage: React.FC = () => {
                     </div>
                 )}
 
-                <DiffDrawer event={selected} onClose={() => setSelected(null)} now={now} />
+                <DiffDrawer event={selected} onClose={() => setSelected(null)} now={now} availableAccounts={cosmosAccounts} />
             </div>
         </AppLayout>
     );
