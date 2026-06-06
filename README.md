@@ -5,10 +5,38 @@ QueryPal lets you query, explore, and manage **Azure Cosmos DB (MongoDB API)** u
 
 **Key capabilities:**
 - Natural language → MongoDB query via Google Gemini + LangGraph ReAct agent
+- Cross-collection queries with automatic `$lookup` guidance and schema relationship inference
 - Paginated data explorer with filtering, multi-select, and document editing
+- Data quality analytics powered by [QueryArgus](https://github.com/ChingEnLin/QueryArgus) — configurable audit runs, live progress, per-user saved profiles
 - Saved queries, audit trails, and schema relationship graph
+- Role-based access control (RBAC): viewer / analyst / admin roles with JWT claim verification
+- Admin UI for managing user roles
 - Enterprise auth: Microsoft Entra ID with On-Behalf-Of (OBO) flow
 - Private backend: frontend nginx proxies all API calls internally — backend is unreachable from the internet
+
+---
+
+## Screenshots
+
+**Hub** — pick a Cosmos DB connection to start querying
+
+![Hub](docs/assets/screenshots/hub.png)
+
+**Query Generator** — describe what you need in plain English; the ReAct agent generates, tests, and refines the MongoDB query
+
+![Workspace](docs/assets/screenshots/workspace.png)
+
+**Data Explorer** — browse, filter, and edit documents with a resizable JSON panel
+
+![Explorer](docs/assets/screenshots/explorer.png)
+
+**Analytics** — run QueryArgus data-quality audits and review findings by severity
+
+![Analytics](docs/assets/screenshots/analytics.png)
+
+**Admin** — manage user roles (Admin, Analyst, Viewer) from the role management panel
+
+![RBAC](docs/assets/screenshots/rbac.png)
 
 ---
 
