@@ -1,3 +1,61 @@
+## [2.13.0](https://github.com/ChingEnLin/QueryPal/compare/v2.12.0...v2.13.0) (2026-06-06)
+
+### Features
+
+* **rbac:** JWT verification, role-based access control, and admin role management UI ([#41](https://github.com/ChingEnLin/QueryPal/issues/41)) ([#42](https://github.com/ChingEnLin/QueryPal/issues/42)) ([8c010c4](https://github.com/ChingEnLin/QueryPal/commit/8c010c4b29b31a3de23cea925cdcca2834d758be))
+
+## [2.12.0](https://github.com/ChingEnLin/QueryPal/compare/v2.11.0...v2.12.0) (2026-05-28)
+
+### Features
+
+* **argus:** structured observers + live progress polling ([#39](https://github.com/ChingEnLin/QueryPal/issues/39)) ([d0e02d7](https://github.com/ChingEnLin/QueryPal/commit/d0e02d7f2d66107c1e239b471b8987bfeef9b2af)), closes [#2](https://github.com/ChingEnLin/QueryPal/issues/2)
+
+## [2.11.0](https://github.com/ChingEnLin/QueryPal/compare/v2.10.1...v2.11.0) (2026-05-25)
+
+### Features
+
+* add .venv to .gitignore for virtual environment exclusion ([7453fe8](https://github.com/ChingEnLin/QueryPal/commit/7453fe8e75b0d42e272f64287abe7d626710108b))
+* add dynamic model selection for LLM queries ([32147f9](https://github.com/ChingEnLin/QueryPal/commit/32147f9dc50412512d6325aedf38ff44ddadf1e5))
+* add QueryArgus data-quality UI on Analytics page ([0ed0ce0](https://github.com/ChingEnLin/QueryPal/commit/0ed0ce0a17d0b3d95f3289fd0e8c7dbe0f25e28d))
+* **analytics:** model selection for QueryArgus runs ([87572a5](https://github.com/ChingEnLin/QueryPal/commit/87572a513949f14969b2800a9ca4c679def7dcc7))
+* **analytics:** model selection, gemini-only judge, and improvement hints ([00b9342](https://github.com/ChingEnLin/QueryPal/commit/00b934257cf7467d9887c55e2c26667544e19b28))
+* **analytics:** notifications system for async Argus runs ([e2575c9](https://github.com/ChingEnLin/QueryPal/commit/e2575c9ff515764ce863d1d135fcf0c73dac09f2))
+* **analytics:** sidebar audit cues, finding filters, and notification deep-link ([621aa0e](https://github.com/ChingEnLin/QueryPal/commit/621aa0edb14685aafec50775059f78185dd90e8c))
+* **argus:** persist reports, add history tab, async run, tooltips ([f56a4ec](https://github.com/ChingEnLin/QueryPal/commit/f56a4ecbf5dbb7523fb297da8bd9a22ab92d0b6b))
+* **argus:** post-hoc finding rating endpoint + UI (Arm A) ([0cc40f1](https://github.com/ChingEnLin/QueryPal/commit/0cc40f1f3294ecc9f32917705419399a8289761f))
+* **argus:** tiered run configuration with saved custom profiles ([2030d8f](https://github.com/ChingEnLin/QueryPal/commit/2030d8f3d9c4918a95bec5754d69f3fc7da491e1))
+* **argus:** trends tab with quality, severity, and token charts ([3f8e772](https://github.com/ChingEnLin/QueryPal/commit/3f8e7723f3959a46c1c92dfde50bc517e82f9c9a))
+* enhance collection selection and loading states across components ([6c7356a](https://github.com/ChingEnLin/QueryPal/commit/6c7356ad6d73226b07bd18c61924b24841807738))
+* harden Cloud Run security with Secret Manager, VPC connector, and private backend ([27bb9b5](https://github.com/ChingEnLin/QueryPal/commit/27bb9b55cf7a69009338c0613ab71f50e0ed5c64))
+* integrate QueryArgus as data-quality audit endpoint ([bd42169](https://github.com/ChingEnLin/QueryPal/commit/bd421693f0da4004df3879bed194f19e0bc0a319))
+* **query:** inject inferred relationships and $lookup guidance for multi-collection prompts ([6e5fc22](https://github.com/ChingEnLin/QueryPal/commit/6e5fc2246224f98e579b2a832ad200f2be5c39a3))
+
+### Bug Fixes
+
+* address claudebot review issues on model selection PR ([f83e159](https://github.com/ChingEnLin/QueryPal/commit/f83e159b5a0205e525a21847b460588a1ecf5891))
+* align Terraform DB config and reorganize docs ([#33](https://github.com/ChingEnLin/QueryPal/issues/33)) ([8cc3d18](https://github.com/ChingEnLin/QueryPal/commit/8cc3d18fed60ce62c15f84a62bf0c831743fa45e))
+* **argus:** address claudebot review — auth, eviction, formatting ([d4ca8ab](https://github.com/ChingEnLin/QueryPal/commit/d4ca8abad736783309a6b580666b1beeff5c864a))
+* construct Cloud Run SA email inline to use PROJECT_ID, clarify VITE_API_BASE_URL ([cdb3ddb](https://github.com/ChingEnLin/QueryPal/commit/cdb3ddb982ce09746ad1bd302f23f142b624778e))
+* **query:** Cosmos-safe $lookup guidance, retry-prompt, nested ObjectId serialization ([ed276a1](https://github.com/ChingEnLin/QueryPal/commit/ed276a1c11224c4d3531b9019a1360ba906a9298))
+* **query:** resolve contradictory retry instruction and review feedback ([9b5c976](https://github.com/ChingEnLin/QueryPal/commit/9b5c976d414207301dab25e1cfbd841c24a94ff3)), closes [#0](https://github.com/ChingEnLin/QueryPal/issues/0)
+* show per-card loader on Hub when opening Explorer or account ([d069d8f](https://github.com/ChingEnLin/QueryPal/commit/d069d8fa52d788dd231914cd7ef96b925a939fa3))
+
+### Maintenance
+
+* gitignore HITL experiment artifacts ([205df64](https://github.com/ChingEnLin/QueryPal/commit/205df641b133df42be4c5a6efd5c644a9fdcb9ff))
+* resolve INFRASTRUCTURE.md conflict for dev → production merge ([dca0412](https://github.com/ChingEnLin/QueryPal/commit/dca04129ab47d38cca5db09d9f3eed99785552b7))
+* **submodule:** bump queryargus to harden Arm A FP-skip prompt ([71e25f2](https://github.com/ChingEnLin/QueryPal/commit/71e25f2cd9410cfd281c4e1b7d5a7c5f0179677c))
+* wire QueryArgus submodule into Docker, CI, and tooling ([ff3bd38](https://github.com/ChingEnLin/QueryPal/commit/ff3bd38801a7e572655fce3decd9291c5028ca8c))
+
+### Documentation
+
+* add infrastructure documentation with architecture diagrams to README ([2ca3e11](https://github.com/ChingEnLin/QueryPal/commit/2ca3e1101e7eb2b2ed4760ca1ae9df2e4c98a9a4))
+
+### CI/CD
+
+* **backend:** ignore queryargus submodule tests during pytest collection ([616d538](https://github.com/ChingEnLin/QueryPal/commit/616d5387fa4ebf4b317a00e11b7cafd20229d3d2))
+* **backend:** pass --ignore=queryargus to pytest directly ([f382402](https://github.com/ChingEnLin/QueryPal/commit/f38240257b12d65fbb185af8548e2c3c99878860))
+
 ## [2.10.1](https://github.com/ChingEnLin/QueryPal/compare/v2.10.0...v2.10.1) (2026-05-17)
 
 ### Maintenance
