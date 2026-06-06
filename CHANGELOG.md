@@ -1,3 +1,9 @@
+## [2.13.0](https://github.com/ChingEnLin/QueryPal/compare/v2.12.0...v2.13.0) (2026-06-06)
+
+### Features
+
+* **rbac:** JWT verification, role-based access control, and admin role management UI ([#41](https://github.com/ChingEnLin/QueryPal/issues/41)) ([#42](https://github.com/ChingEnLin/QueryPal/issues/42)) ([8c010c4](https://github.com/ChingEnLin/QueryPal/commit/8c010c4b29b31a3de23cea925cdcca2834d758be))
+
 ## [2.12.0](https://github.com/ChingEnLin/QueryPal/compare/v2.11.0...v2.12.0) (2026-05-28)
 
 ### Features
