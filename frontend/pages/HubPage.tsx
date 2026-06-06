@@ -1,11 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useTheme } from '../contexts/ThemeContext';
 import UserMenuButton from '../components/UserMenuButton';
+import CommandPalette from '../components/CommandPalette';
 import { getAzureCosmosAccounts } from '../services/dbService';
 import { CosmosDBAccount } from '../types';
 import { API_BASE_URL } from '../app.config';
+
+const RECENT_KEY = 'qp_recent_connections';
+const MAX_RECENTS = 3;
+
+interface RecentConnection {
+  accountId: string;
+  accountName: string;
+  action: 'query' | 'explorer';
+  accessedAt: number;
+}
+
+function loadRecents(): RecentConnection[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(entry: Omit<RecentConnection, 'accessedAt'>) {
+  const existing = loadRecents().filter(
+    (r) => !(r.accountId === entry.accountId && r.action === entry.action)
+  );
+  const next: RecentConnection[] = [
+    { ...entry, accessedAt: Date.now() },
+    ...existing,
+  ].slice(0, MAX_RECENTS);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+}
 
 interface RecentActivityItem {
   database_name: string;
@@ -149,6 +179,7 @@ const HubPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
+  const [recents, setRecents] = useState<RecentConnection[]>(loadRecents);
 
   useEffect(() => {
     getAzureCosmosAccounts()
@@ -179,26 +210,42 @@ const HubPage: React.FC = () => {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<'open' | 'explorer' | null>(null);
 
-  const handleOpenAccount = (account: CosmosDBAccount) => {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const handleOpenAccount = useCallback((account: CosmosDBAccount) => {
     if (busyAccountId) return;
     setBusyAccountId(account.id);
     setBusyAction('open');
+    saveRecent({ accountId: account.id, accountName: account.name, action: 'query' });
+    setRecents(loadRecents());
     navigate('/query-generator', { state: { preselectedAccountId: account.id, preselectedAccountName: account.name } });
-  };
+  }, [busyAccountId, navigate]);
 
-  const handleOpenExplorer = (account: CosmosDBAccount) => {
+  const handleOpenExplorer = useCallback((account: CosmosDBAccount) => {
     if (busyAccountId) return;
     setBusyAccountId(account.id);
     setBusyAction('explorer');
+    saveRecent({ accountId: account.id, accountName: account.name, action: 'explorer' });
+    setRecents(loadRecents());
     // Navigate immediately; the explorer wrapper resolves the first database
     // and shows a blurred connection chip while it loads.
     navigate(`/data-explorer/${encodeURIComponent(account.id)}`, {
       state: { pendingAccountName: account.name },
     });
-  };
+  }, [busyAccountId, navigate]);
 
   return (
     <div style={s.page}>
@@ -209,30 +256,24 @@ const HubPage: React.FC = () => {
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 14.5 }}>QueryPal</span>
         </Link>
 
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 8 }}>
-          {[
-            { label: 'Home', href: '/hub', active: true },
-            { label: 'Analytics', href: '/analytics', active: false },
-          ].map((item) => (
-            <Link
-              key={item.href}
-              to={item.href}
-              style={{
-                fontSize: 12.5,
-                color: item.active ? 'var(--fg)' : 'var(--muted)',
-                textDecoration: 'none',
-                padding: '6px 9px',
-                borderRadius: 6,
-                fontWeight: item.active ? 500 : 400,
-                background: item.active ? 'var(--soft)' : 'transparent',
-              }}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => setPaletteOpen(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 12px', border: '1px solid var(--border)', borderRadius: 7,
+              background: 'var(--soft)', color: 'var(--muted)', fontSize: 12,
+              cursor: 'pointer', fontFamily: 'var(--font-body)',
+            }}
+            title="Command palette (⌘K)"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="7" cy="7" r="4.5"/>
+              <path d="M10.5 10.5l3 3"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>⌘K</span>
+          </button>
           {/* Theme toggle — shows icon for what you'll switch TO */}
           <button
             onClick={toggleTheme}
@@ -271,6 +312,49 @@ const HubPage: React.FC = () => {
             Pick a connection to start querying.
           </p>
         </div>
+
+        {/* Jump back in */}
+        {recents.length > 0 && (
+          <section>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', margin: '0 0 12px' }}>
+              Jump back in
+            </h2>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {recents.map((r) => {
+                const account = accounts.find((a) => a.id === r.accountId);
+                const inert = !!busyAccountId;
+                return (
+                  <button
+                    key={`${r.accountId}-${r.action}`}
+                    disabled={inert}
+                    onClick={() => {
+                      const acc = account ?? ({ id: r.accountId, name: r.accountName } as CosmosDBAccount);
+                      if (r.action === 'query') handleOpenAccount(acc);
+                      else handleOpenExplorer(acc);
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      padding: '8px 14px', borderRadius: 10,
+                      border: '1px solid var(--border)', background: 'var(--panel)',
+                      cursor: inert ? 'not-allowed' : 'pointer', opacity: inert ? 0.55 : 1,
+                      fontFamily: 'var(--font-body)', color: 'var(--fg)',
+                      transition: 'border-color 0.12s, background 0.12s',
+                    }}
+                    onMouseEnter={(e) => { if (!inert) { (e.currentTarget as HTMLButtonElement).style.borderColor = 'color-mix(in oklch, var(--accent) 35%, var(--border))'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--soft)'; } }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--panel)'; }}
+                  >
+                    <div style={{ width: 22, height: 22, borderRadius: 5, background: '#1a4f8c', color: '#fff', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>C</div>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{r.accountName}</span>
+                    <span className={`qa-chip${r.action === 'query' ? ' accent' : ''}`} style={{ fontSize: 10 }}>
+                      {r.action === 'query' ? 'Query' : 'Explorer'}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{formatRelativeTime(new Date(r.accessedAt).toISOString())}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Connections */}
         <section>
@@ -391,6 +475,12 @@ const HubPage: React.FC = () => {
           </div>
         </section>
       </div>
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        availableAccounts={accounts}
+        onSwitchAccount={(account) => { setPaletteOpen(false); handleOpenAccount(account); }}
+      />
     </div>
   );
 };

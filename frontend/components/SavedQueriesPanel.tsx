@@ -25,6 +25,8 @@ const timeAgo = (dateString: string) => {
     return `${Math.floor(d / 30)}mo ago`;
 };
 
+const WRITE_OP_RE = /\.(insert_one|insert_many|update_one|update_many|replace_one|delete_one|delete_many|bulk_write|drop|drop_index|drop_indexes|create_index|create_indexes|rename_collection)\s*\(/i;
+
 const PinIcon = () => (
     <svg width="11" height="11" viewBox="0 0 16 16" fill="var(--accent)" stroke="var(--accent)" strokeWidth="1.2">
         <path d="M5 2v6l-2 2v1h4v4h2v-4h4v-1l-2-2V2z"/>
@@ -46,6 +48,7 @@ const SavedQueryCard: React.FC<SavedQueryCardProps> = ({ query, onLoad, onLoadAn
     const handleDelete = () => {
         if (window.confirm(`Delete "${query.name}"? This cannot be undone.`)) onDelete(query.id);
     };
+    const isWrite = WRITE_OP_RE.test(query.code);
     return (
         <div
             className="qa-card"
@@ -59,6 +62,11 @@ const SavedQueryCard: React.FC<SavedQueryCardProps> = ({ query, onLoad, onLoadAn
             {/* Name + tags row */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, paddingRight: 20 }}>
                 <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.3 }}>{query.name}</span>
+                {isWrite && (
+                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, background: 'color-mix(in oklch, #c94250 12%, var(--bg))', color: '#c94250', fontFamily: 'var(--font-mono)', flexShrink: 0, marginTop: 1 }}>
+                        write op
+                    </span>
+                )}
             </div>
 
             {/* Prompt quote */}
@@ -86,16 +94,16 @@ const SavedQueryCard: React.FC<SavedQueryCardProps> = ({ query, onLoad, onLoadAn
                     disabled={!dbReady}
                     className="qa-btn"
                     title={!dbReady ? 'Connect to a database first' : 'Load query into editor'}
-                    style={{ fontSize: 12, padding: '4px 12px', opacity: dbReady ? 1 : 0.45, cursor: dbReady ? 'pointer' : 'not-allowed' }}
+                    style={{ fontSize: 12, padding: '4px 12px' }}
                 >
                     Load
                 </button>
                 <button
                     onClick={() => onLoadAndRun(query)}
-                    disabled={!dbReady}
+                    disabled={!dbReady || isWrite}
                     className="qa-btn primary"
-                    title={!dbReady ? 'Connect to a database first' : 'Load query and run it immediately'}
-                    style={{ fontSize: 12, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 5, opacity: dbReady ? 1 : 0.45, cursor: dbReady ? 'pointer' : 'not-allowed' }}
+                    title={!dbReady ? 'Connect to a database first' : isWrite ? 'Write operations must be reviewed — load the query and acknowledge the toggle to run' : 'Load query and run it immediately'}
+                    style={{ fontSize: 12, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 5 }}
                 >
                     <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
                         <path d="M5 3l9 5-9 5V3z" fill="currentColor" strokeLinejoin="round"/>
@@ -138,6 +146,7 @@ const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({
     onClose, queries, onLoad, onLoadAndRun, onEdit, onDelete, onShare, isLoading, dbReady, currentUserEmail,
 }) => {
     const [activeTab, setActiveTab] = useState<'my_queries' | 'shared_with_me'>('my_queries');
+    const [search, setSearch] = useState('');
 
     const { myQueries, sharedWithMe } = useMemo(() => {
         if (!currentUserEmail) return { myQueries: [], sharedWithMe: [] };
@@ -150,7 +159,14 @@ const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({
         return { myQueries: myq, sharedWithMe: swm };
     }, [queries, currentUserEmail]);
 
-    const queriesToDisplay = activeTab === 'my_queries' ? myQueries : sharedWithMe;
+    const baseList = activeTab === 'my_queries' ? myQueries : sharedWithMe;
+    const queriesToDisplay = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        if (!term) return baseList;
+        return baseList.filter(
+            (q) => q.name.toLowerCase().includes(term) || q.prompt.toLowerCase().includes(term)
+        );
+    }, [baseList, search]);
 
     const renderContent = () => {
         if (isLoading) {
@@ -184,7 +200,12 @@ const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({
                     <path d="M4 2h6l3 3v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/>
                     <path d="M6 7h5M6 10h3"/>
                 </svg>
-                {activeTab === 'my_queries' ? (
+                {search ? (
+                    <>
+                        <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>No matches</p>
+                        <p style={{ fontSize: 12, margin: 0, textAlign: 'center' }}>Try a different name or keyword.</p>
+                    </>
+                ) : activeTab === 'my_queries' ? (
                     <>
                         <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>No saved queries yet</p>
                         <p style={{ fontSize: 12, margin: 0, textAlign: 'center' }}>Click Save on a generated query to add it here.</p>
@@ -248,7 +269,7 @@ const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({
                         {(['my_queries', 'shared_with_me'] as const).map((tab) => (
                             <button
                                 key={tab}
-                                onClick={() => setActiveTab(tab)}
+                                onClick={() => { setActiveTab(tab); setSearch(''); }}
                                 style={{
                                     flex: 1, padding: '4px 0', fontSize: 12, fontWeight: activeTab === tab ? 500 : 400,
                                     border: 'none', borderRadius: 4, cursor: 'pointer',
@@ -267,6 +288,35 @@ const SavedQueriesPanel: React.FC<SavedQueriesPanelProps> = ({
                                 )}
                             </button>
                         ))}
+                    </div>
+                </div>
+
+                {/* Search */}
+                <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--soft)', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 10px' }}>
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--muted)', flexShrink: 0 }}>
+                            <circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/>
+                        </svg>
+                        <input
+                            type="text"
+                            placeholder="Search by name or prompt…"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            style={{
+                                flex: 1, background: 'none', border: 'none', outline: 'none',
+                                fontSize: 12.5, color: 'var(--fg)', fontFamily: 'var(--font-body)',
+                            }}
+                        />
+                        {search && (
+                            <button
+                                onClick={() => setSearch('')}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', padding: 0 }}
+                            >
+                                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                    <path d="M3 3l10 10M13 3L3 13"/>
+                                </svg>
+                            </button>
+                        )}
                     </div>
                 </div>
 
