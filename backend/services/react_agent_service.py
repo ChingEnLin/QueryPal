@@ -68,6 +68,13 @@ class AgentState(TypedDict):
     iterations: int
     max_iterations: int
 
+    # Ambiguity gate: when the request is too vague to answer correctly, the
+    # triage node sets needs_clarification and populates clarifying_questions
+    # instead of generating a (likely wrong) query.
+    enable_clarification: bool
+    needs_clarification: bool
+    clarifying_questions: list[str]
+
 
 # Define LLM clients and prompts
 client = genai.Client()
@@ -186,6 +193,104 @@ Respond in JSON format:
     "critique": "If invalid, explain what went wrong and how to fix it. If valid, briefly explain why."
 }}
 """
+
+TRIAGE_PROMPT = """
+You are a triage assistant for a natural-language-to-MongoDB query generator.
+Your ONLY job is to decide whether the user's request can be turned into a
+correct query right now, or whether a concrete, blocking detail is missing.
+
+User Request: {user_input}
+Database: {database}
+Collections: {collections}
+Schema summary: {schema_context}
+Inferred Relationships: {relationship_context}
+Clarification already provided by the user (if any): {intermediate_context}
+
+DEFAULT TO PROCEEDING. A query generator follows this step; asking unnecessary
+questions is far worse than making a reasonable assumption. Only request
+clarification when you genuinely CANNOT write a correct query without an answer.
+
+Ask for clarification ONLY when one of these concrete, blocking gaps exists:
+- The request references a field or collection that does NOT appear in the
+  schema summary and has no reasonable synonym there.
+- A filter depends on a value with no definable meaning from the schema
+  (e.g. "recent", "active", "important", "top") where no field or threshold
+  makes the intent unambiguous.
+- A time window is implied but the start/end is genuinely undefined and cannot
+  be inferred (e.g. "lately" with no date field to anchor it).
+- The request is so underspecified that multiple fundamentally different
+  queries would all be plausible answers.
+
+Do NOT ask for clarification when:
+- The request is merely long or multi-step but each step is mappable.
+- You could pick a sensible default (e.g. a $limit, a sort order, which date
+  field to use when only one exists).
+- More detail would merely be "nice to have".
+
+If clarification was already provided above, incorporate it and PROCEED unless a
+brand-new blocking gap remains.
+
+Respond in JSON format:
+{{
+    "needs_clarification": true/false,
+    "questions": ["A specific question", "Another specific question"]
+}}
+If needs_clarification is false, "questions" MUST be an empty list.
+Ask at most 3 questions, each targeting a single blocking gap.
+"""
+
+
+def triage_node(state: AgentState):
+    logger.info("--- TRIAGE NODE ---")
+
+    # Gate is opt-out: when disabled, always proceed to generation.
+    if not state.get("enable_clarification", True):
+        logger.info("Clarification gate disabled; proceeding to generation.")
+        return {"needs_clarification": False, "clarifying_questions": []}
+
+    prompt = TRIAGE_PROMPT.format(
+        user_input=state["user_input"],
+        database=state["database"],
+        collections=", ".join(state["collections"]),
+        schema_context=state["schema_context"],
+        relationship_context=state.get("relationship_context")
+        or "None (single collection or no inferred relationships).",
+        intermediate_context=state.get("intermediate_context") or "None.",
+    )
+
+    try:
+        response = client.models.generate_content(
+            model=state.get("model", "gemini-2.5-flash"),
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                thinking_config=thinking_config_for(
+                    state.get("model", "gemini-2.5-flash")
+                ),
+            ),
+        )
+
+        if hasattr(response, "parsed") and response.parsed:
+            data = response.parsed
+        else:
+            data = json.loads(response.text)
+
+        needs_clarification = bool(data.get("needs_clarification", False))
+        questions = data.get("questions", []) or []
+        # Defensive: a true verdict with no questions is useless — proceed instead.
+        if needs_clarification and not questions:
+            needs_clarification = False
+    except Exception as e:
+        # Never let triage block generation: fail open and proceed.
+        logger.warning("Triage failed; proceeding to generation: %s", e)
+        needs_clarification = False
+        questions = []
+
+    logger.info(f"Triage result - needs_clarification: {needs_clarification}")
+    return {
+        "needs_clarification": needs_clarification,
+        "clarifying_questions": questions if needs_clarification else [],
+    }
 
 
 def generate_query_node(state: AgentState):
@@ -335,15 +440,25 @@ def should_continue(state: AgentState):
     return "generate_query_node"
 
 
+def after_triage(state: AgentState):
+    # If the request is too vague, stop and return clarifying questions instead
+    # of generating a query.
+    if state.get("needs_clarification"):
+        return END
+    return "generate_query_node"
+
+
 # Build the graph
 workflow = StateGraph(AgentState)
 
+workflow.add_node("triage_node", triage_node)
 workflow.add_node("generate_query_node", generate_query_node)
 workflow.add_node("execute_test_node", execute_test_node)
 workflow.add_node("evaluate_node", evaluate_node)
 
-workflow.set_entry_point("generate_query_node")
+workflow.set_entry_point("triage_node")
 
+workflow.add_conditional_edges("triage_node", after_triage)
 workflow.add_edge("generate_query_node", "execute_test_node")
 workflow.add_edge("execute_test_node", "evaluate_node")
 workflow.add_conditional_edges("evaluate_node", should_continue)
@@ -361,6 +476,7 @@ def run_query_generator(
     max_iterations: int = 3,
     model: str = "gemini-2.5-flash",
     relationship_context: str = "",
+    enable_clarification: bool = True,
 ):
     logger.info(f"Starting ReAct Agent workflow for input: '{user_input}'")
     initial_state = {
@@ -374,6 +490,7 @@ def run_query_generator(
         "model": model,
         "iterations": 0,
         "max_iterations": max_iterations,
+        "enable_clarification": enable_clarification,
     }
 
     # Run the graph
@@ -385,4 +502,6 @@ def run_query_generator(
         "query_result": final_state.get("query_result", None),
         "explanation": final_state.get("evaluation", ""),
         "is_valid": final_state.get("is_valid", False),
+        "needs_clarification": final_state.get("needs_clarification", False),
+        "clarifying_questions": final_state.get("clarifying_questions", []),
     }
