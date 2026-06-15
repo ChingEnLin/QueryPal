@@ -1,3 +1,5 @@
+import datetime as _datetime
+
 from bson import ObjectId
 
 SCHEMA_FETCH_FAILED = "Could not fetch schema summary."
@@ -10,12 +12,37 @@ from pymongo.results import (
 )
 
 
+def _iso_date(value: str) -> _datetime.datetime:
+    """mongosh-style ISODate() shim.
+
+    The LLM instinctively reaches for `ISODate("...")` (mongosh/JS syntax). The
+    real executor here is Python `eval()` against PyMongo, so we provide a shim
+    that turns the string into a timezone-aware datetime PyMongo understands.
+    """
+    return _datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _build_query_scope(db):
+    """Globals exposed to the eval'd query string.
+
+    Note: queries are evaluated as a single Python *expression*, so they must
+    not contain `import` statements. `datetime` is provided here so that
+    `datetime.datetime(2025, 1, 1)` resolves without an import.
+    """
+    return {
+        "db": db,
+        "ObjectId": ObjectId,
+        "datetime": _datetime,
+        "ISODate": _iso_date,
+    }
+
+
 def execute_mongo_query(connection_string: str, database: str, query: str):
     client = pymongo.MongoClient(connection_string)
     db = client[database]
     try:
-        # Evaluate the query string in the context of the db variable and ObjectId
-        query_result = eval(query, {"db": db, "ObjectId": ObjectId})
+        # Evaluate the query string in a sandboxed scope. See _build_query_scope.
+        query_result = eval(query, _build_query_scope(db))
     except Exception as e:
         # Return the exception to be handled by the endpoint
         return {"error": str(e), "exception_type": type(e).__name__}
