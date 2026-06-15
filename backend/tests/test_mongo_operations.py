@@ -141,6 +141,61 @@ class TestMongoService:
         assert result == 2
 
     @patch("services.mongo_service.pymongo.MongoClient")
+    def test_execute_mongo_query_with_datetime_in_scope(
+        self, mock_mongo_client, mock_client, sample_documents
+    ):
+        """Regression: `datetime` must be in the eval scope.
+
+        Previously the sandbox scope was only {db, ObjectId}, so a query using
+        `datetime.datetime(...)` failed with `name 'datetime' is not defined`.
+        """
+        # Setup
+        mock_mongo_client.return_value = mock_client
+        db = mock_client["test_db"]
+        collection = db["test_collection"]
+        collection.insert_many(sample_documents)
+
+        # Execute — filter created_at on or after Jan 2 (matches Jane only)
+        query = (
+            'db["test_collection"].find('
+            '{"created_at": {"$gte": datetime.datetime(2023, 1, 2, '
+            "tzinfo=datetime.timezone.utc)}})"
+        )
+        result = execute_mongo_query("mongodb://localhost", "test_db", query)
+
+        # Assert
+        assert "error" not in result
+        assert len(result) == 1
+        assert result[0]["name"] == "Jane Smith"
+
+    @patch("services.mongo_service.pymongo.MongoClient")
+    def test_execute_mongo_query_with_isodate_shim(
+        self, mock_mongo_client, mock_client, sample_documents
+    ):
+        """Regression: the mongosh-style `ISODate("...")` shim must resolve.
+
+        The LLM instinctively reaches for `ISODate(...)`; the shim turns it into
+        a timezone-aware datetime so the query does not blow up.
+        """
+        # Setup
+        mock_mongo_client.return_value = mock_client
+        db = mock_client["test_db"]
+        collection = db["test_collection"]
+        collection.insert_many(sample_documents)
+
+        # Execute
+        query = (
+            'db["test_collection"].find('
+            '{"created_at": {"$gte": ISODate("2023-01-02T00:00:00Z")}})'
+        )
+        result = execute_mongo_query("mongodb://localhost", "test_db", query)
+
+        # Assert
+        assert "error" not in result
+        assert len(result) == 1
+        assert result[0]["name"] == "Jane Smith"
+
+    @patch("services.mongo_service.pymongo.MongoClient")
     def test_execute_mongo_query_invalid_query(self, mock_mongo_client, mock_client):
         """Test execute_mongo_query with invalid query syntax."""
         # Setup
