@@ -164,6 +164,9 @@ Instructions:
 3. Do not include markdown formatting or explanations, just return the code, but you can use ```python if you must.
 4. If the user is asking for a visualization, ensure the query retrieves the necessary data format.
 5. You are allowed to use both find() and aggregate() pipelines. If using aggregate(), be mindful of the resulting data size and include $limit stages if applicable.
+6. EXECUTION CONTEXT: the query is run with PyMongo via Python `eval()` as a SINGLE expression — NOT in mongosh. This has two consequences:
+   - Do NOT write `import` statements (e.g. `import datetime`). `eval()` only accepts one expression and an import is a statement — it will raise `invalid syntax`.
+   - For dates, use Python datetime objects: `datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)`. The `datetime` module is already in scope. Do NOT use mongosh-only syntax like a bare `ISODate("...")` mindset — `datetime.datetime(...)` is the correct, supported form here.
 {cross_collection_guidance}
 """
 
@@ -175,6 +178,10 @@ Generated Query: {generated_query}
 Is Write Action: {is_write_action}
 Query Result / Error: 
 {query_result}
+
+EXECUTION CONTEXT (important): this query is executed with PyMongo via Python `eval()`, NOT in mongosh. The scope already provides `db`, `ObjectId`, `datetime`, and an `ISODate` shim. Therefore:
+  - Python datetime objects such as `datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)` are the CORRECT, supported way to express dates. Do NOT critique them or recommend replacing them with mongosh `ISODate("...")`.
+  - If the error is `name 'datetime' is not defined` or `invalid syntax` caused by an `import` line, the fix is to REMOVE the `import` statement (the query must be a single expression) and rely on the in-scope `datetime` module — NOT to switch to mongosh syntax.
 
 Your task:
 Determine if this query successfully answers the user's request based on the code and the result.
