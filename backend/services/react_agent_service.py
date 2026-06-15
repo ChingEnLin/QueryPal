@@ -232,6 +232,10 @@ Do NOT ask for clarification when:
 - The request is merely long or multi-step but each step is mappable.
 - You could pick a sensible default (e.g. a $limit, a sort order, which date
   field to use when only one exists).
+- A vague relative-time term ("recent", "recently", "lately", "latest") is
+  used and a clear date field exists to anchor it — assume a sensible default
+  window (e.g. the last 30 days, or sort descending for "latest") and PROCEED
+  rather than asking. Only ask about time when NO date field can anchor it.
 - More detail would merely be "nice to have".
 
 If clarification was already provided above, incorporate it and PROCEED unless a
