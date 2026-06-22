@@ -6,8 +6,20 @@ def test_app_startup(client):
     # Test that the app is created successfully
     assert client.app is not None
 
-    # Check that all routers are included
-    routes = [route.path for route in client.app.routes]
+    # Check that all routers are included. Newer FastAPI versions wrap
+    # `include_router` results in `_IncludedRouter`, which has no `.path` of
+    # its own — expand those into their prefixed sub-route paths.
+    routes = []
+    for route in client.app.routes:
+        if hasattr(route, "path"):
+            routes.append(route.path)
+        elif hasattr(route, "original_router"):
+            prefix = route.include_context.prefix
+            routes.extend(
+                prefix + sub.path
+                for sub in route.original_router.routes
+                if hasattr(sub, "path")
+            )
 
     # Check that main route prefixes exist
     route_prefixes = ["/query", "/azure", "/system", "/user", "/data"]
