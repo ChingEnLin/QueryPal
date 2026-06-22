@@ -1,3 +1,9 @@
+## [2.14.1](https://github.com/ChingEnLin/QueryPal/compare/v2.14.0...v2.14.1) (2026-06-22)
+
+### Bug Fixes
+
+* **query-gen:** make datetime queries work in the eval sandbox ([#45](https://github.com/ChingEnLin/QueryPal/issues/45)) ([520da1f](https://github.com/ChingEnLin/QueryPal/commit/520da1f176d657f22e88a50f4bcb737bd92e7669))
+
 ## [2.14.0](https://github.com/ChingEnLin/QueryPal/compare/v2.13.0...v2.14.0) (2026-06-06)
 
 ### Features
