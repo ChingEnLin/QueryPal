@@ -858,3 +858,57 @@ export async function removeUserRole(oid: string, assignmentId: string): Promise
   });
   if (!response.ok) throw new Error('Failed to remove role');
 }
+
+// --- PostgreSQL (Azure Flexible Server) client ---------------------------
+// These mirror the Cosmos helpers but take the bearer token explicitly so they
+// stay trivially testable; callers acquire it via getAuthenticatedToken().
+
+export type DbEngine = 'cosmos' | 'postgres';
+
+export interface PostgresServer { name: string; id: string; fqdn: string; }
+
+export async function listPostgresServers(token: string): Promise<PostgresServer[]> {
+  if (!USE_MSAL_AUTH) return []; // dev/mock mode: no Azure PG discovery
+  const res = await fetch(`${API_BASE_URL}/postgres/servers`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`postgres/servers ${res.status}`);
+  return res.json();
+}
+
+async function _pgPost(token: string, path: string, body: unknown) {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${path} ${res.status}`);
+  return res.json();
+}
+
+export async function getPgDatabases(token: string, serverId: string): Promise<string[]> {
+  return _pgPost(token, '/postgres/databases', { server_id: serverId });
+}
+
+export async function getPgSchema(token: string, serverId: string, database: string) {
+  return _pgPost(token, '/postgres/schema', { server_id: serverId, database });
+}
+
+export async function getPgTableInfo(
+  token: string, serverId: string, database: string, schemaName: string, table: string,
+) {
+  return _pgPost(token, '/postgres/table_info', {
+    server_id: serverId, database, schema_name: schemaName, table,
+  });
+}
+
+export async function pgNl2Sql(token: string, body: {
+  server_id: string; database: string; schema_context: string;
+  user_input: string; model?: string; max_iterations?: number;
+}) {
+  return _pgPost(token, '/postgres/nl2sql', body);
+}
+
+export async function pgExecute(token: string, serverId: string, database: string, sql: string) {
+  return _pgPost(token, '/postgres/execute', { server_id: serverId, database, sql });
+}
