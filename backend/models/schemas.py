@@ -113,3 +113,34 @@ class UserWithRoles(BaseModel):
 
 class AssignRoleRequest(BaseModel):
     role: Literal["Admin", "Analyst", "Viewer"]
+
+
+class PgDatabasesRequest(BaseModel):
+    server_id: str
+
+
+class PgSchemaRequest(BaseModel):
+    server_id: str
+    database: str
+
+
+class PgTableInfoRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_name: str
+    table: str
+
+
+class PgNl2SqlRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_context: str
+    user_input: str
+    model: str = "gemini-2.5-flash"
+    max_iterations: int = Field(default=3, ge=1, le=10)
+
+
+class PgExecuteRequest(BaseModel):
+    server_id: str
+    database: str
+    sql: str
