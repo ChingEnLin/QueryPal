@@ -109,21 +109,31 @@ def get_table_info(conn, schema: str, table: str, sample_limit: int = 20) -> dic
         )
         indexes = [r[0] for r in cur.fetchall()]
 
-        # Identifiers can't be parameterized; quote with format() on validated
-        # catalog names (schema/table came from get_schema_overview).
-        cur.execute(
-            'SELECT * FROM "{}"."{}" LIMIT %s'.format(
-                schema.replace('"', '""'), table.replace('"', '""')
-            ),
-            (sample_limit,),
-        )
-        sample_cols = [d[0] for d in (cur.description or [])]
-        sample_rows = [[_json_safe(v) for v in row] for row in cur.fetchall()]
+        # Sample data is best-effort: the caller may lack table-level read
+        # privileges (e.g. no pg_read_all_data) even though catalog metadata
+        # above is readable. Don't fail the whole request — return columns/
+        # indexes with an empty sample and a reason the UI can surface.
+        # Identifiers can't be parameterized; quote on validated catalog names.
+        sample = {"columns": [], "rows": []}
+        try:
+            cur.execute(
+                'SELECT * FROM "{}"."{}" LIMIT %s'.format(
+                    schema.replace('"', '""'), table.replace('"', '""')
+                ),
+                (sample_limit,),
+            )
+            sample = {
+                "columns": [d[0] for d in (cur.description or [])],
+                "rows": [[_json_safe(v) for v in row] for row in cur.fetchall()],
+            }
+        except Exception as e:
+            conn.rollback()  # clear the aborted transaction
+            sample = {"columns": [], "rows": [], "error": str(e).strip()}
 
     return {
         "schema": schema,
         "table": table,
         "columns": columns,
         "indexes": indexes,
-        "sample": {"columns": sample_cols, "rows": sample_rows},
+        "sample": sample,
     }

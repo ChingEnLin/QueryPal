@@ -67,10 +67,20 @@ def revoke_access(conn, user_email: str) -> dict:
 
 
 def list_access(conn) -> list:
-    """Emails of individual Entra user principals that currently have access."""
+    """Emails of Entra user principals that actually have read access.
+
+    "Has access" = member of pg_read_all_data (what grant_access confers), NOT
+    merely having a login principal — otherwise a created-but-ungranted user
+    would show as granted yet fail every query with permission denied.
+    """
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT rolname FROM pgaadauth_list_principals(false) "
-            "WHERE principaltype = 'user'"
+            """
+            SELECT p.rolname
+            FROM pgaadauth_list_principals(false) p
+            JOIN pg_roles u ON u.rolname = p.rolname
+            WHERE p.principaltype = 'user'
+              AND pg_has_role(u.oid, 'pg_read_all_data', 'member')
+            """
         )
         return [r[0] for r in cur.fetchall()]

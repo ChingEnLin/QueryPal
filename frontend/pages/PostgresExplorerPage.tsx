@@ -21,7 +21,7 @@ interface TableInfo {
   table: string;
   columns: { name: string; type: string; nullable: boolean }[];
   indexes: string[];
-  sample: { columns: string[]; rows: any[][] };
+  sample: { columns: string[]; rows: any[][]; error?: string };
 }
 interface SqlResult {
   columns: string[];
@@ -280,7 +280,13 @@ const PostgresExplorerPage: React.FC = () => {
                 ))}
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>Sample rows</div>
-              <ResultTable columns={tableInfo.sample.columns} rows={tableInfo.sample.rows} />
+              {tableInfo.sample.error ? (
+                <div className="qa-chip warn" style={{ fontSize: 11.5 }}>
+                  Sample unavailable — {tableInfo.sample.error}
+                </div>
+              ) : (
+                <ResultTable columns={tableInfo.sample.columns} rows={tableInfo.sample.rows} />
+              )}
             </div>
           )}
         </div>
