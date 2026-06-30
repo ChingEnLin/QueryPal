@@ -4,7 +4,7 @@ import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useTheme } from '../contexts/ThemeContext';
 import UserMenuButton from '../components/UserMenuButton';
 import CommandPalette from '../components/CommandPalette';
-import { getAzureCosmosAccounts } from '../services/dbService';
+import { getAzureCosmosAccounts, listPostgresServers, PostgresServer } from '../services/dbService';
 import { CosmosDBAccount } from '../types';
 import { API_BASE_URL } from '../app.config';
 
@@ -181,12 +181,21 @@ const HubPage: React.FC = () => {
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
   const [recents, setRecents] = useState<RecentConnection[]>(loadRecents);
 
+  const [pgServers, setPgServers] = useState<PostgresServer[]>([]);
+
   useEffect(() => {
     getAzureCosmosAccounts()
       .then((accs) => { setAccounts(accs); })
       .catch((err) => { setError(err.message || 'Failed to load accounts'); })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    getToken()
+      .then((token) => (token ? listPostgresServers(token) : []))
+      .then(setPgServers)
+      .catch(() => { /* PG discovery is best-effort; absence just hides the section */ });
+  }, [getToken]);
 
   useEffect(() => {
     const fetchRecent = async () => {
@@ -381,12 +390,12 @@ const HubPage: React.FC = () => {
                 {error}
               </div>
             )}
-            {!loading && !error && accounts.length === 0 && (
+            {!loading && !error && accounts.length === 0 && pgServers.length === 0 && (
               <div style={{
                 background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14,
                 padding: 22, color: 'var(--muted)', fontSize: 13,
               }}>
-                No Cosmos DB accounts found. Add a connection below.
+                No database connections found. Add a connection below.
               </div>
             )}
             {accounts.map((account) => (
@@ -398,6 +407,23 @@ const HubPage: React.FC = () => {
                 busyAction={busyAccountId === account.id ? busyAction : null}
                 disabled={!!busyAccountId && busyAccountId !== account.id}
               />
+            ))}
+            {pgServers.map((srv) => (
+              <button
+                key={srv.id}
+                onClick={() => navigate(`/postgres/${encodeURIComponent(srv.id)}`)}
+                style={{
+                  textAlign: 'left', background: 'var(--panel)', border: '1px solid var(--border)',
+                  borderRadius: 14, padding: 22, cursor: 'pointer', display: 'flex',
+                  flexDirection: 'column', gap: 10,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="qa-chip accent" style={{ fontSize: 11 }}>PostgreSQL</span>
+                </div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: 'var(--fg)' }}>{srv.name}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--muted)' }}>{srv.fqdn}</div>
+              </button>
             ))}
           </div>
         </section>

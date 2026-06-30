@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { CollectionSummary, DbInfo, CosmosDBAccount } from '../types';
 import { API_BASE_URL } from '../app.config';
 import { useRoles } from '../hooks/useRoles';
+import { getAuthenticatedToken, listPostgresServers, PostgresServer } from '../services/dbService';
 
 interface AppSidebarProps {
   accountName?: string;
@@ -87,7 +88,15 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   const { can } = useRoles();
   const isAdmin = can('system:admin');
   const [showDbPicker, setShowDbPicker] = useState(false);
+  const [pgServers, setPgServers] = useState<PostgresServer[]>([]);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    getAuthenticatedToken()
+      .then((token) => listPostgresServers(token))
+      .then(setPgServers)
+      .catch(() => { /* best-effort; absence just hides the PostgreSQL group */ });
+  }, []);
   const [collectionSort, setCollectionSort] = useState<'name_asc' | 'name_desc' | 'count_desc' | 'count_asc' | 'findings_desc' | 'findings_asc'>('name_asc');
   const chipRef = useRef<HTMLDivElement>(null);
 
@@ -158,11 +167,11 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
           ) : (
             <>
               <div
-                onClick={() => ((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1)) ? setShowDbPicker(v => !v) : undefined}
+                onClick={() => ((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1) || pgServers.length > 0) ? setShowDbPicker(v => !v) : undefined}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 7,
                   padding: '5px 9px', background: 'var(--soft)', borderRadius: 7,
-                  cursor: ((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1)) ? 'pointer' : 'default',
+                  cursor: ((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1) || pgServers.length > 0) ? 'pointer' : 'default',
                 }}
               >
                 <span style={{ width: 14, height: 14, borderRadius: 4, background: '#1d6cf2', flexShrink: 0 }} />
@@ -253,6 +262,43 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                             {db.name}
                             {isCurrent && (
                               <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 'auto', color: 'var(--accent)', flexShrink: 0 }}>
+                                <path d="M3 8l4 4 6-6"/>
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                  {pgServers.length > 0 && (
+                    <>
+                      {((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1)) && (
+                        <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                      )}
+                      <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
+                        PostgreSQL
+                      </div>
+                      {pgServers.map(srv => {
+                        const isCurrent = srv.id === accountId;
+                        return (
+                          <button
+                            key={srv.id}
+                            onClick={() => { setShowDbPicker(false); if (!isCurrent) navigate(`/postgres/${encodeURIComponent(srv.id)}`); }}
+                            style={{
+                              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '7px 10px', border: 'none', textAlign: 'left',
+                              cursor: isCurrent ? 'default' : 'pointer',
+                              background: isCurrent ? 'var(--accent-soft)' : 'transparent',
+                              color: isCurrent ? 'var(--accent)' : 'var(--fg)',
+                              fontSize: 12.5, fontFamily: 'var(--font-body)',
+                            }}
+                            onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                            onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            <span style={{ width: 10, height: 10, borderRadius: 3, background: isCurrent ? '#1d6cf2' : 'var(--muted)', flexShrink: 0 }} />
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{srv.name}</span>
+                            {isCurrent && (
+                              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--accent)', flexShrink: 0 }}>
                                 <path d="M3 8l4 4 6-6"/>
                               </svg>
                             )}
