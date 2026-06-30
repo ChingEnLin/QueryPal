@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
 
 from models.schemas import (
+    PgAccessListRequest,
     PgDatabasesRequest,
     PgExecuteRequest,
+    PgGrantRequest,
     PgNl2SqlRequest,
+    PgRevokeRequest,
     PgSchemaRequest,
     PgTableInfoRequest,
 )
@@ -14,6 +17,13 @@ from services.azure_postgres_resources import (
     get_table_info,
     list_databases,
     list_postgres_servers,
+)
+from services.data_documents_service import log_write_operation
+from services.pg_admin_service import (
+    get_pg_admin_connection,
+    grant_access,
+    list_access,
+    revoke_access,
 )
 from services.pg_connection_obo import get_pg_connection
 from services.pg_query_service import OSSRDBMS_SCOPE, execute_sql
@@ -36,6 +46,23 @@ def _connect(authorization: str, server_id: str, database: str, caller: Caller):
     pg_token = exchange_token_obo(user_token, scope=OSSRDBMS_SCOPE)
     try:
         return get_pg_connection(fqdn, database, caller.email, pg_token)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"PostgreSQL connection failed: {e}")
+
+
+def _admin_connect(authorization: str, server_id: str):
+    """Resolve FQDN (via the caller's OBO ARM discovery, 404 on unknown) and open
+    a PG connection as the backend SP admin — used by grant/revoke/list, which
+    must run as a PG admin regardless of the caller's own PG access."""
+    user_token = authorization.replace("Bearer ", "")
+    arm_token = exchange_token_obo(user_token)
+    servers = list_postgres_servers(arm_token)
+    try:
+        fqdn = get_server_fqdn(server_id, servers)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="PostgreSQL server not found")
+    try:
+        return get_pg_admin_connection(fqdn)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"PostgreSQL connection failed: {e}")
 
@@ -122,3 +149,63 @@ def execute(
     if isinstance(result, dict) and "error" in result:
         raise HTTPException(status_code=500, detail=f"SQL error: {result['error']}")
     return result
+
+
+# --- Access provisioning (admin only) ------------------------------------
+
+
+@router.post("/grant")
+def grant(
+    data: PgGrantRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("system:admin")),
+):
+    conn = _admin_connect(authorization, data.server_id)
+    try:
+        result = grant_access(conn, data.user_email)
+    finally:
+        conn.close()
+    log_write_operation(
+        user_email=caller.email,
+        operation="grant",
+        database_name=data.server_id,
+        collection_name="pg_access",
+        document_id=data.user_email,
+    )
+    return result
+
+
+@router.post("/revoke")
+def revoke(
+    data: PgRevokeRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("system:admin")),
+):
+    conn = _admin_connect(authorization, data.server_id)
+    try:
+        result = revoke_access(conn, data.user_email)
+    except Exception as e:
+        raise HTTPException(status_code=409, detail=f"Cannot revoke: {e}")
+    finally:
+        conn.close()
+    log_write_operation(
+        user_email=caller.email,
+        operation="revoke",
+        database_name=data.server_id,
+        collection_name="pg_access",
+        document_id=data.user_email,
+    )
+    return result
+
+
+@router.post("/access")
+def access(
+    data: PgAccessListRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("system:admin")),
+):
+    conn = _admin_connect(authorization, data.server_id)
+    try:
+        return list_access(conn)
+    finally:
+        conn.close()

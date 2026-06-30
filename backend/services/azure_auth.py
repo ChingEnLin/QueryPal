@@ -112,6 +112,20 @@ def exchange_token_obo(user_token: str, scope: Optional[str] = None) -> str:
     return result["access_token"]
 
 
+def get_app_token(scope: str) -> str:
+    """Acquire an app-only (client-credentials) token for `scope`.
+
+    Used for actions QueryPal performs as itself (the backend service principal)
+    rather than on behalf of a user — e.g. running PostgreSQL grant/revoke as the
+    SP that is a permanent PG Entra admin.
+    """
+    app = _get_msal_app()
+    result = app.acquire_token_for_client(scopes=[scope])
+    if "access_token" not in result:
+        raise Exception(f"App token acquisition failed: {result}")
+    return result["access_token"]
+
+
 @dataclass
 class TokenClaims:
     email: Optional[str] = None

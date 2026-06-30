@@ -35,3 +35,23 @@ def test_obo_raises_when_no_access_token():
             assert False, "expected exception"
         except Exception as e:
             assert "OBO token exchange failed" in str(e)
+
+
+def test_get_app_token_uses_client_credentials():
+    fake_app = MagicMock()
+    fake_app.acquire_token_for_client.return_value = {"access_token": "apptok"}
+    with patch.object(auth, "_get_msal_app", return_value=fake_app):
+        assert auth.get_app_token("oss/.default") == "apptok"
+    _, kwargs = fake_app.acquire_token_for_client.call_args
+    assert kwargs["scopes"] == ["oss/.default"]
+
+
+def test_get_app_token_raises_when_no_access_token():
+    fake_app = MagicMock()
+    fake_app.acquire_token_for_client.return_value = {"error": "nope"}
+    with patch.object(auth, "_get_msal_app", return_value=fake_app):
+        try:
+            auth.get_app_token("oss/.default")
+            assert False, "expected exception"
+        except Exception as e:
+            assert "App token acquisition failed" in str(e)

@@ -144,3 +144,17 @@ class PgExecuteRequest(BaseModel):
     server_id: str
     database: str
     sql: str
+
+
+class PgGrantRequest(BaseModel):
+    server_id: str
+    user_email: str
+
+
+class PgRevokeRequest(BaseModel):
+    server_id: str
+    user_email: str
+
+
+class PgAccessListRequest(BaseModel):
+    server_id: str
