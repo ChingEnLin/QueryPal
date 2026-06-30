@@ -64,11 +64,12 @@ Respond ONLY with a suggestion for how to fix the query. Do not repeat the error
 
 def extract_python_code(text: str) -> str:
     """
-    Extracts code from a string wrapped in triple backticks (```python ... ```), or returns the original if not wrapped.
+    Extracts code from a string wrapped in triple backticks (```python ... ```,
+    ```sql ... ```, or an untagged ``` ... ```), or returns the original if not wrapped.
     """
     import re
 
-    match = re.search(r"```python\s*([\s\S]+?)\s*```", text)
+    match = re.search(r"```[a-zA-Z]*\s*([\s\S]+?)\s*```", text)
     if match:
         return match.group(1).strip()
     return text.strip()
