@@ -14,4 +14,7 @@ def get_pg_connection(fqdn: str, dbname: str, email: str, pg_token: str):
         user=email,
         password=pg_token,
         sslmode="require",
+        # Fail fast instead of hanging on the OS default (~minutes) when the
+        # server is unreachable — almost always a firewall/network issue.
+        connect_timeout=10,
     )
