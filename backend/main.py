@@ -15,6 +15,7 @@ from routes import (
     audit,
     argus,
     admin,
+    postgres,
 )
 
 
@@ -101,6 +102,7 @@ app.include_router(data_documents.router, prefix="/data", tags=["Data Documents"
 app.include_router(audit.router, prefix="/audit", tags=["Audit"])
 app.include_router(argus.router, prefix="/argus", tags=["Argus"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
+app.include_router(postgres.router, prefix="/postgres", tags=["PostgreSQL"])
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
