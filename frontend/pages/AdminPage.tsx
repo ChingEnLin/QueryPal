@@ -28,35 +28,48 @@ export default function AdminPage() {
   const [pgServers, setPgServers] = useState<PostgresServer[]>([]);
   const [pgServerId, setPgServerId] = useState<string>('');
   const [pgAccess, setPgAccess] = useState<Set<string>>(new Set());
+  const [pgAccessLoading, setPgAccessLoading] = useState(false);
   const [pgBusy, setPgBusy] = useState<Record<string, boolean>>({});
 
-  // All hooks must be called before any early return (rules of hooks)
+  // All hooks must be called before any early return (rules of hooks).
+  // Load users AND PG-server discovery together so the table (and whether the
+  // PostgreSQL column exists) renders once, with no pop-in afterwards.
   useEffect(() => {
     if (!can('system:admin')) return;
-    getAdminUsers()
-      .then(setUsers)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!can('system:admin')) return;
-    getAuthenticatedToken()
-      .then((token) => listPostgresServers(token))
-      .then((servers) => {
-        setPgServers(servers);
-        if (servers.length > 0) setPgServerId(servers[0].id);
-      })
-      .catch(() => { /* PG provisioning is optional; absence hides the column */ });
+    (async () => {
+      try {
+        const [adminUsers] = await Promise.all([
+          getAdminUsers(),
+          // PG provisioning is optional — never fail the page over it.
+          (async () => {
+            try {
+              const token = await getAuthenticatedToken();
+              const servers = await listPostgresServers(token);
+              setPgServers(servers);
+              if (servers.length > 0) setPgServerId(servers[0].id);
+            } catch { /* absence just hides the column */ }
+          })(),
+        ]);
+        setUsers(adminUsers);
+      } catch (e: any) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   // Load who currently has access whenever the selected server changes.
   useEffect(() => {
     if (!pgServerId) return;
+    let cancelled = false;
+    setPgAccessLoading(true);
     getAuthenticatedToken()
       .then((token) => pgListAccess(token, pgServerId))
-      .then((emails) => setPgAccess(new Set(emails.map((e) => e.toLowerCase()))))
-      .catch(() => setPgAccess(new Set()));
+      .then((emails) => { if (!cancelled) setPgAccess(new Set(emails.map((e) => e.toLowerCase()))); })
+      .catch(() => { if (!cancelled) setPgAccess(new Set()); })
+      .finally(() => { if (!cancelled) setPgAccessLoading(false); });
+    return () => { cancelled = true; };
   }, [pgServerId]);
 
   const setPgAccessFor = (email: string, has: boolean) =>
@@ -229,8 +242,10 @@ export default function AdminPage() {
                   </td>
 
                   {pgServers.length > 0 && (
-                    <td style={{ padding: '10px 10px' }}>
-                      {pgAccess.has(u.email.toLowerCase()) ? (
+                    <td style={{ padding: '10px 10px', minWidth: 120 }}>
+                      {pgAccessLoading ? (
+                        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Checking…</span>
+                      ) : pgAccess.has(u.email.toLowerCase()) ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span className="qa-chip ok" style={{ fontSize: 11 }}>● granted</span>
                           <button
