@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useRoles } from '../hooks/useRoles';
-import { getAdminUsers, assignUserRole, removeUserRole, AdminUser } from '../services/dbService';
+import {
+  getAdminUsers, assignUserRole, removeUserRole, AdminUser,
+  getAuthenticatedToken, listPostgresServers, pgListAccess, pgGrantAccess, pgRevokeAccess,
+  PostgresServer,
+} from '../services/dbService';
 import AppLayout from '../components/AppLayout';
 
 const ROLES = ['Admin', 'Analyst', 'Viewer'] as const;
@@ -20,6 +24,12 @@ export default function AdminPage() {
   const [pendingRole, setPendingRole] = useState<Record<string, string>>({});
   const [actionError, setActionError] = useState<Record<string, string>>({});
 
+  // PostgreSQL access provisioning
+  const [pgServers, setPgServers] = useState<PostgresServer[]>([]);
+  const [pgServerId, setPgServerId] = useState<string>('');
+  const [pgAccess, setPgAccess] = useState<Set<string>>(new Set());
+  const [pgBusy, setPgBusy] = useState<Record<string, boolean>>({});
+
   // All hooks must be called before any early return (rules of hooks)
   useEffect(() => {
     if (!can('system:admin')) return;
@@ -28,6 +38,61 @@ export default function AdminPage() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!can('system:admin')) return;
+    getAuthenticatedToken()
+      .then((token) => listPostgresServers(token))
+      .then((servers) => {
+        setPgServers(servers);
+        if (servers.length > 0) setPgServerId(servers[0].id);
+      })
+      .catch(() => { /* PG provisioning is optional; absence hides the column */ });
+  }, []);
+
+  // Load who currently has access whenever the selected server changes.
+  useEffect(() => {
+    if (!pgServerId) return;
+    getAuthenticatedToken()
+      .then((token) => pgListAccess(token, pgServerId))
+      .then((emails) => setPgAccess(new Set(emails.map((e) => e.toLowerCase()))))
+      .catch(() => setPgAccess(new Set()));
+  }, [pgServerId]);
+
+  const setPgAccessFor = (email: string, has: boolean) =>
+    setPgAccess((prev) => {
+      const next = new Set(prev);
+      if (has) next.add(email.toLowerCase()); else next.delete(email.toLowerCase());
+      return next;
+    });
+
+  const handlePgGrant = async (oid: string, email: string) => {
+    setPgBusy((p) => ({ ...p, [oid]: true }));
+    setActionError((p) => ({ ...p, [oid]: '' }));
+    try {
+      const token = await getAuthenticatedToken();
+      await pgGrantAccess(token, pgServerId, email);
+      setPgAccessFor(email, true);
+    } catch (e: any) {
+      setActionError((p) => ({ ...p, [oid]: e.message }));
+    } finally {
+      setPgBusy((p) => ({ ...p, [oid]: false }));
+    }
+  };
+
+  const handlePgRevoke = async (oid: string, email: string) => {
+    setPgBusy((p) => ({ ...p, [oid]: true }));
+    setActionError((p) => ({ ...p, [oid]: '' }));
+    try {
+      const token = await getAuthenticatedToken();
+      await pgRevokeAccess(token, pgServerId, email);
+      setPgAccessFor(email, false);
+    } catch (e: any) {
+      setActionError((p) => ({ ...p, [oid]: e.message }));
+    } finally {
+      setPgBusy((p) => ({ ...p, [oid]: false }));
+    }
+  };
 
   const handleAssign = async (oid: string) => {
     const role = pendingRole[oid];
@@ -70,6 +135,19 @@ export default function AdminPage() {
           </p>
         </div>
 
+        {pgServers.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>PostgreSQL server:</span>
+            <select
+              value={pgServerId}
+              onChange={(e) => setPgServerId(e.target.value)}
+              style={{ fontSize: 12, fontFamily: 'var(--font-body)', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 5, padding: '4px 8px', color: 'var(--fg)', cursor: 'pointer' }}
+            >
+              {pgServers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+
         {loading && (
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading users…</div>
         )}
@@ -86,7 +164,7 @@ export default function AdminPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['User', 'Current Roles', 'Add Role'].map((h) => (
+                {['User', 'Current Roles', 'Add Role', ...(pgServers.length > 0 ? ['PostgreSQL'] : [])].map((h) => (
                   <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: 'var(--muted)', fontWeight: 500, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
                 ))}
               </tr>
@@ -149,6 +227,33 @@ export default function AdminPage() {
                       <div style={{ fontSize: 11.5, color: 'var(--status-err)', marginTop: 4 }}>{actionError[u.oid]}</div>
                     )}
                   </td>
+
+                  {pgServers.length > 0 && (
+                    <td style={{ padding: '10px 10px' }}>
+                      {pgAccess.has(u.email.toLowerCase()) ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="qa-chip ok" style={{ fontSize: 11 }}>● granted</span>
+                          <button
+                            className="qa-btn"
+                            disabled={pgBusy[u.oid]}
+                            onClick={() => handlePgRevoke(u.oid, u.email)}
+                            style={{ fontSize: 12, padding: '4px 10px' }}
+                          >
+                            {pgBusy[u.oid] ? '…' : 'Revoke'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className="qa-btn primary"
+                          disabled={pgBusy[u.oid]}
+                          onClick={() => handlePgGrant(u.oid, u.email)}
+                          style={{ fontSize: 12, padding: '4px 10px' }}
+                        >
+                          {pgBusy[u.oid] ? '…' : 'Grant'}
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

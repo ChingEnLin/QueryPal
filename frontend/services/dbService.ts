@@ -912,3 +912,16 @@ export async function pgNl2Sql(token: string, body: {
 export async function pgExecute(token: string, serverId: string, database: string, sql: string) {
   return _pgPost(token, '/postgres/execute', { server_id: serverId, database, sql });
 }
+
+// --- PostgreSQL access provisioning (admin only) ---
+export async function pgListAccess(token: string, serverId: string): Promise<string[]> {
+  return _pgPost(token, '/postgres/access', { server_id: serverId });
+}
+
+export async function pgGrantAccess(token: string, serverId: string, userEmail: string) {
+  return _pgPost(token, '/postgres/grant', { server_id: serverId, user_email: userEmail });
+}
+
+export async function pgRevokeAccess(token: string, serverId: string, userEmail: string) {
+  return _pgPost(token, '/postgres/revoke', { server_id: serverId, user_email: userEmail });
+}
