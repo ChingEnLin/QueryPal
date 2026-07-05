@@ -70,6 +70,23 @@ def test_execute_rejects_unknown_server(client, mock_auth_header, patched):
     assert resp.status_code == 404
 
 
+def test_analyze_returns_insight(client, mock_auth_header, patched, monkeypatch):
+    from services.gemini_service import PgInsight
+
+    monkeypatch.setattr(
+        patched,
+        "analyze_pg_result",
+        lambda **kw: PgInsight(summary="2 rows", points=["p1"], followups=["f1"]),
+    )
+    resp = client.post(
+        "/postgres/analyze",
+        headers=mock_auth_header,
+        json={"columns": ["id"], "rows": [[1], [2]], "user_input": "count"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"summary": "2 rows", "points": ["p1"], "followups": ["f1"]}
+
+
 # --- Access provisioning (admin) routes ---------------------------------
 
 import base64 as _b64
@@ -79,8 +96,12 @@ import json as _json
 def _admin_header():
     payload = (
         _b64.urlsafe_b64encode(
-            _json.dumps({"preferred_username": "admin@example.com", "roles": ["Admin"]}).encode()
-        ).rstrip(b"=").decode()
+            _json.dumps(
+                {"preferred_username": "admin@example.com", "roles": ["Admin"]}
+            ).encode()
+        )
+        .rstrip(b"=")
+        .decode()
     )
     return {"authorization": f"Bearer header.{payload}.sig"}
 
@@ -108,7 +129,9 @@ def test_grant_requires_admin(client, mock_auth_header, patched_admin):
 
 def test_grant_ok_for_admin(client, patched_admin, monkeypatch):
     monkeypatch.setattr(
-        patched_admin, "grant_access", lambda conn, email: {"granted": email, "created": True}
+        patched_admin,
+        "grant_access",
+        lambda conn, email: {"granted": email, "created": True},
     )
     resp = client.post(
         "/postgres/grant",

@@ -913,6 +913,12 @@ export async function pgExecute(token: string, serverId: string, database: strin
   return _pgPost(token, '/postgres/execute', { server_id: serverId, database, sql });
 }
 
+export async function pgAnalyze(token: string, body: {
+  columns: string[]; rows: unknown[][]; user_input?: string; model?: string;
+}): Promise<{ summary: string; points: string[]; followups: string[] }> {
+  return _pgPost(token, '/postgres/analyze', body);
+}
+
 // --- PostgreSQL access provisioning (admin only) ---
 export async function pgListAccess(token: string, serverId: string): Promise<string[]> {
   return _pgPost(token, '/postgres/access', { server_id: serverId });

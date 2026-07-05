@@ -146,6 +146,13 @@ class PgExecuteRequest(BaseModel):
     sql: str
 
 
+class PgAnalyzeRequest(BaseModel):
+    columns: list[str]
+    rows: list[list]
+    user_input: str = ""
+    model: str = "gemini-2.5-flash"
+
+
 class PgGrantRequest(BaseModel):
     server_id: str
     user_email: str

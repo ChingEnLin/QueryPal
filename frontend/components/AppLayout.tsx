@@ -24,6 +24,11 @@ interface AppLayoutProps {
   availableAccounts?: CosmosDBAccount[];
   onSwitchAccount?: (account: CosmosDBAccount) => void;
   chipLoading?: boolean;
+  pgSchema?: { schema: string; tables: { name: string; rowEstimate: number }[] }[];
+  activePgTable?: string;
+  onPgTableSelect?: (schema: string, table: string) => void;
+  pgDatabases?: string[];
+  onSwitchPgDatabase?: (db: string) => void;
 }
 
 const AppLayout: React.FC<AppLayoutProps> = ({
@@ -44,6 +49,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   availableAccounts,
   onSwitchAccount,
   chipLoading,
+  pgSchema,
+  activePgTable,
+  onPgTableSelect,
+  pgDatabases,
+  onSwitchPgDatabase,
 }) => {
   const navigate = useNavigate();
   const { toggleTheme } = useTheme();
@@ -102,6 +112,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         availableAccounts={availableAccounts}
         onSwitchAccount={onSwitchAccount}
         chipLoading={chipLoading}
+        pgSchema={pgSchema}
+        activePgTable={activePgTable}
+        onPgTableSelect={onPgTableSelect}
+        pgDatabases={pgDatabases}
+        onSwitchPgDatabase={onSwitchPgDatabase}
       />
       <div className="qp-main">
         <AppTopBar

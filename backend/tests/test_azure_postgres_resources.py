@@ -64,20 +64,37 @@ def test_get_schema_overview_groups_tables_by_schema():
 
 def test_get_table_info_returns_columns_indexes_sample():
     cur = MagicMock()
-    # 1) columns query  2) indexes query  3) sample query
+    cur.fetchone.return_value = (16384,)  # relid lookup
+    # fetchall order: columns, pk, fk, indexes, sample
     cur.fetchall.side_effect = [
-        [("id", "integer", "NO"), ("name", "text", "YES")],
-        [("patients_pkey",)],
-        [(1, "Ann"), (2, "Bob")],
+        [
+            ("id", "integer", "NO"),
+            ("name", "text", "YES"),
+            ("study_id", "integer", "YES"),
+        ],
+        [("id",)],  # primary key columns
+        [("study_id", "studies", "id")],  # foreign keys
+        [("patients_pkey", "btree", True, "id"), ("idx_name", "gin", False, "name")],
+        [(1, "Ann", 7), (2, "Bob", 7)],  # sample
     ]
-    cur.description = [("id",), ("name",)]
+    cur.description = [("id",), ("name",), ("study_id",)]
     conn = MagicMock()
     conn.cursor.return_value.__enter__.return_value = cur
     out = pg.get_table_info(conn, "public", "patients", sample_limit=20)
     assert out["columns"] == [
-        {"name": "id", "type": "integer", "nullable": False},
-        {"name": "name", "type": "text", "nullable": True},
+        {"name": "id", "type": "integer", "nullable": False, "pk": True, "fk": None},
+        {"name": "name", "type": "text", "nullable": True, "pk": False, "fk": None},
+        {
+            "name": "study_id",
+            "type": "integer",
+            "nullable": True,
+            "pk": False,
+            "fk": "studies.id",
+        },
     ]
-    assert out["indexes"] == ["patients_pkey"]
-    assert out["sample"]["columns"] == ["id", "name"]
-    assert out["sample"]["rows"] == [[1, "Ann"], [2, "Bob"]]
+    assert out["indexes"] == [
+        {"name": "patients_pkey", "cols": "id", "kind": "uniq"},
+        {"name": "idx_name", "cols": "name", "kind": "gin"},
+    ]
+    assert out["sample"]["columns"] == ["id", "name", "study_id"]
+    assert out["sample"]["rows"] == [[1, "Ann", 7], [2, "Bob", 7]]

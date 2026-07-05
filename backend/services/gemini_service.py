@@ -325,3 +325,55 @@ def generate_schema_relationships(
     except Exception as e:
         print(f"Error parsing Gemini relationship response: {e}")
         return SchemaRelationshipsResponse(relationships=[])
+
+
+class PgInsight(BaseModel):
+    summary: str
+    points: List[str] = Field(default_factory=list)
+    followups: List[str] = Field(default_factory=list)
+
+
+PROMPT_TEMPLATE_PG_INSIGHT = """You are a data analyst reviewing a PostgreSQL query result.
+
+User's request (if any): {user_input}
+Columns: {columns}
+Rows (sample, may be truncated):
+{rows}
+
+Return a JSON object:
+- "summary": one or two sentences describing what the result shows.
+- "points": up to 4 short bullet strings — notable patterns, anomalies, or distributions.
+- "followups": up to 3 short natural-language follow-up questions the user could ask next.
+Base everything only on the data shown. Do not invent columns or values.
+"""
+
+
+def analyze_pg_result(
+    columns: list, rows: list, user_input: str = "", model: str = "gemini-2.5-flash"
+) -> PgInsight:
+    """Summarize a SQL result set into {summary, points, followups}."""
+    rows_str = str(rows)[:8000]
+    full_prompt = PROMPT_TEMPLATE_PG_INSIGHT.format(
+        user_input=user_input or "(none)", columns=columns, rows=rows_str
+    )
+    client = genai.Client()
+    response = client.models.generate_content(
+        model=model,
+        contents=full_prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=PgInsight,
+            thinking_config=thinking_config_for(model),
+        ),
+    )
+    if hasattr(response, "parsed") and response.parsed:
+        return response.parsed
+    import json
+
+    try:
+        return PgInsight(**json.loads(response.text))
+    except Exception as e:
+        print(f"Error parsing Gemini insight response: {e}")
+        return PgInsight(
+            summary="Could not analyze the result.", points=[], followups=[]
+        )

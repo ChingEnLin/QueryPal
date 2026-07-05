@@ -2,6 +2,7 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException
 
 from models.schemas import (
     PgAccessListRequest,
+    PgAnalyzeRequest,
     PgDatabasesRequest,
     PgExecuteRequest,
     PgGrantRequest,
@@ -19,6 +20,7 @@ from services.azure_postgres_resources import (
     list_postgres_servers,
 )
 from services.data_documents_service import log_write_operation
+from services.gemini_service import analyze_pg_result
 from services.pg_admin_service import (
     get_pg_admin_connection,
     grant_access,
@@ -47,7 +49,9 @@ def _connect(authorization: str, server_id: str, database: str, caller: Caller):
     try:
         return get_pg_connection(fqdn, database, caller.email, pg_token)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"PostgreSQL connection failed: {e}")
+        raise HTTPException(
+            status_code=502, detail=f"PostgreSQL connection failed: {e}"
+        )
 
 
 def _admin_connect(authorization: str, server_id: str):
@@ -64,7 +68,9 @@ def _admin_connect(authorization: str, server_id: str):
     try:
         return get_pg_admin_connection(fqdn)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"PostgreSQL connection failed: {e}")
+        raise HTTPException(
+            status_code=502, detail=f"PostgreSQL connection failed: {e}"
+        )
 
 
 @router.get("/servers")
@@ -149,6 +155,22 @@ def execute(
     if isinstance(result, dict) and "error" in result:
         raise HTTPException(status_code=500, detail=f"SQL error: {result['error']}")
     return result
+
+
+@router.post("/analyze")
+def analyze(
+    data: PgAnalyzeRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
+):
+    """AI insight over a result set the caller already fetched. No DB access —
+    operates purely on the provided rows, so no server connection is opened."""
+    return analyze_pg_result(
+        columns=data.columns,
+        rows=data.rows,
+        user_input=data.user_input,
+        model=data.model,
+    )
 
 
 # --- Access provisioning (admin only) ------------------------------------
