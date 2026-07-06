@@ -98,6 +98,7 @@ export interface AnalysisResult {
     chartType: ChartJSType;
     chartData: ChartJSData;
     chartOptions?: ChartJSOptions;
+    followups?: string[];
 }
 
 /**

@@ -25,6 +25,7 @@ ChartJS.register(
 
 interface AnalysisResultDisplayProps {
   result: AnalysisResult;
+  onFollowup?: (prompt: string) => void;
 }
 
 const SparkleIcon = () => (
@@ -44,7 +45,7 @@ const CHART_TYPE_LABELS: Record<string, string> = {
   bubble: 'Bubble chart',
 };
 
-const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ result }) => {
+const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ result, onFollowup }) => {
   const { theme } = useTheme();
 
   const themedChartOptions = React.useMemo(() => {
@@ -152,6 +153,24 @@ const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ result })
           }}>
             {result.insight}
           </p>
+          {result.followups && result.followups.length > 0 && onFollowup && (
+            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)' }}>
+                Follow-ups
+              </div>
+              {result.followups.map((f, i) => (
+                <button
+                  key={i}
+                  onClick={() => onFollowup(f)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 9px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--panel)', font: 'inherit', fontSize: 12, color: 'var(--fg)', cursor: 'pointer' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--soft)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--panel)'; }}
+                >
+                  <span style={{ color: 'var(--accent)', marginRight: 6 }}>→</span>{f}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Chart panel */}

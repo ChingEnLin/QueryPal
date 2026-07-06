@@ -37,6 +37,7 @@ interface QueryResultProps {
   isAnalyzing: boolean;
   analysisResult: AnalysisResult | null;
   analysisError: string | null;
+  onFollowup?: (prompt: string) => void;
   onEvaluateWrite?: () => void;
   isEvaluatingWrite?: boolean;
   writeEvaluationResult?: { evaluation: string } | null;
@@ -100,7 +101,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
   isExecuting, executionError, executionResult,
   onDebug, isDebugging, debuggingResult, debugError,
   sourceCollection, onSetIntermediateContext, intermediateContext,
-  onAnalyze, isAnalyzing, analysisResult, analysisError,
+  onAnalyze, isAnalyzing, analysisResult, analysisError, onFollowup,
   onEvaluateWrite, isEvaluatingWrite, writeEvaluationResult, writeEvaluationError,
   isTutorialActive, tutorialStepIndex,
 }) => {
@@ -419,7 +420,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
         {analysisError && (
           <div style={{ fontSize: 12, color: '#c94250', padding: '8px 0' }}>Analysis error: {analysisError}</div>
         )}
-        {analysisResult && <AnalysisResultDisplay result={analysisResult} />}
+        {analysisResult && <AnalysisResultDisplay result={analysisResult} onFollowup={onFollowup} />}
 
         {graphDrawer}
 
