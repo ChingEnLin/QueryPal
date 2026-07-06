@@ -23,10 +23,8 @@ interface AppSidebarProps {
   // PostgreSQL workspace: table tree + database switching live in the sidebar,
   // mirroring how Cosmos collections do.
   pgSchema?: { schema: string; tables: { name: string; rowEstimate: number }[] }[];
-  activePgTable?: string; // "schema.table"
-  onPgTableSelect?: (schema: string, table: string) => void;
-  pgDatabases?: string[];
-  onSwitchPgDatabase?: (db: string) => void;
+  activePgTables?: string[]; // ["schema.table", ...]
+  onPgTableSelect?: (schema: string, table: string, ev?: { ctrlKey?: boolean; metaKey?: boolean }) => void;
 }
 
 type NavItem =
@@ -90,10 +88,8 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   onSwitchAccount,
   chipLoading,
   pgSchema,
-  activePgTable,
+  activePgTables,
   onPgTableSelect,
-  pgDatabases,
-  onSwitchPgDatabase,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -168,9 +164,8 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   const showAccounts = accountList.length > 0;
   const showDbs = !!availableDbs && availableDbs.length > 1;
   const showPgServers = pgServerList.length > 0;
-  const showPgDbs = isPg && !!pgDatabases && pgDatabases.length > 0;
 
-  const hasPicker = showAccounts || showDbs || showPgServers || showPgDbs;
+  const hasPicker = showAccounts || showDbs || showPgServers;
 
   const isActive = (href: string, matchPrefix?: boolean) => {
     if (matchPrefix) return location.pathname.startsWith(href);
@@ -353,45 +348,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                       })}
                     </>
                   )}
-                  {showPgDbs && (
-                    <>
-                      {(showAccounts || showDbs || showPgServers) && (
-                        <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
-                      )}
-                      <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
-                        Database
-                      </div>
-                      {pgDatabases.map(db => {
-                        const isCurrent = db === databaseName;
-                        return (
-                          <button
-                            key={db}
-                            onClick={() => { setShowDbPicker(false); if (!isCurrent) onSwitchPgDatabase?.(db); }}
-                            style={{
-                              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                              padding: '7px 10px', border: 'none', textAlign: 'left',
-                              cursor: isCurrent ? 'default' : 'pointer',
-                              background: isCurrent ? 'var(--accent-soft)' : 'transparent',
-                              color: isCurrent ? 'var(--accent)' : 'var(--fg)',
-                              fontSize: 12.5, fontFamily: 'var(--font-mono)',
-                            }}
-                            onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
-                            onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                          >
-                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" style={{ color: isCurrent ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>
-                              <ellipse cx="8" cy="4" rx="6" ry="2"/><path d="M2 4v8c0 1.1 2.7 2 6 2s6-.9 6-2V4M2 8c0 1.1 2.7 2 6 2s6-.9 6-2"/>
-                            </svg>
-                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{db}</span>
-                            {isCurrent && (
-                              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--accent)', flexShrink: 0 }}>
-                                <path d="M3 8l4 4 6-6"/>
-                              </svg>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </>
-                  )}
                 </div>
               )}
             </>
@@ -409,7 +365,8 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
 
         {NAV_ITEMS.map((item) => {
           const resolvedHref = item.label === 'Explorer' ? (explorerHref ?? item.href) : item.href;
-          const active = resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false;
+          // The PostgreSQL explorer is itself the workspace, so mark that tab active there.
+          const active = (isPg && item.label === 'Workspace') || (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false);
           const style: React.CSSProperties = {
             ...itemBase,
             color: active ? 'var(--fg)' : 'var(--muted)',
@@ -435,6 +392,17 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                 {iconSpan}
                 {item.label}
               </button>
+            );
+          }
+
+          // In the PG workspace the Workspace tab is the current page — show it
+          // selected and non-navigating (its href points at the Cosmos workspace).
+          if (isPg && item.label === 'Workspace') {
+            return (
+              <span key={item.label} style={{ ...style, cursor: 'default' }}>
+                {iconSpan}
+                {item.label}
+              </span>
             );
           }
 
@@ -631,11 +599,12 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, padding: '2px 6px', fontFamily: 'var(--font-mono)' }}>{g.schema}</div>
                 )}
                 {g.tables.map((t) => {
-                  const active = activePgTable === `${g.schema}.${t.name}`;
+                  const active = activePgTables?.includes(`${g.schema}.${t.name}`) ?? false;
                   return (
                     <button
                       key={t.name}
-                      onClick={() => onPgTableSelect?.(g.schema, t.name)}
+                      title="Click to open · ⌘/Ctrl-click to add for a cross-table query"
+                      onClick={(e) => onPgTableSelect?.(g.schema, t.name, { ctrlKey: e.ctrlKey, metaKey: e.metaKey })}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center',
                         padding: '5px 8px', borderRadius: 6, border: 'none', cursor: 'pointer',

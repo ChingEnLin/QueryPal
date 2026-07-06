@@ -233,6 +233,11 @@ html.dark {
 }
 .qa-iconbtn:hover { background: var(--soft); color: var(--fg); }
 
+/* Middle column is a flex column with a bounded height; without this its cards
+   would shrink to fit (tiny/unreadable) instead of overflowing. Keep their
+   natural height so the column scrolls. */
+.pg-workspace-mid > * { flex-shrink: 0; }
+
 /* table quick-switch chips */
 .ws-chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .ws-chip {
@@ -288,17 +293,23 @@ html.dark {
 .ws-fk .arr { color: var(--muted); }
 .ws-fk .dst { color: #2f6df0; }
 
-/* dark SQL editor with syntax-highlight overlay */
-.ws-editor { position: relative; min-height: 130px; overflow: auto; background: #0f0e0d; border-radius: 8px; }
+/* dark SQL editor: highlight <pre> sits in normal flow and defines the height
+   (grows with content); the transparent <textarea> overlays it exactly. The
+   whole editor grows inside the scrollable column instead of scrolling itself,
+   so the two layers can never desync. */
+.ws-editor { position: relative; min-height: 130px; background: #0f0e0d; border-radius: 8px; }
 .ws-editor .hl, .ws-editor textarea {
   margin: 0; padding: 12px 14px;
   font-family: var(--font-mono); font-size: 12px; line-height: 1.65; letter-spacing: 0;
   tab-size: 2; white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word;
   border: 0; box-sizing: border-box; width: 100%; min-height: 130px;
 }
-.ws-editor .hl { position: absolute; inset: 0; pointer-events: none; color: #c8c4bc; }
-.ws-editor textarea { position: relative; background: transparent; color: transparent; caret-color: #e0956e; resize: vertical; outline: none; display: block; }
-.ws-editor::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); }
+.ws-editor .hl { position: relative; pointer-events: none; color: #c8c4bc; }
+.ws-editor textarea {
+  position: absolute; inset: 0; height: 100%;
+  background: transparent; color: transparent; caret-color: #e0956e;
+  resize: none; overflow: hidden; outline: none; display: block;
+}
 .ws-copy {
   position: absolute; top: 8px; right: 8px; padding: 3px 9px; border-radius: 4px; cursor: pointer;
   background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.12);

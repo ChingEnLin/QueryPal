@@ -869,11 +869,15 @@ export interface PostgresServer { name: string; id: string; fqdn: string; }
 
 export async function listPostgresServers(token: string): Promise<PostgresServer[]> {
   if (!USE_MSAL_AUTH) return []; // dev/mock mode: no Azure PG discovery
+  const cached = _getCached<PostgresServer[]>('pg_servers');
+  if (cached) return cached;
   const res = await fetch(`${API_BASE_URL}/postgres/servers`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`postgres/servers ${res.status}`);
-  return res.json();
+  const data: PostgresServer[] = await res.json();
+  _setCached('pg_servers', data);
+  return data;
 }
 
 async function _pgPost(token: string, path: string, body: unknown) {
@@ -882,16 +886,31 @@ async function _pgPost(token: string, path: string, body: unknown) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${path} ${res.status}`);
+  if (!res.ok) {
+    // Surface the backend's error detail (e.g. the real Postgres message)
+    // instead of a bare status code.
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail || `${path} ${res.status}`);
+  }
   return res.json();
 }
 
 export async function getPgDatabases(token: string, serverId: string): Promise<string[]> {
-  return _pgPost(token, '/postgres/databases', { server_id: serverId });
+  const key = `pg_dbs:${serverId}`;
+  const cached = _getCached<string[]>(key);
+  if (cached) return cached;
+  const data = await _pgPost(token, '/postgres/databases', { server_id: serverId }) as string[];
+  _setCached(key, data);
+  return data;
 }
 
 export async function getPgSchema(token: string, serverId: string, database: string) {
-  return _pgPost(token, '/postgres/schema', { server_id: serverId, database });
+  const key = `pg_schema:${serverId}:${database}`;
+  const cached = _getCached<unknown>(key);
+  if (cached) return cached;
+  const data = await _pgPost(token, '/postgres/schema', { server_id: serverId, database });
+  _setCached(key, data);
+  return data;
 }
 
 export async function getPgTableInfo(

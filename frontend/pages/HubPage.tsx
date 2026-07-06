@@ -12,9 +12,10 @@ const RECENT_KEY = 'qp_recent_connections';
 const MAX_RECENTS = 3;
 
 interface RecentConnection {
-  accountId: string;
+  engine?: 'cosmos' | 'pg'; // absent on legacy entries => cosmos
+  accountId: string; // cosmos account id, or PG server id
   accountName: string;
-  action: 'query' | 'explorer';
+  action: 'query' | 'explorer' | 'workspace'; // pg uses 'workspace'
   accessedAt: number;
 }
 
@@ -331,13 +332,17 @@ const HubPage: React.FC = () => {
             </h2>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {recents.map((r) => {
+                const engine = r.engine ?? 'cosmos';
+                const isPg = engine === 'pg';
                 const account = accounts.find((a) => a.id === r.accountId);
                 const inert = !!busyAccountId;
+                const actionLabel = r.action === 'query' ? 'Query' : r.action === 'explorer' ? 'Explorer' : 'Workspace';
                 return (
                   <button
                     key={`${r.accountId}-${r.action}`}
                     disabled={inert}
                     onClick={() => {
+                      if (isPg) { navigate(`/postgres/${encodeURIComponent(r.accountId)}`); return; }
                       const acc = account ?? ({ id: r.accountId, name: r.accountName } as CosmosDBAccount);
                       if (r.action === 'query') handleOpenAccount(acc);
                       else handleOpenExplorer(acc);
@@ -353,10 +358,10 @@ const HubPage: React.FC = () => {
                     onMouseEnter={(e) => { if (!inert) { (e.currentTarget as HTMLButtonElement).style.borderColor = 'color-mix(in oklch, var(--accent) 35%, var(--border))'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--soft)'; } }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--panel)'; }}
                   >
-                    <div style={{ width: 22, height: 22, borderRadius: 5, background: '#1a4f8c', color: '#fff', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>C</div>
+                    <div style={{ width: 22, height: 22, borderRadius: 5, background: isPg ? '#31648c' : '#1a4f8c', color: '#fff', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{isPg ? 'P' : 'C'}</div>
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{r.accountName}</span>
                     <span className={`qa-chip${r.action === 'query' ? ' accent' : ''}`} style={{ fontSize: 10 }}>
-                      {r.action === 'query' ? 'Query' : 'Explorer'}
+                      {actionLabel}
                     </span>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>{formatRelativeTime(new Date(r.accessedAt).toISOString())}</span>
                   </button>
@@ -422,7 +427,11 @@ const HubPage: React.FC = () => {
               <PgConnectionCard
                 key={srv.id}
                 server={srv}
-                onOpen={(s) => navigate(`/postgres/${encodeURIComponent(s.id)}`)}
+                onOpen={(s) => {
+                  saveRecent({ engine: 'pg', accountId: s.id, accountName: s.name, action: 'workspace' });
+                  setRecents(loadRecents());
+                  navigate(`/postgres/${encodeURIComponent(s.id)}`);
+                }}
               />
             ))}
           </div>

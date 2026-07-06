@@ -189,11 +189,7 @@ const SqlEditor: React.FC<{
   onExplain: () => void;
   running: boolean;
 }> = ({ sql, onChange, taRef, onRun, onExplain, running }) => {
-  const preRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
-  const onScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
-    if (preRef.current) { preRef.current.scrollTop = e.currentTarget.scrollTop; preRef.current.scrollLeft = e.currentTarget.scrollLeft; }
-  };
   const copy = () => { navigator.clipboard?.writeText(sql); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   return (
     <div className="qa-card" style={{ padding: '10px 14px 12px' }}>
@@ -201,12 +197,12 @@ const SqlEditor: React.FC<{
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg)' }}>// generated SQL</span>
       </div>
       <div className="ws-editor">
-        <pre className="hl" ref={preRef} aria-hidden="true" dangerouslySetInnerHTML={{ __html: highlightSQL(sql) + '\n' }} />
-        <textarea ref={taRef} value={sql} spellCheck={false} onScroll={onScroll} onChange={(e) => onChange(e.target.value)} />
+        <pre className="hl" aria-hidden="true" dangerouslySetInnerHTML={{ __html: highlightSQL(sql) + '\n' }} />
+        <textarea ref={taRef} value={sql} spellCheck={false} onChange={(e) => onChange(e.target.value)} />
         <button className="ws-copy" onClick={copy} style={{ color: copied ? '#8fce9e' : undefined }}>{copied ? '✓ copied' : 'copy'}</button>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-        <button className="qa-btn" style={{ height: 30, gap: 6 }} disabled={running || !sql.trim()} onClick={onExplain}>
+        <button className="qa-btn" style={{ height: 30, gap: 6 }} disabled={running || !sql.trim()} onClick={onExplain} title="Run EXPLAIN to show the query plan without executing the query">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 13h12M4 11V7M7 11V4M10 11V8M13 11V5" /></svg>
           Explain
         </button>
@@ -247,8 +243,32 @@ const InsightsPanel: React.FC<{
   analyzing: boolean;
   onAnalyze: () => void;
   onFollowup: (f: string) => void;
-}> = ({ hasResult, insight, analyzing, onAnalyze, onFollowup }) => (
-  <aside className="ws-insights">
+}> = ({ hasResult, insight, analyzing, onAnalyze, onFollowup }) => {
+  const [width, setWidth] = useState(316);
+  const drag = useRef<{ startX: number; startW: number } | null>(null);
+  const onResizeStart = (e: React.PointerEvent) => {
+    e.preventDefault();
+    drag.current = { startX: e.clientX, startW: width };
+    const onMove = (ev: PointerEvent) => {
+      if (!drag.current) return;
+      // Panel is docked right, so dragging left (smaller clientX) widens it.
+      setWidth(Math.min(640, Math.max(240, drag.current.startW + (drag.current.startX - ev.clientX))));
+    };
+    const onUp = () => {
+      drag.current = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+  return (
+  <aside className="ws-insights" style={{ width, position: 'relative' }}>
+    <div
+      onPointerDown={onResizeStart}
+      title="Drag to resize"
+      style={{ position: 'absolute', top: 0, left: -3, width: 6, height: '100%', cursor: 'col-resize', zIndex: 2 }}
+    />
     <div className="ws-ins-hd">
       <SparkIcon stroke="var(--accent)" />
       <span className="t">Insights</span>
@@ -302,7 +322,8 @@ const InsightsPanel: React.FC<{
       )}
     </div>
   </aside>
-);
+  );
+};
 
 const EXAMPLES = ['count rows per table', 'the 10 most recent records', 'rows added in the last 7 days'];
 
@@ -315,7 +336,10 @@ const PostgresExplorerPage: React.FC = () => {
   const [serverName, setServerName] = useState('');
   const [databases, setDatabases] = useState<string[]>([]);
   const [schema, setSchema] = useState<SchemaGroup[]>([]);
-  const [tableInfo, setTableInfo] = useState<TableInfo | null>(null);
+  // Multi-select: keys are "schema.table" (in selection order); infos holds the
+  // fetched column/FK metadata per selected table.
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [infos, setInfos] = useState<Record<string, TableInfo>>({});
   const [schemaOpen, setSchemaOpen] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -344,15 +368,39 @@ const PostgresExplorerPage: React.FC = () => {
 
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  const schemaContext = useMemo(
-    () => schema.flatMap((g) => g.tables.map((t) => `${g.schema}.${t.name}`)).join('\n'),
+  const selectedInfos = useMemo(
+    () => selectedKeys.map((k) => infos[k]).filter(Boolean) as TableInfo[],
+    [selectedKeys, infos],
+  );
+
+  // Ground the NL->SQL agent in the selected tables' real columns + FK links so
+  // it writes correct joins; fall back to bare table names when nothing is picked.
+  const schemaContext = useMemo(() => {
+    if (selectedInfos.length === 0) {
+      return schema.flatMap((g) => g.tables.map((t) => `${g.schema}.${t.name}`)).join('\n');
+    }
+    return selectedInfos
+      .map((t) => {
+        const cols = t.columns
+          .map((c) => {
+            const tags = [c.pk && 'PK', c.fk && `FK -> ${c.fk}`, !c.nullable && 'NOT NULL']
+              .filter(Boolean)
+              .join(', ');
+            return `  - ${c.name} ${c.type}${tags ? ` [${tags}]` : ''}`;
+          })
+          .join('\n');
+        return `${t.schema}.${t.table}\n${cols}`;
+      })
+      .join('\n\n');
+  }, [selectedInfos, schema]);
+
+  const rowEstimateFor = useCallback(
+    (info: TableInfo) => {
+      const g = schema.find((s) => s.schema === info.schema);
+      return g?.tables.find((t) => t.name === info.table)?.rowEstimate ?? null;
+    },
     [schema],
   );
-  const selectedRowEstimate = useMemo(() => {
-    if (!tableInfo) return null;
-    const g = schema.find((s) => s.schema === tableInfo.schema);
-    return g?.tables.find((t) => t.name === tableInfo.table)?.rowEstimate ?? null;
-  }, [schema, tableInfo]);
 
   // Resolve server name + database list; redirect to first db if none in URL.
   useEffect(() => {
@@ -393,20 +441,31 @@ const PostgresExplorerPage: React.FC = () => {
 
   const resetResults = () => { setRunState('idle'); setSqlResult(null); setPlan(''); setMessages([]); setInsight(null); };
 
-  const openTable = useCallback(async (schemaName: string, table: string) => {
+  const openTable = useCallback(async (
+    schemaName: string, table: string, ev?: { ctrlKey?: boolean; metaKey?: boolean },
+  ) => {
+    const key = `${schemaName}.${table}`;
+    const multi = !!(ev?.ctrlKey || ev?.metaKey);
+    // Cmd/Ctrl-click an already-selected table -> deselect it.
+    if (multi && selectedKeys.includes(key)) {
+      setSelectedKeys((ks) => ks.filter((k) => k !== key));
+      return;
+    }
+    setSelectedKeys((ks) => (multi ? [...ks, key] : [key]));
+    setSchemaOpen(true);
+    if (infos[key]) return; // metadata already fetched
     try {
       setError(null);
       setTableLoading(true);
       const token = await getAuthenticatedToken();
       const info = await getPgTableInfo(token, serverId, database, schemaName, table);
-      setTableInfo(info);
-      setSchemaOpen(true);
+      setInfos((m) => ({ ...m, [key]: info }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setTableLoading(false);
     }
-  }, [serverId, database]);
+  }, [serverId, database, selectedKeys, infos]);
 
   const insertAtCaret = useCallback((snippet: string) => {
     const ta = taRef.current;
@@ -417,13 +476,12 @@ const PostgresExplorerPage: React.FC = () => {
     requestAnimationFrame(() => { ta.focus(); const p = start + snippet.length; ta.setSelectionRange(p, p); });
   }, [sql]);
 
-  const queryTable = useCallback(() => {
-    if (!tableInfo) return;
-    const cols = tableInfo.columns.slice(0, 6).map((c) => c.name).join(', ') || '*';
-    setSql(`SELECT ${cols}\nFROM ${tableInfo.schema}.${tableInfo.table}\nLIMIT 100;`);
+  const queryTable = useCallback((info: TableInfo) => {
+    const cols = info.columns.slice(0, 6).map((c) => c.name).join(', ') || '*';
+    setSql(`SELECT ${cols}\nFROM ${info.schema}.${info.table}\nLIMIT 100;`);
     resetResults();
     requestAnimationFrame(() => taRef.current?.focus());
-  }, [tableInfo]);
+  }, []);
 
   const generate = useCallback(async () => {
     if (!prompt.trim()) return;
@@ -527,7 +585,8 @@ const PostgresExplorerPage: React.FC = () => {
   }, []);
 
   const switchDatabase = (db: string) => {
-    setTableInfo(null);
+    setSelectedKeys([]);
+    setInfos({});
     resetResults();
     navigate(`/postgres/${encodeURIComponent(serverId)}/${encodeURIComponent(db)}`);
   };
@@ -542,37 +601,51 @@ const PostgresExplorerPage: React.FC = () => {
       accountId={serverId}
       databaseName={database}
       pgSchema={schema}
-      activePgTable={tableInfo ? `${tableInfo.schema}.${tableInfo.table}` : undefined}
+      activePgTables={selectedKeys}
       onPgTableSelect={openTable}
-      pgDatabases={databases}
-      onSwitchPgDatabase={switchDatabase}
     >
       <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg)', fontFamily: 'var(--font-body)', color: 'var(--fg)' }} onKeyDown={onEditorKey}>
         {/* ── Middle + right rail (table tree + db switch now live in the app sidebar) ── */}
         <div style={{ flex: 1, display: 'flex', minHeight: 0, minWidth: 0 }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '18px 22px 26px', display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          <div className="pg-workspace-mid" style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '18px 22px 26px', display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
             {error && (
               <div style={{ background: 'color-mix(in oklch, var(--status-err) 10%, var(--bg))', border: '1px solid color-mix(in oklch, var(--status-err) 30%, var(--border))', color: 'var(--status-err)', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: 13 }}>
                 <strong>Error: </strong>{error}
               </div>
             )}
 
-            {/* Breadcrumb */}
+            {/* Scope row: database selector + breadcrumb */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--muted)' }}>
-              {dbIcon}{database}
-              {tableInfo && <><span>›</span><span className="qa-chip accent" style={{ fontSize: 11 }}>{tableInfo.schema}.{tableInfo.table}</span></>}
+              <span style={{ color: 'var(--muted)', display: 'flex' }}>{dbIcon}</span>
+              <select
+                value={database}
+                onChange={(e) => switchDatabase(e.target.value)}
+                title="Switch database"
+                style={{ padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', fontFamily: 'var(--font-mono)', fontSize: 12, cursor: 'pointer', outline: 'none' }}
+              >
+                {databases.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              {selectedKeys.length > 0 && <span>›</span>}
+              {selectedKeys.map((k) => (
+                <span key={k} className="qa-chip accent" style={{ fontSize: 11 }}>{k}</span>
+              ))}
+              {selectedKeys.length > 1 && (
+                <span style={{ fontSize: 11 }}>· {selectedKeys.length} tables — ⌘/Ctrl-click a table to add or remove</span>
+              )}
             </div>
 
-            {/* Schema card */}
-            {loading && !tableInfo && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Loading schema…</div>}
+            {/* Schema cards (one per selected table) */}
+            {loading && selectedKeys.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Loading schema…</div>}
+            {selectedInfos.map((info) => (
+              <React.Fragment key={`${info.schema}.${info.table}`}>
+                <SchemaCard info={info} rowEstimate={rowEstimateFor(info)} open={schemaOpen}
+                  onToggle={() => setSchemaOpen((o) => !o)} onInsert={insertAtCaret} onQueryTable={() => queryTable(info)} />
+                {info.sample.error && (
+                  <div className="qa-chip" style={{ fontSize: 11.5 }}>Sample data unavailable — {info.sample.error}</div>
+                )}
+              </React.Fragment>
+            ))}
             {tableLoading && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Loading table metadata…</div>}
-            {!tableLoading && tableInfo && (
-              <SchemaCard info={tableInfo} rowEstimate={selectedRowEstimate} open={schemaOpen}
-                onToggle={() => setSchemaOpen((o) => !o)} onInsert={insertAtCaret} onQueryTable={queryTable} />
-            )}
-            {!tableLoading && tableInfo?.sample.error && (
-              <div className="qa-chip" style={{ fontSize: 11.5 }}>Sample data unavailable — {tableInfo.sample.error}</div>
-            )}
 
             {/* NL generator */}
             <div className="qa-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 11 }}>
@@ -621,14 +694,18 @@ const PostgresExplorerPage: React.FC = () => {
             {runState !== 'idle' && (
               <div className="qa-card ws-anim" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 10px', borderBottom: '1px solid var(--border)' }}>
-                  {([['results', `Results${runState === 'done' && sqlResult ? ` · ${sqlResult.rows.length}` : ''}`], ['plan', 'Query plan'], ['messages', 'Messages']] as const).map(([k, l]) => (
-                    <button key={k} onClick={() => setTab(k)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', padding: '10px 12px', fontSize: 12.5, fontWeight: tab === k ? 500 : 400, color: tab === k ? 'var(--fg)' : 'var(--muted)', borderBottom: tab === k ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: -1 }}>{l}</button>
+                  {([
+                    ['results', `Results${runState === 'done' && sqlResult ? ` · ${sqlResult.rows.length}` : ''}`, 'Rows returned by the query'],
+                    ['plan', 'Query plan', 'The PostgreSQL EXPLAIN plan — how the query would be executed'],
+                    ['messages', 'Messages', 'Execution log: status, timing and any errors'],
+                  ] as const).map(([k, l, tip]) => (
+                    <button key={k} onClick={() => setTab(k)} title={tip} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', padding: '10px 12px', fontSize: 12.5, fontWeight: tab === k ? 500 : 400, color: tab === k ? 'var(--fg)' : 'var(--muted)', borderBottom: tab === k ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: -1 }}>{l}</button>
                   ))}
                   {runState === 'done' && meta && (
                     <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>{meta}</span>
                   )}
                 </div>
-                <div style={{ maxHeight: 340, overflow: 'auto' }}>
+                <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
                   {runState === 'running' && (
                     <div style={{ minHeight: 140, display: 'grid', placeItems: 'center', color: 'var(--muted)', fontSize: 12.5 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><Spinner size={15} /> Executing on {database}…</div>
