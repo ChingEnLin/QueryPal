@@ -10,6 +10,7 @@ import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResou
 import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult, mockSavedQueries } from '../services/mockData';
 import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
 import QueryDisplay from '../components/QueryDisplay';
+import AgentVerdict from '../components/AgentVerdict';
 import { useRoles } from '../hooks/useRoles';
 import QueryResult from '../components/QueryResult';
 import Loader from '../components/Loader';
@@ -2052,6 +2053,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                         historyIndex={historyIndex}
                         onNavigateHistory={handleNavigateHistory}
                       />
+                      <AgentVerdict isValid={_queryResult?.is_valid} explanation={_queryResult?.explanation} />
                       <QueryResult
                         isExecuting={isExecuting}
                         executionError={executionError}
@@ -2559,6 +2561,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
             editableCode ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} isTransferable={!!handover} onOpenInExplorer={handleOpenInExplorer} canWrite={can('data:write')} />
+                <AgentVerdict isValid={_queryResult?.is_valid} explanation={_queryResult?.explanation} />
                 <QueryResult isExecuting={isExecuting} executionError={executionError} executionResult={executionResult} onDebug={handleDebugQuery} isDebugging={isDebugging} debuggingResult={debuggingResult} debugError={debugError} sourceCollection={querySourceCollection} onSetIntermediateContext={handleSetIntermediateContext} intermediateContext={intermediateContext} onAnalyze={handleAnalyzeQuery} isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError} onEvaluateWrite={handleEvaluateWrite} isEvaluatingWrite={isEvaluatingWrite} writeEvaluationResult={writeEvaluationResult} writeEvaluationError={writeEvaluationError} />
               </div>
             ) : (

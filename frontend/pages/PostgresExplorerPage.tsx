@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
+import AgentVerdict from '../components/AgentVerdict';
 import {
   getAuthenticatedToken,
   getPgDatabases,
@@ -352,6 +353,7 @@ const PostgresExplorerPage: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [sql, setSql] = useState('');
   const [sqlWriteNotice, setSqlWriteNotice] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<{ isValid?: boolean; explanation?: string } | null>(null);
 
   // Execution / results
   const [runState, setRunState] = useState<RunState>('idle');
@@ -439,7 +441,7 @@ const PostgresExplorerPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [serverId, database, navigate]);
 
-  const resetResults = () => { setRunState('idle'); setSqlResult(null); setPlan(''); setMessages([]); setInsight(null); };
+  const resetResults = () => { setRunState('idle'); setSqlResult(null); setPlan(''); setMessages([]); setInsight(null); setVerdict(null); };
 
   const openTable = useCallback(async (
     schemaName: string, table: string, ev?: { ctrlKey?: boolean; metaKey?: boolean },
@@ -496,6 +498,7 @@ const PostgresExplorerPage: React.FC = () => {
         user_input: prompt, model, max_iterations: maxIterations,
       });
       setSql(out.generated_code || '');
+      setVerdict({ isValid: out.is_valid, explanation: out.explanation });
       if (out.is_write_action) {
         setSqlWriteNotice('Write/DDL detected — not executed. Review before running manually.');
       } else if (out.query_result && typeof out.query_result === 'object' && 'columns' in out.query_result) {
@@ -689,6 +692,8 @@ const PostgresExplorerPage: React.FC = () => {
                 Generate a query above, click a column to build one, or “Query table”.
               </div>
             )}
+
+            {verdict && <AgentVerdict isValid={verdict.isValid} explanation={verdict.explanation} />}
 
             {/* Results card */}
             {runState !== 'idle' && (
