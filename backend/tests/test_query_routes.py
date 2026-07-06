@@ -204,6 +204,7 @@ def test_analyze_query(client):
             "chartType": "bar",
             "chartData": {"labels": ["A", "B"], "data": [1, 2]},
             "chartOptions": {"title": "Test Chart"},
+            "followups": ["Break down by province", "Show the newest 10"],
         }
 
         analyze_request = AnalyzeRequest(
@@ -221,6 +222,7 @@ def test_analyze_query(client):
         assert data["chartType"] == "bar"
         assert "chartData" in data
         assert "chartOptions" in data
+        assert data["followups"] == ["Break down by province", "Show the newest 10"]
 
         mock_analyze.assert_called_once_with(
             [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}],

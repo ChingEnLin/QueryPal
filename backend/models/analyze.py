@@ -12,3 +12,4 @@ class AnalyzeResponse(BaseModel):
     chartType: str
     chartData: Dict[str, Any]
     chartOptions: Dict[str, Any]
+    followups: List[str] = []

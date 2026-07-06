@@ -13,11 +13,12 @@ You are a data analyst assistant. Given the following MongoDB query result, prov
 1. A concise textual insight or summary of the data.
 2. A recommended chart type (bar, line, pie, etc.) for visualization.
 3. Chart.js compatible data and options objects for the recommended chart.
+4. Two or three short natural-language follow-up questions the user could ask next, grounded only in this data.
 
 Query result (JSON array):
 {query_result}
 
-Respond in JSON with keys: insight, chartType, chartData, chartOptions.
+Respond in JSON with keys: insight, chartType, chartData, chartOptions, followups.
 """
     client = genai.Client()
     response = client.models.generate_content(
