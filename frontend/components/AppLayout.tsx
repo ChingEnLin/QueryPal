@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import AppSidebar from './AppSidebar';
 import AppTopBar from './AppTopBar';
 import CommandPalette from './CommandPalette';
+import { savedQueriesTarget } from './UserMenuButton';
 import { CollectionSummary, DbInfo, CosmosDBAccount } from '../types';
 
 interface AppLayoutProps {
@@ -52,6 +53,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   onPgTableSelect,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toggleTheme } = useTheme();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -76,7 +78,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
           case '2': e.preventDefault(); setPaletteOpen(false); if (explorerHref) navigate(explorerHref); return;
           case '3': e.preventDefault(); setPaletteOpen(false); navigate('/analytics'); return;
           case '4': e.preventDefault(); setPaletteOpen(false); navigate('/audit'); return;
-          case 'S': case 's': e.preventDefault(); setPaletteOpen(false); navigate('/query-generator?panel=saved'); return;
+          case 'S': case 's': e.preventDefault(); setPaletteOpen(false); navigate(savedQueriesTarget(location.pathname)); return;
         }
       } else {
         if (e.key === 'n' || e.key === 'N') {
@@ -89,7 +91,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     };
     window.addEventListener('keydown', handle);
     return () => window.removeEventListener('keydown', handle);
-  }, [navigate, explorerHref, onNewQuery, toggleTheme]);
+  }, [navigate, location.pathname, explorerHref, onNewQuery, toggleTheme]);
 
   return (
     <div className="qp-app">

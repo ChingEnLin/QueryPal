@@ -15,7 +15,17 @@ from langgraph.graph import StateGraph, END
 from services.gemini_service import extract_python_code, thinking_config_for
 from services.pg_query_service import execute_sql, is_write_sql
 
+# Configure logger
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
 client = genai.Client()
 
 GENERATE_PROMPT = """You are an expert PostgreSQL engineer.

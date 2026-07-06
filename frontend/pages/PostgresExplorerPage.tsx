@@ -1,7 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import AgentVerdict from '../components/AgentVerdict';
+import SavedQueriesPanel from '../components/SavedQueriesPanel';
+import SaveQueryDialog from '../components/SaveQueryDialog';
+import ShareQueryDialog from '../components/ShareQueryDialog';
+import { SavedQuery } from '../types';
+import { msalInstance } from '../authConfig';
+import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import {
   getAuthenticatedToken,
   getPgDatabases,
@@ -188,8 +195,9 @@ const SqlEditor: React.FC<{
   taRef: React.RefObject<HTMLTextAreaElement | null>;
   onRun: () => void;
   onExplain: () => void;
+  onSave: () => void;
   running: boolean;
-}> = ({ sql, onChange, taRef, onRun, onExplain, running }) => {
+}> = ({ sql, onChange, taRef, onRun, onExplain, onSave, running }) => {
   const [copied, setCopied] = useState(false);
   const copy = () => { navigator.clipboard?.writeText(sql); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   return (
@@ -203,6 +211,10 @@ const SqlEditor: React.FC<{
         <button className="ws-copy" onClick={copy} style={{ color: copied ? '#8fce9e' : undefined }}>{copied ? '✓ copied' : 'copy'}</button>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+        <button className="qa-btn" style={{ height: 30, gap: 6 }} disabled={!sql.trim()} onClick={onSave} title="Save this query to your saved queries">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 2h8l3 3v9H3z" /><path d="M6 2v4h4M6 14v-4h5v4" /></svg>
+          Save
+        </button>
         <button className="qa-btn" style={{ height: 30, gap: 6 }} disabled={running || !sql.trim()} onClick={onExplain} title="Run EXPLAIN to show the query plan without executing the query">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 13h12M4 11V7M7 11V4M10 11V8M13 11V5" /></svg>
           Explain
@@ -368,6 +380,16 @@ const PostgresExplorerPage: React.FC = () => {
   const [insight, setInsight] = useState<Insight | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
 
+  // Saved queries (engine=pg)
+  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const [savedPanelOpen, setSavedPanelOpen] = useState(false);
+  const [saveDialog, setSaveDialog] = useState<{ isOpen: boolean; data?: Partial<SavedQuery> & { prompt: string; code: string } }>({ isOpen: false });
+  const [shareDialog, setShareDialog] = useState<{ isOpen: boolean; query?: SavedQuery }>({ isOpen: false });
+  const [savingQuery, setSavingQuery] = useState(false);
+  const currentUserEmail = msalInstance.getAllAccounts()[0]?.username || 'dev.user@example.com';
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedInfos = useMemo(
@@ -516,8 +538,8 @@ const PostgresExplorerPage: React.FC = () => {
     }
   }, [prompt, serverId, database, schemaContext, model, maxIterations]);
 
-  const runSql = useCallback(async () => {
-    if (!sql.trim()) return;
+  const execSql = useCallback(async (sqlText: string) => {
+    if (!sqlText.trim()) return;
     setRunning(true);
     setError(null);
     setRunState('running');
@@ -526,7 +548,7 @@ const PostgresExplorerPage: React.FC = () => {
     const t0 = performance.now();
     try {
       const token = await getAuthenticatedToken();
-      const out = await pgExecute(token, serverId, database, sql) as SqlResult;
+      const out = await pgExecute(token, serverId, database, sqlText) as SqlResult;
       const ms = Math.round(performance.now() - t0);
       setSqlResult(out);
       setSqlWriteNotice(null);
@@ -542,7 +564,9 @@ const PostgresExplorerPage: React.FC = () => {
     } finally {
       setRunning(false);
     }
-  }, [sql, serverId, database]);
+  }, [serverId, database]);
+
+  const runSql = useCallback(() => execSql(sql), [execSql, sql]);
 
   const explain = useCallback(async () => {
     if (!sql.trim()) return;
@@ -585,6 +609,68 @@ const PostgresExplorerPage: React.FC = () => {
     setPrompt(f);
     document.getElementById('pg-nl-prompt')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     (document.getElementById('pg-nl-prompt') as HTMLTextAreaElement | null)?.focus();
+  }, []);
+
+  // --- Saved queries (engine=pg) ---
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingSaved(true);
+    getSavedQueries('pg')
+      .then((qs) => { if (!cancelled) setSavedQueries(qs); })
+      .catch(() => { /* non-critical */ })
+      .finally(() => { if (!cancelled) setLoadingSaved(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Open the panel when deep-linked with ?panel=saved (from the profile menu).
+  useEffect(() => {
+    if (searchParams.get('panel') === 'saved') {
+      setSavedPanelOpen(true);
+      searchParams.delete('panel');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const openSaveDialog = useCallback(() => {
+    if (!sql.trim()) return;
+    setSaveDialog({ isOpen: true, data: { prompt, code: sql } });
+  }, [sql, prompt]);
+
+  const handleSaveOrUpdate = useCallback(async (data: Pick<SavedQuery, 'name' | 'prompt' | 'code'> | SavedQuery) => {
+    setSavingQuery(true);
+    try {
+      if ('id' in data) {
+        const updated = await updateSavedQuery(data as SavedQuery);
+        setSavedQueries((prev) => prev.map((q) => (q.id === updated.id ? updated : q)));
+      } else {
+        const created = await saveQuery({ ...(data as Pick<SavedQuery, 'name' | 'prompt' | 'code'>), engine: 'pg' });
+        setSavedQueries((prev) => [...prev, created]);
+      }
+      setSaveDialog({ isOpen: false });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingQuery(false);
+    }
+  }, []);
+
+  const handleDeleteSaved = useCallback(async (id: string) => {
+    const prev = savedQueries;
+    setSavedQueries((qs) => qs.filter((q) => q.id !== id));
+    try { await deleteSavedQuery(id); } catch { setSavedQueries(prev); }
+  }, [savedQueries]);
+
+  const loadSaved = useCallback((q: SavedQuery) => {
+    setPrompt(q.prompt);
+    setSql(q.code);
+    resetResults();
+    setSavedPanelOpen(false);
+  }, []);
+
+  const handleUpdateSharing = useCallback(async (q: SavedQuery) => {
+    setSavedQueries((prev) => prev.map((x) => (x.id === q.id ? q : x)));
+    setShareDialog({ isOpen: false });
+    try { await updateSavedQuery(q); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }, []);
 
   const switchDatabase = (db: string) => {
@@ -686,7 +772,7 @@ const PostgresExplorerPage: React.FC = () => {
 
             {/* SQL editor */}
             {sql ? (
-              <SqlEditor sql={sql} onChange={setSql} taRef={taRef} onRun={runSql} onExplain={explain} running={running} />
+              <SqlEditor sql={sql} onChange={setSql} taRef={taRef} onRun={runSql} onExplain={explain} onSave={openSaveDialog} running={running} />
             ) : (
               <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '28px 0', border: '1.5px dashed var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13 }}>
                 Generate a query above, click a column to build one, or “Query table”.
@@ -745,6 +831,43 @@ const PostgresExplorerPage: React.FC = () => {
           <InsightsPanel hasResult={!!sqlResult} insight={insight} analyzing={analyzing} onAnalyze={analyze} onFollowup={followup} />
         </div>
       </div>
+
+      {savedPanelOpen && createPortal(
+        <SavedQueriesPanel
+          onClose={() => setSavedPanelOpen(false)}
+          queries={savedQueries}
+          onLoad={loadSaved}
+          onLoadAndRun={(q) => { loadSaved(q); execSql(q.code); }}
+          onEdit={(q) => setSaveDialog({ isOpen: true, data: q })}
+          onDelete={handleDeleteSaved}
+          onShare={(q) => setShareDialog({ isOpen: true, query: q })}
+          isLoading={loadingSaved}
+          dbReady={!loading && !!database}
+          currentUserEmail={currentUserEmail}
+        />,
+        document.body,
+      )}
+
+      {saveDialog.isOpen && createPortal(
+        <SaveQueryDialog
+          isOpen={saveDialog.isOpen}
+          onClose={() => setSaveDialog({ isOpen: false })}
+          onSave={handleSaveOrUpdate}
+          isSaving={savingQuery}
+          initialData={saveDialog.data!}
+        />,
+        document.body,
+      )}
+
+      {shareDialog.isOpen && shareDialog.query && createPortal(
+        <ShareQueryDialog
+          isOpen={shareDialog.isOpen}
+          onClose={() => setShareDialog({ isOpen: false })}
+          onSave={handleUpdateSharing}
+          query={shareDialog.query}
+        />,
+        document.body,
+      )}
     </AppLayout>
   );
 };
