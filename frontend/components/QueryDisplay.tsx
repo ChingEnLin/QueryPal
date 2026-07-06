@@ -13,6 +13,8 @@ interface QueryDisplayProps {
   isTransferable?: boolean;
   onOpenInExplorer?: () => void;
   canWrite?: boolean;
+  onExplain?: () => void;
+  isExplaining?: boolean;
 }
 
 const WRITE_OPERATION_REGEX = /\.(insert_one|insert_many|update_one|update_many|replace_one|delete_one|delete_many|bulk_write|drop|drop_index|drop_indexes|create_index|create_indexes|rename_collection)\s*\(/i;
@@ -34,6 +36,7 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({
   code, onCodeChange, onRunQuery, onSaveQuery,
   isExecuting, historyCount, historyIndex, onNavigateHistory,
   isTransferable, onOpenInExplorer, canWrite = true,
+  onExplain, isExplaining,
 }) => {
   const [copied, setCopied] = useState(false);
   const [allowWrite, setAllowWrite] = useState(false);
@@ -214,6 +217,17 @@ const QueryDisplay: React.FC<QueryDisplayProps> = ({
         >
           Save
         </button>
+        {onExplain && (
+          <button
+            onClick={onExplain}
+            disabled={!code || isExplaining}
+            className="qa-btn"
+            style={{ fontSize: 12 }}
+            title="Explain in plain English what this query does"
+          >
+            {isExplaining ? 'Explaining…' : 'Explain'}
+          </button>
+        )}
         <button
           onClick={() => { onRunQuery(); setAllowWrite(false); }}
           disabled={isRunDisabled}

@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { parseQueryForHandover } from '../utils/queryHandover';
-import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships, evaluateWriteResult, getAvailableModels } from '../services/geminiService';
+import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, explainMongoQuery, inferSchemaRelationships, evaluateWriteResult, getAvailableModels } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
@@ -508,6 +508,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [isExplaining, setIsExplaining] = useState<boolean>(false);
 
   // State for write evaluation
   const [isEvaluatingWrite, setIsEvaluatingWrite] = useState<boolean>(false);
@@ -1019,6 +1021,23 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       setIsAnalyzing(false);
     }
   }, [selectedModel]);
+
+  const handleExplainQuery = useCallback(async () => {
+    if (!editableCode) return;
+    setIsExplaining(true);
+    setExplanation(null);
+    try {
+      const res = await explainMongoQuery(editableCode, selectedModel);
+      setExplanation(res.explanation);
+    } catch (e) {
+      setExplanation(e instanceof Error ? e.message : 'Failed to explain the query.');
+    } finally {
+      setIsExplaining(false);
+    }
+  }, [editableCode, selectedModel]);
+
+  // Clear a stale explanation whenever the query code changes.
+  useEffect(() => { setExplanation(null); }, [editableCode]);
 
   const handleEvaluateWrite = useCallback(async () => {
     if (!editableCode || !executionResult || !lastSuccessfulPrompt || !selectedAccountId || !connectedDbInfo) return;
@@ -2052,8 +2071,17 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                         historyCount={codeHistory.length}
                         historyIndex={historyIndex}
                         onNavigateHistory={handleNavigateHistory}
+                        onExplain={handleExplainQuery}
+                        isExplaining={isExplaining}
                       />
                       <AgentVerdict isValid={_queryResult?.is_valid} explanation={_queryResult?.explanation} />
+                      {explanation && (
+                        <div className="qa-card" style={{ padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <span className="qa-chip accent" style={{ flexShrink: 0 }}>Explanation</span>
+                          <span style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.55, flex: 1 }}>{explanation}</span>
+                          <button onClick={() => setExplanation(null)} className="qa-btn" style={{ fontSize: 11, padding: '2px 8px' }} title="Dismiss">Dismiss</button>
+                        </div>
+                      )}
                       <QueryResult
                         isExecuting={isExecuting}
                         executionError={executionError}
@@ -2560,8 +2588,15 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
           {(!isLoading && !error && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep && !isDemoModeForSaveStep) && (
             editableCode ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} isTransferable={!!handover} onOpenInExplorer={handleOpenInExplorer} canWrite={can('data:write')} />
+                <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} isTransferable={!!handover} onOpenInExplorer={handleOpenInExplorer} canWrite={can('data:write')} onExplain={handleExplainQuery} isExplaining={isExplaining} />
                 <AgentVerdict isValid={_queryResult?.is_valid} explanation={_queryResult?.explanation} />
+                {explanation && (
+                  <div className="qa-card" style={{ padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <span className="qa-chip accent" style={{ flexShrink: 0 }}>Explanation</span>
+                    <span style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.55, flex: 1 }}>{explanation}</span>
+                    <button onClick={() => setExplanation(null)} className="qa-btn" style={{ fontSize: 11, padding: '2px 8px' }} title="Dismiss">Dismiss</button>
+                  </div>
+                )}
                 <QueryResult isExecuting={isExecuting} executionError={executionError} executionResult={executionResult} onDebug={handleDebugQuery} isDebugging={isDebugging} debuggingResult={debuggingResult} debugError={debugError} sourceCollection={querySourceCollection} onSetIntermediateContext={handleSetIntermediateContext} intermediateContext={intermediateContext} onAnalyze={handleAnalyzeQuery} isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError} onEvaluateWrite={handleEvaluateWrite} isEvaluatingWrite={isEvaluatingWrite} writeEvaluationResult={writeEvaluationResult} writeEvaluationError={writeEvaluationError} />
               </div>
             ) : (
