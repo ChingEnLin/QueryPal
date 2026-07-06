@@ -377,3 +377,30 @@ def analyze_pg_result(
         return PgInsight(
             summary="Could not analyze the result.", points=[], followups=[]
         )
+
+
+PROMPT_TEMPLATE_EXPLAIN = """
+You are a MongoDB expert. Explain, in one or two plain-English sentences, exactly what the following PyMongo query does — the collection, filters, sorting, limits, and any aggregation stages. Do not restate the code or add caveats.
+
+Query:
+{query}
+"""
+
+
+def explain_mongo_query(code: str, model: str = "gemini-2.5-flash"):
+    from models.schemas import ExplainQueryResponse
+
+    prompt = PROMPT_TEMPLATE_EXPLAIN.format(query=code)
+    try:
+        client = genai.Client()
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                thinking_config=thinking_config_for(model)
+            ),
+        )
+        text = (response.text or "").strip()
+    except Exception as e:
+        text = f"Could not generate an explanation: {e}"
+    return ExplainQueryResponse(explanation=text or "No explanation available.")

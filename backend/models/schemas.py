@@ -64,6 +64,15 @@ class DebugSuggestionResponse(BaseModel):
     suggestion: str
 
 
+class ExplainQueryRequest(BaseModel):
+    query: str
+    model: str = "gemini-2.5-flash"
+
+
+class ExplainQueryResponse(BaseModel):
+    explanation: str
+
+
 class SchemaRelationshipsRequest(BaseModel):
     account_id: str
     database_name: str
