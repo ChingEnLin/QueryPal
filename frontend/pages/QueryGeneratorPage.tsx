@@ -1295,6 +1295,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setIsSavedQueriesPanelOpen(false);
   };
 
+  const handleSeedCollectionQuery = useCallback((code: string) => {
+    setUserInput('Preview documents');
+    setLastSuccessfulPrompt('');
+    setEditableCode(code);
+    setCodeHistory([code]);
+    setHistoryIndex(0);
+  }, []);
+
   const handleLoadAndRunSavedQuery = (query: SavedQuery) => {
     clearQueryState();
     setUserInput(query.prompt);
@@ -1726,6 +1734,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                                     // Deselect this collection
                                     setSelectedCollections(prev => prev.filter(c => c !== colName));
                                   }}
+                                  onSeedQuery={handleSeedCollectionQuery}
                                 />
                               ) : (
                                 <div className="py-4 text-center text-red-500 text-sm">Failed to load details.</div>
@@ -2447,7 +2456,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     {isColLoading ? (
                       <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--muted)' }}>Loading schema…</div>
                     ) : info ? (
-                      <CollectionActionPanel info={info} onClose={() => setSelectedCollections(prev => prev.filter(c => c !== colName))} />
+                      <CollectionActionPanel info={info} onClose={() => setSelectedCollections(prev => prev.filter(c => c !== colName))} onSeedQuery={handleSeedCollectionQuery} />
                     ) : (
                       <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--status-err)' }}>Failed to load schema.</div>
                     )}

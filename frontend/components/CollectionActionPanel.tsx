@@ -69,9 +69,10 @@ export const SchemaRenderer: React.FC<SchemaRendererProps> = ({ data, indent = 0
 interface CollectionActionPanelProps {
   info: CollectionInfo;
   onClose: () => void;
+  onSeedQuery?: (code: string) => void;
 }
 
-const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onClose }) => {
+const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onClose, onSeedQuery }) => {
   const [isSchemaOpen, setIsSchemaOpen] = useState(true);
 
   useEffect(() => { setIsSchemaOpen(true); }, [info.name]);
@@ -151,6 +152,18 @@ const CollectionActionPanel: React.FC<CollectionActionPanelProps> = ({ info, onC
           </div>
         )}
       </div>
+
+      {onSeedQuery && (
+        <button
+          onClick={() => onSeedQuery(`db['${info.name}'].find({}).limit(20)`)}
+          className="qa-btn"
+          style={{ alignSelf: 'flex-start', fontSize: 12, gap: 6, marginBottom: 8 }}
+          title={`Seed a starter query for ${info.name}`}
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><polygon points="4,2 14,8 4,14" /></svg>
+          Query collection
+        </button>
+      )}
 
       {/* Close / deselect */}
       <button
