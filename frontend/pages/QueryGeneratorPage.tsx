@@ -1039,6 +1039,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   // Clear a stale explanation whenever the query code changes.
   useEffect(() => { setExplanation(null); }, [editableCode]);
 
+  const handleAnalysisFollowup = useCallback((prompt: string) => {
+    setUserInput(prompt);
+    const primaryContext = selectedCollections.length > 0 ? collectionDetailsMap[selectedCollections[0]] : undefined;
+    setLastSuccessfulPrompt(prompt);
+    handleGenerateQuery(prompt, primaryContext);
+  }, [selectedCollections, collectionDetailsMap, handleGenerateQuery]);
+
   const handleEvaluateWrite = useCallback(async () => {
     if (!editableCode || !executionResult || !lastSuccessfulPrompt || !selectedAccountId || !connectedDbInfo) return;
 
@@ -2094,6 +2101,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                         onSetIntermediateContext={handleSetIntermediateContext}
                         intermediateContext={intermediateContext}
                         onAnalyze={handleAnalyzeQuery}
+                        onFollowup={handleAnalysisFollowup}
                         isAnalyzing={isAnalyzing}
                         analysisResult={analysisResult}
                         analysisError={analysisError}
@@ -2597,7 +2605,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     <button onClick={() => setExplanation(null)} className="qa-btn" style={{ fontSize: 11, padding: '2px 8px' }} title="Dismiss">Dismiss</button>
                   </div>
                 )}
-                <QueryResult isExecuting={isExecuting} executionError={executionError} executionResult={executionResult} onDebug={handleDebugQuery} isDebugging={isDebugging} debuggingResult={debuggingResult} debugError={debugError} sourceCollection={querySourceCollection} onSetIntermediateContext={handleSetIntermediateContext} intermediateContext={intermediateContext} onAnalyze={handleAnalyzeQuery} isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError} onEvaluateWrite={handleEvaluateWrite} isEvaluatingWrite={isEvaluatingWrite} writeEvaluationResult={writeEvaluationResult} writeEvaluationError={writeEvaluationError} />
+                <QueryResult isExecuting={isExecuting} executionError={executionError} executionResult={executionResult} onDebug={handleDebugQuery} isDebugging={isDebugging} debuggingResult={debuggingResult} debugError={debugError} sourceCollection={querySourceCollection} onSetIntermediateContext={handleSetIntermediateContext} intermediateContext={intermediateContext} onAnalyze={handleAnalyzeQuery} onFollowup={handleAnalysisFollowup} isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError} onEvaluateWrite={handleEvaluateWrite} isEvaluatingWrite={isEvaluatingWrite} writeEvaluationResult={writeEvaluationResult} writeEvaluationError={writeEvaluationError} />
               </div>
             ) : (
               <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0', border: '1.5px dashed var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13 }}>
