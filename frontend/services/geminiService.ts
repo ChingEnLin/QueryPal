@@ -124,9 +124,11 @@ export const debugMongoQuery = async (query: string, errorMessage: string, model
 
     console.log("Sending failed query to backend for debugging...");
 
+    const token = await getAuthenticatedToken();
     const response = await fetch(`${API_BASE_URL}/query/debug`, {
         method: 'POST',
         headers: {
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -189,9 +191,10 @@ export const analyzeQueryResult = async (queryResult: any, model: string = 'gemi
 
     console.log("Sending query result to backend for analysis...");
 
+    const token = await getAuthenticatedToken();
     const response = await fetch(`${API_BASE_URL}/query/analyze`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ query_result: queryResult, model }),
     });
 
