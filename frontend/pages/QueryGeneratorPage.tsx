@@ -2266,6 +2266,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   }
 
   // ── Embedded: connected — 2-column workspace layout ──────────────────
+  const resultIsAnalyzable = Array.isArray(executionResult) && executionResult.length > 0
+    && typeof executionResult[0] === 'object' && executionResult[0] !== null;
+
   const insightsRail = (
     <aside style={{
       width: 300, flexShrink: 0,
@@ -2283,12 +2286,32 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         <span className="qa-chip" style={{ marginLeft: 'auto', fontSize: 10 }}>auto</span>
       </div>
 
-      {/* Analysis result */}
-      {analysisResult && (
+      {/* AI analysis: trigger button (moved here from the results toolbar) + result */}
+      {analysisResult ? (
         <div className="qa-card animate-fade-in" style={{ padding: '10px 12px' }}>
           <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 6 }}>Analysis</div>
           <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>{analysisResult.insight}</div>
         </div>
+      ) : resultIsAnalyzable ? (
+        <div className="qa-card animate-fade-in" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>Results ready. Analyze them for patterns, anomalies and suggested follow-ups.</div>
+          <button
+            id="tutorial-analyze-button"
+            className="qa-btn primary"
+            style={{ width: '100%', justifyContent: 'center' }}
+            disabled={isAnalyzing}
+            onClick={() => handleAnalyzeQuery(executionResult)}
+          >
+            {isAnalyzing ? (
+              <><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" style={{ animation: 'qp-spin 0.7s linear infinite' }}><path d="M8 2a6 6 0 1 0 6 6" /></svg> Analyzing…</>
+            ) : (
+              <><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 1.5l1.4 3.8L13 6.5l-3.6 1.2L8 11.5 6.6 7.7 3 6.5l3.6-1.2z" /></svg> Analyze results</>
+            )}
+          </button>
+        </div>
+      ) : null}
+      {analysisError && (
+        <div className="qa-card" style={{ padding: '10px 12px', color: 'var(--status-err)', fontSize: 12 }}>{analysisError}</div>
       )}
 
       {/* Debug result */}
@@ -2308,10 +2331,10 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       )}
 
       {/* Empty state */}
-      {!analysisResult && !debuggingResult && !writeEvaluationResult && (
+      {!analysisResult && !resultIsAnalyzable && !debuggingResult && !writeEvaluationResult && (
         <div style={{ background: 'var(--soft)', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', padding: '12px 14px' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Run a query to see AI insights</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>After executing, use "Analyze" on the results to get patterns, anomalies, and follow-up suggestions.</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>After executing, use "Analyze results" here to get patterns, anomalies, and follow-up suggestions.</div>
         </div>
       )}
 

@@ -14,7 +14,6 @@ import {
   AiSparkleIcon,
   PinIcon,
   DownloadIcon,
-  BarChartIcon,
   EditIcon,
   UndoIcon,
   RedoIcon,
@@ -33,7 +32,7 @@ interface QueryResultProps {
   sourceCollection: string | null;
   onSetIntermediateContext: (data: any, source: string) => void;
   intermediateContext: { data: any; source: string; } | null;
-  onAnalyze: (dataToAnalyze: any) => void;
+  onAnalyze?: (dataToAnalyze: any) => void; // deprecated: analysis is triggered from the workspace Insights rail
   isAnalyzing: boolean;
   analysisResult: AnalysisResult | null;
   analysisError: string | null;
@@ -101,7 +100,7 @@ const QueryResult: React.FC<QueryResultProps> = ({
   isExecuting, executionError, executionResult,
   onDebug, isDebugging, debuggingResult, debugError,
   sourceCollection, onSetIntermediateContext, intermediateContext,
-  onAnalyze, isAnalyzing, analysisResult, analysisError, onFollowup,
+  isAnalyzing, analysisResult, analysisError, onFollowup,
   onEvaluateWrite, isEvaluatingWrite, writeEvaluationResult, writeEvaluationError,
   isTutorialActive, tutorialStepIndex,
 }) => {
@@ -117,7 +116,6 @@ const QueryResult: React.FC<QueryResultProps> = ({
   const isWriteOpSummary = useMemo(() => isWriteSummary(executionResult), [executionResult]);
   const canBeTable = useMemo(() => isTableCompatible(executionResult), [executionResult]);
   const canBeContext = useMemo(() => isContextCompatible(executionResult), [executionResult]);
-  const isAnalyzable = useMemo(() => isTableCompatible(executionResult), [executionResult]);
 
   const allTableHeaders = useMemo(() => {
     if (!canBeTable) return [];
@@ -184,11 +182,6 @@ const QueryResult: React.FC<QueryResultProps> = ({
       const src = sourceCollection ? `'${sourceCollection}' collection` : 'the previous query';
       onSetIntermediateContext(processedDataForActions, src);
     }
-  };
-
-  const handleAnalyzeClick = () => {
-    if (!isAnalyzable || isAnalyzing || !!analysisResult) return;
-    onAnalyze(processedDataForActions);
   };
 
   const handleDownloadCSV = useCallback((separator: ',' | ';') => {
@@ -308,9 +301,6 @@ const QueryResult: React.FC<QueryResultProps> = ({
             <div style={{ display: 'flex', gap: 5 }}>
               <IconBtn title="Graph view" disabled={isTableEditMode} onClick={() => setIsGraphVisible(true)}>
                 <GraphIcon className="w-3 h-3" />
-              </IconBtn>
-              <IconBtn id="tutorial-analyze-button" title={isAnalyzing ? 'Analyzing…' : analysisResult ? 'Analyzed' : 'Analyze with AI'} disabled={!isAnalyzable || isAnalyzing || !!analysisResult || isTableEditMode} active={!!analysisResult} onClick={handleAnalyzeClick}>
-                <BarChartIcon className="w-3 h-3" />
               </IconBtn>
               <IconBtn title={isCurrentResultInContext ? 'Context set' : 'Use as context'} disabled={!canBeContext || isTableEditMode} active={isCurrentResultInContext} onClick={handleSetContextClick}>
                 <PinIcon className="w-3 h-3" />
