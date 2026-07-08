@@ -2110,7 +2110,6 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                         onSetIntermediateContext={handleSetIntermediateContext}
                         intermediateContext={intermediateContext}
                         onAnalyze={handleAnalyzeQuery}
-                        onFollowup={handleAnalysisFollowup}
                         isAnalyzing={isAnalyzing}
                         analysisResult={analysisResult}
                         analysisError={analysisError}
@@ -2288,9 +2287,27 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
       {/* AI analysis: trigger button (moved here from the results toolbar) + result */}
       {analysisResult ? (
-        <div className="qa-card animate-fade-in" style={{ padding: '10px 12px' }}>
-          <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 6 }}>Analysis</div>
-          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>{analysisResult.insight}</div>
+        <div className="qa-card animate-fade-in" style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 6 }}>Analysis</div>
+            <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>{analysisResult.insight}</div>
+          </div>
+          {analysisResult.followups && analysisResult.followups.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 500 }}>Follow-ups</div>
+              {analysisResult.followups.map((f, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleAnalysisFollowup(f)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 9px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--panel)', font: 'inherit', fontSize: 12, color: 'var(--fg)', cursor: 'pointer' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--soft)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--panel)'; }}
+                >
+                  <span style={{ color: 'var(--accent)', marginRight: 6 }}>→</span>{f}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : resultIsAnalyzable ? (
         <div className="qa-card animate-fade-in" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -2637,7 +2654,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     <button onClick={() => setExplanation(null)} className="qa-btn" style={{ fontSize: 11, padding: '2px 8px' }} title="Dismiss">Dismiss</button>
                   </div>
                 )}
-                <QueryResult isExecuting={isExecuting} executionError={executionError} executionResult={executionResult} onDebug={handleDebugQuery} isDebugging={isDebugging} debuggingResult={debuggingResult} debugError={debugError} sourceCollection={querySourceCollection} onSetIntermediateContext={handleSetIntermediateContext} intermediateContext={intermediateContext} onAnalyze={handleAnalyzeQuery} onFollowup={handleAnalysisFollowup} isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError} onEvaluateWrite={handleEvaluateWrite} isEvaluatingWrite={isEvaluatingWrite} writeEvaluationResult={writeEvaluationResult} writeEvaluationError={writeEvaluationError} />
+                <QueryResult isExecuting={isExecuting} executionError={executionError} executionResult={executionResult} onDebug={handleDebugQuery} isDebugging={isDebugging} debuggingResult={debuggingResult} debugError={debugError} sourceCollection={querySourceCollection} onSetIntermediateContext={handleSetIntermediateContext} intermediateContext={intermediateContext} onAnalyze={handleAnalyzeQuery} isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError} onEvaluateWrite={handleEvaluateWrite} isEvaluatingWrite={isEvaluatingWrite} writeEvaluationResult={writeEvaluationResult} writeEvaluationError={writeEvaluationError} />
               </div>
             ) : (
               <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0', border: '1.5px dashed var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13 }}>
