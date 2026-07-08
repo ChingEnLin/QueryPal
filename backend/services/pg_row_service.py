@@ -32,6 +32,9 @@ def _qi(name: str) -> str:
 
 
 def _qt(schema: str, table: str) -> str:
+    # Contract: schema/table are quote-escaped here (injection-safe) but NOT
+    # allowlisted — the caller must resolve them against the real catalog first
+    # (the route does this via get_table_info, which 404s an unknown table).
     return f"{_qi(schema)}.{_qi(table)}"
 
 
