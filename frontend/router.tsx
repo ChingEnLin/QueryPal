@@ -3,7 +3,7 @@ import LoginPage from './pages/LoginPage';
 import HubPage from './pages/HubPage';
 import QueryGeneratorPageWrapper from './pages/QueryGeneratorPageWrapper';
 import DataExplorerPageWrapper from './pages/DataExplorerPageWrapper';
-import PostgresExplorerPage from './pages/PostgresExplorerPage';
+import PostgresWorkspacePage from './pages/PostgresWorkspacePage';
 import AnalyticsPageWrapper from './pages/AnalyticsPageWrapper';
 import NotFoundPage from './pages/NotFoundPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -79,7 +79,7 @@ export const router = createBrowserRouter([
     path: "/postgres/:serverId",
     element: (
       <ProtectedRoute>
-        <PostgresExplorerPage />
+        <PostgresWorkspacePage />
       </ProtectedRoute>
     ),
   },
@@ -87,7 +87,7 @@ export const router = createBrowserRouter([
     path: "/postgres/:serverId/:database",
     element: (
       <ProtectedRoute>
-        <PostgresExplorerPage />
+        <PostgresWorkspacePage />
       </ProtectedRoute>
     ),
   },

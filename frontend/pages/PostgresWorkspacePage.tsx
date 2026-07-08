@@ -340,7 +340,7 @@ const InsightsPanel: React.FC<{
 
 const EXAMPLES = ['count rows per table', 'the 10 most recent records', 'rows added in the last 7 days'];
 
-const PostgresExplorerPage: React.FC = () => {
+const PostgresWorkspacePage: React.FC = () => {
   const { serverId: rawServerId, database: rawDatabase } = useParams<{ serverId: string; database?: string }>();
   const navigate = useNavigate();
   const serverId = rawServerId ? decodeURIComponent(rawServerId) : '';
@@ -872,4 +872,4 @@ const PostgresExplorerPage: React.FC = () => {
   );
 };
 
-export default PostgresExplorerPage;
+export default PostgresWorkspacePage;
