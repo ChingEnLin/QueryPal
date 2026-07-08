@@ -880,9 +880,9 @@ export async function listPostgresServers(token: string): Promise<PostgresServer
   return data;
 }
 
-async function _pgPost(token: string, path: string, body: unknown) {
+async function _pgPost(token: string, path: string, body: unknown, method: string = 'POST') {
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
@@ -949,4 +949,50 @@ export async function pgGrantAccess(token: string, serverId: string, userEmail: 
 
 export async function pgRevokeAccess(token: string, serverId: string, userEmail: string) {
   return _pgPost(token, '/postgres/revoke', { server_id: serverId, user_email: userEmail });
+}
+
+// --- PostgreSQL data explorer (row browse + CRUD) ---
+export interface PgFilter { column: string; op: string; value?: unknown }
+export interface PgSort { column: string; dir: 'asc' | 'desc' }
+
+export async function getPgRows(token: string, args: {
+  serverId: string; database: string; schema: string; table: string;
+  filters?: PgFilter[]; sort?: PgSort | null; limit?: number; offset?: number;
+}): Promise<{ columns: string[]; rows: unknown[][]; total: number; pk: string[] }> {
+  return _pgPost(token, '/postgres/rows', {
+    server_id: args.serverId, database: args.database,
+    schema_name: args.schema, table: args.table,
+    filters: args.filters ?? [], sort: args.sort ?? null,
+    limit: args.limit ?? 50, offset: args.offset ?? 0,
+  });
+}
+
+export async function pgInsertRow(token: string, args: {
+  serverId: string; database: string; schema: string; table: string;
+  values: Record<string, unknown>;
+}): Promise<{ columns: string[]; rows: unknown[][] }> {
+  return _pgPost(token, '/postgres/row', {
+    server_id: args.serverId, database: args.database,
+    schema_name: args.schema, table: args.table, values: args.values,
+  });
+}
+
+export async function pgUpdateRow(token: string, args: {
+  serverId: string; database: string; schema: string; table: string;
+  pk: Record<string, unknown>; values: Record<string, unknown>;
+}): Promise<{ columns: string[]; rows: unknown[][] }> {
+  return _pgPost(token, '/postgres/row', {
+    server_id: args.serverId, database: args.database,
+    schema_name: args.schema, table: args.table, pk: args.pk, values: args.values,
+  }, 'PATCH');
+}
+
+export async function pgDeleteRow(token: string, args: {
+  serverId: string; database: string; schema: string; table: string;
+  pk: Record<string, unknown>;
+}): Promise<{ columns: string[]; rows: unknown[][] }> {
+  return _pgPost(token, '/postgres/row', {
+    server_id: args.serverId, database: args.database,
+    schema_name: args.schema, table: args.table, pk: args.pk,
+  }, 'DELETE');
 }
