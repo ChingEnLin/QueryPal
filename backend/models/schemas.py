@@ -174,3 +174,39 @@ class PgRevokeRequest(BaseModel):
 
 class PgAccessListRequest(BaseModel):
     server_id: str
+
+
+class PgRowsRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_name: str
+    table: str
+    filters: list[dict] = Field(default_factory=list)
+    sort: dict | None = None
+    limit: int = Field(default=50, ge=1, le=500)
+    offset: int = Field(default=0, ge=0)
+
+
+class PgRowInsertRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_name: str
+    table: str
+    values: dict
+
+
+class PgRowUpdateRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_name: str
+    table: str
+    pk: dict
+    values: dict
+
+
+class PgRowDeleteRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_name: str
+    table: str
+    pk: dict
