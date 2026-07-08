@@ -8,6 +8,10 @@ from models.schemas import (
     PgGrantRequest,
     PgNl2SqlRequest,
     PgRevokeRequest,
+    PgRowDeleteRequest,
+    PgRowInsertRequest,
+    PgRowsRequest,
+    PgRowUpdateRequest,
     PgSchemaRequest,
     PgTableInfoRequest,
 )
@@ -27,8 +31,10 @@ from services.pg_admin_service import (
     list_access,
     revoke_access,
 )
+from services import pg_row_service
 from services.pg_connection_obo import get_pg_connection
 from services.pg_query_service import OSSRDBMS_SCOPE, execute_sql
+from services.pg_row_service import NoPrimaryKey, RowError
 from services.pg_react_agent_service import run_sql_generator
 from services.rbac import Caller, require
 
@@ -71,6 +77,17 @@ def _admin_connect(authorization: str, server_id: str):
         raise HTTPException(
             status_code=502, detail=f"PostgreSQL connection failed: {e}"
         )
+
+
+def _row_meta(conn, schema_name: str, table: str):
+    """Whitelist source: the target table's real columns + primary-key columns.
+    Raises 404 if the table is not visible (empty columns list from catalog)."""
+    info = get_table_info(conn, schema_name, table)
+    if not info["columns"]:
+        raise HTTPException(status_code=404, detail="Table not found")
+    allowed = {c["name"] for c in info["columns"]}
+    pk_cols = [c["name"] for c in info["columns"] if c.get("pk")]
+    return allowed, pk_cols
 
 
 @router.get("/servers")
@@ -171,6 +188,104 @@ def analyze(
         user_input=data.user_input,
         model=data.model,
     )
+
+
+@router.post("/rows")
+def rows(
+    data: PgRowsRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("query:read")),
+):
+    conn = _connect(authorization, data.server_id, data.database, caller)
+    try:
+        allowed, pk_cols = _row_meta(conn, data.schema_name, data.table)
+        return pg_row_service.browse(
+            conn, data.schema_name, data.table, allowed, pk_cols,
+            data.filters, data.sort, data.limit, data.offset,
+        )
+    except RowError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/row")
+def insert_row(
+    data: PgRowInsertRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("data:write")),
+):
+    conn = _connect(authorization, data.server_id, data.database, caller)
+    try:
+        allowed, _ = _row_meta(conn, data.schema_name, data.table)
+        result = pg_row_service.insert_row(
+            conn, data.schema_name, data.table, allowed, data.values,
+        )
+    except RowError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+    log_write_operation(
+        user_email=caller.email, operation="insert",
+        database_name=data.server_id,
+        collection_name=f"{data.schema_name}.{data.table}",
+        after_data=data.values,
+    )
+    return result
+
+
+@router.patch("/row")
+def update_row(
+    data: PgRowUpdateRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("data:write")),
+):
+    conn = _connect(authorization, data.server_id, data.database, caller)
+    try:
+        allowed, pk_cols = _row_meta(conn, data.schema_name, data.table)
+        result = pg_row_service.update_row(
+            conn, data.schema_name, data.table, allowed, pk_cols, data.pk, data.values,
+        )
+    except NoPrimaryKey as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except RowError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+    log_write_operation(
+        user_email=caller.email, operation="update",
+        database_name=data.server_id,
+        collection_name=f"{data.schema_name}.{data.table}",
+        document_id=str(data.pk), after_data=data.values,
+    )
+    return result
+
+
+@router.delete("/row")
+def delete_row(
+    data: PgRowDeleteRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("data:write")),
+):
+    conn = _connect(authorization, data.server_id, data.database, caller)
+    try:
+        _, pk_cols = _row_meta(conn, data.schema_name, data.table)
+        result = pg_row_service.delete_row(
+            conn, data.schema_name, data.table, pk_cols, data.pk,
+        )
+    except NoPrimaryKey as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except RowError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+    log_write_operation(
+        user_email=caller.email, operation="delete",
+        database_name=data.server_id,
+        collection_name=f"{data.schema_name}.{data.table}",
+        document_id=str(data.pk),
+    )
+    return result
 
 
 # --- Access provisioning (admin only) ------------------------------------
