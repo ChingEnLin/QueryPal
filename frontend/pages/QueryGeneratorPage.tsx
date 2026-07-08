@@ -2287,27 +2287,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
       {/* AI analysis: trigger button (moved here from the results toolbar) + result */}
       {analysisResult ? (
-        <div className="qa-card animate-fade-in" style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 6 }}>Analysis</div>
-            <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>{analysisResult.insight}</div>
-          </div>
-          {analysisResult.followups && analysisResult.followups.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 500 }}>Follow-ups</div>
-              {analysisResult.followups.map((f, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleAnalysisFollowup(f)}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 9px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--panel)', font: 'inherit', fontSize: 12, color: 'var(--fg)', cursor: 'pointer' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--soft)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--panel)'; }}
-                >
-                  <span style={{ color: 'var(--accent)', marginRight: 6 }}>→</span>{f}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="qa-card animate-fade-in" style={{ padding: '10px 12px' }}>
+          <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 6 }}>Summary</div>
+          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>{analysisResult.insight}</div>
         </div>
       ) : resultIsAnalyzable ? (
         <div className="qa-card animate-fade-in" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -2355,17 +2337,31 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         </div>
       )}
 
+      {/* Suggested follow-ups + notebook, anchored to the bottom (matches the PG Insights panel) */}
+      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {analysisResult && analysisResult.followups && analysisResult.followups.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', fontWeight: 500, marginBottom: 3 }}>Suggested follow-ups</div>
+          {analysisResult.followups.map((f, i) => (
+            <button key={i} className="ws-sug" onClick={() => handleAnalysisFollowup(f)}>
+              <span style={{ color: 'var(--accent)', marginRight: 6 }}>→</span>{f}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Notebook shortcut */}
       <button
         onClick={() => setIsNotebookPanelOpen(true)}
         className="qa-btn"
-        style={{ width: '100%', justifyContent: 'center', marginTop: 'auto' }}
+        style={{ width: '100%', justifyContent: 'center' }}
       >
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
           <path d="M4 2h8a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM6 6h4M6 9h4M6 12h2"/>
         </svg>
         View notebook
       </button>
+      </div>
     </aside>
   );
 
