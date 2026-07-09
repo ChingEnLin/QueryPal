@@ -142,9 +142,15 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
     return () => clearInterval(id);
   }, []);
 
-  const explorerHref = accountId && databaseName
-    ? `/data-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`
+  const pgWorkspaceHref = isPg && accountId
+    ? `/postgres/${encodeURIComponent(accountId)}${databaseName ? '/' + encodeURIComponent(databaseName) : ''}`
     : null;
+  const explorerHref = !accountId || !databaseName
+    ? null
+    : isPg
+      ? `/postgres-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`
+      : `/data-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`;
+  const isPgExplorer = location.pathname.startsWith('/postgres-explorer');
 
   // In a PG workspace the sidebar's own listPostgresServers fetch can lose the
   // race with the page's OBO calls (error swallowed above), so fall back to the
@@ -364,9 +370,14 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         }}>Workspace</div>
 
         {NAV_ITEMS.map((item) => {
-          const resolvedHref = item.label === 'Explorer' ? (explorerHref ?? item.href) : item.href;
-          // The PostgreSQL explorer is itself the workspace, so mark that tab active there.
-          const active = (isPg && item.label === 'Workspace') || (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false);
+          let resolvedHref = item.href;
+          if (item.label === 'Explorer') resolvedHref = explorerHref ?? item.href;
+          else if (isPg && item.label === 'Workspace') resolvedHref = pgWorkspaceHref ?? item.href;
+          const active = item.label === 'Workspace'
+            ? (isPg ? isPg && !isPgExplorer : (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false))
+            : item.label === 'Explorer' && isPg
+              ? isPgExplorer
+              : (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false);
           const style: React.CSSProperties = {
             ...itemBase,
             color: active ? 'var(--fg)' : 'var(--muted)',
@@ -395,19 +406,8 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             );
           }
 
-          // In the PG workspace the Workspace tab is the current page — show it
-          // selected and non-navigating (its href points at the Cosmos workspace).
-          if (isPg && item.label === 'Workspace') {
-            return (
-              <span key={item.label} style={{ ...style, cursor: 'default' }}>
-                {iconSpan}
-                {item.label}
-              </span>
-            );
-          }
-
-          // PostgreSQL workspace has no Cosmos Explorer / Analytics.
-          if (isPg && (item.label === 'Explorer' || item.label === 'Analytics')) {
+          // PostgreSQL has no Analytics page.
+          if (isPg && item.label === 'Analytics') {
             return (
               <span
                 key={item.label}

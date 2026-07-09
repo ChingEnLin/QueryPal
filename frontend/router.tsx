@@ -4,6 +4,7 @@ import HubPage from './pages/HubPage';
 import QueryGeneratorPageWrapper from './pages/QueryGeneratorPageWrapper';
 import DataExplorerPageWrapper from './pages/DataExplorerPageWrapper';
 import PostgresWorkspacePage from './pages/PostgresWorkspacePage';
+import PostgresDataExplorerPage from './pages/PostgresDataExplorerPage';
 import AnalyticsPageWrapper from './pages/AnalyticsPageWrapper';
 import NotFoundPage from './pages/NotFoundPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -88,6 +89,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <PostgresWorkspacePage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/postgres-explorer/:serverId/:database",
+    element: (
+      <ProtectedRoute>
+        <PostgresDataExplorerPage />
       </ProtectedRoute>
     ),
   },
