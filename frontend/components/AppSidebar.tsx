@@ -279,47 +279,9 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                       })}
                     </>
                   )}
-                  {showAccounts && showDbs && (
-                    <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
-                  )}
-                  {showDbs && (
-                    <>
-                      <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
-                        Database
-                      </div>
-                      {availableDbs.map(db => {
-                        const isCurrent = db.name === databaseName;
-                        return (
-                          <button
-                            key={db.name}
-                            onClick={() => { if (!isCurrent) { setShowDbPicker(false); onSwitchDatabase?.(db); } }}
-                            style={{
-                              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                              padding: '7px 10px', border: 'none', cursor: 'pointer', textAlign: 'left',
-                              background: isCurrent ? 'var(--accent-soft)' : 'transparent',
-                              color: isCurrent ? 'var(--accent)' : 'var(--fg)',
-                              fontSize: 12.5, fontFamily: 'var(--font-mono)',
-                            }}
-                            onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
-                            onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                          >
-                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" style={{ color: isCurrent ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>
-                              <ellipse cx="8" cy="4" rx="6" ry="2"/><path d="M2 4v8c0 1.1 2.7 2 6 2s6-.9 6-2V4M2 8c0 1.1 2.7 2 6 2s6-.9 6-2"/>
-                            </svg>
-                            {db.name}
-                            {isCurrent && (
-                              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 'auto', color: 'var(--accent)', flexShrink: 0 }}>
-                                <path d="M3 8l4 4 6-6"/>
-                              </svg>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </>
-                  )}
                   {showPgServers && (
                     <>
-                      {(showAccounts || showDbs) && (
+                      {showAccounts && (
                         <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
                       )}
                       <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
@@ -346,6 +308,44 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{srv.name}</span>
                             {isCurrent && (
                               <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--accent)', flexShrink: 0 }}>
+                                <path d="M3 8l4 4 6-6"/>
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                  {showDbs && (
+                    <>
+                      {(showAccounts || showPgServers) && (
+                        <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                      )}
+                      <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
+                        Database
+                      </div>
+                      {availableDbs.map(db => {
+                        const isCurrent = db.name === databaseName;
+                        return (
+                          <button
+                            key={db.name}
+                            onClick={() => { if (!isCurrent) { setShowDbPicker(false); onSwitchDatabase?.(db); } }}
+                            style={{
+                              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '7px 10px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                              background: isCurrent ? 'var(--accent-soft)' : 'transparent',
+                              color: isCurrent ? 'var(--accent)' : 'var(--fg)',
+                              fontSize: 12.5, fontFamily: 'var(--font-mono)',
+                            }}
+                            onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                            onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" style={{ color: isCurrent ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>
+                              <ellipse cx="8" cy="4" rx="6" ry="2"/><path d="M2 4v8c0 1.1 2.7 2 6 2s6-.9 6-2V4M2 8c0 1.1 2.7 2 6 2s6-.9 6-2"/>
+                            </svg>
+                            {db.name}
+                            {isCurrent && (
+                              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 'auto', color: 'var(--accent)', flexShrink: 0 }}>
                                 <path d="M3 8l4 4 6-6"/>
                               </svg>
                             )}
