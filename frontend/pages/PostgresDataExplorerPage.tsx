@@ -40,6 +40,7 @@ const PostgresDataExplorerPage: React.FC = () => {
   const [filters, setFilters] = useState<PgFilter[]>([]);
   const [sort, setSort] = useState<PgSort | null>(null);
   const [loading, setLoading] = useState(false);
+  const [schemaLoading, setSchemaLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<{ mode: 'edit' | 'new'; row?: Record<string, unknown> } | null>(null);
 
@@ -67,10 +68,13 @@ const PostgresDataExplorerPage: React.FC = () => {
           return;
         }
         setActiveKey(null); // dropping the selected table when the database changes
+        setSchemaLoading(true);
         const overview = await getPgSchema(token, serverId, database) as SchemaGroup[];
         if (!cancelled) setSchema(overview);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setSchemaLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -186,6 +190,7 @@ const PostgresDataExplorerPage: React.FC = () => {
       pgSchema={schema}
       activePgTables={activeKey ? [activeKey] : []}
       onPgTableSelect={onPgTableSelect}
+      pgSchemaLoading={schemaLoading}
       availableDbs={availableDbs}
       onSwitchDatabase={switchDatabase}
     >

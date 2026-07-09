@@ -25,7 +25,18 @@ interface AppSidebarProps {
   pgSchema?: { schema: string; tables: { name: string; rowEstimate: number }[] }[];
   activePgTables?: string[]; // ["schema.table", ...]
   onPgTableSelect?: (schema: string, table: string, ev?: { ctrlKey?: boolean; metaKey?: boolean }) => void;
+  // True while the PG schema/tables (and thus the switched-to database) are
+  // loading — drives the small spinners in the chip dropdown + tables panel.
+  pgSchemaLoading?: boolean;
 }
+
+// Small spinner reused by the PG database/table loading indicators.
+const MiniSpinner: React.FC<{ size?: number }> = ({ size = 11 }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"
+    style={{ animation: 'ws-spin 0.7s linear infinite', flexShrink: 0, color: 'var(--accent)' }}>
+    <path d="M8 2a6 6 0 1 0 6 6" />
+  </svg>
+);
 
 type NavItem =
   | { label: string; href: string; matchPrefix?: boolean; panel?: never; icon: React.ReactNode }
@@ -90,6 +101,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   pgSchema,
   activePgTables,
   onPgTableSelect,
+  pgSchemaLoading,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -329,7 +341,13 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                         return (
                           <button
                             key={db.name}
-                            onClick={() => { if (!isCurrent) { setShowDbPicker(false); onSwitchDatabase?.(db); } }}
+                            onClick={() => {
+                              if (isCurrent) return;
+                              // Keep the picker open during a PG switch so its
+                              // spinner is visible; Cosmos (no loading flag) closes.
+                              if (pgSchemaLoading === undefined) setShowDbPicker(false);
+                              onSwitchDatabase?.(db);
+                            }}
                             style={{
                               width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                               padding: '7px 10px', border: 'none', cursor: 'pointer', textAlign: 'left',
@@ -344,11 +362,13 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                               <ellipse cx="8" cy="4" rx="6" ry="2"/><path d="M2 4v8c0 1.1 2.7 2 6 2s6-.9 6-2V4M2 8c0 1.1 2.7 2 6 2s6-.9 6-2"/>
                             </svg>
                             {db.name}
-                            {isCurrent && (
+                            {isCurrent && pgSchemaLoading ? (
+                              <span style={{ marginLeft: 'auto', display: 'flex' }}><MiniSpinner /></span>
+                            ) : isCurrent ? (
                               <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 'auto', color: 'var(--accent)', flexShrink: 0 }}>
                                 <path d="M3 8l4 4 6-6"/>
                               </svg>
-                            )}
+                            ) : null}
                           </button>
                         );
                       })}
@@ -580,7 +600,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         </div>
       )}
 
-      {pgSchema && pgSchema.length > 0 && (
+      {((pgSchema && pgSchema.length > 0) || pgSchemaLoading) && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 12 }}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -588,14 +608,19 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em',
             color: 'var(--muted)',
           }}>
-            <span>Tables <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>
-              {pgSchema.reduce((n, g) => n + g.tables.length, 0)}
-            </span></span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Tables {pgSchemaLoading
+              ? <MiniSpinner size={10} />
+              : <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{(pgSchema ?? []).reduce((n, g) => n + g.tables.length, 0)}</span>}
+            </span>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
-            {pgSchema.map((g) => (
+            {pgSchemaLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px', fontSize: 12, color: 'var(--muted)' }}>
+                <MiniSpinner /> Loading tables…
+              </div>
+            ) : (pgSchema ?? []).map((g) => (
               <div key={g.schema} style={{ marginBottom: 8 }}>
-                {pgSchema.length > 1 && (
+                {(pgSchema?.length ?? 0) > 1 && (
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, padding: '2px 6px', fontFamily: 'var(--font-mono)' }}>{g.schema}</div>
                 )}
                 {g.tables.map((t) => {

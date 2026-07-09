@@ -28,6 +28,7 @@ interface AppLayoutProps {
   pgSchema?: { schema: string; tables: { name: string; rowEstimate: number }[] }[];
   activePgTables?: string[];
   onPgTableSelect?: (schema: string, table: string, ev?: { ctrlKey?: boolean; metaKey?: boolean }) => void;
+  pgSchemaLoading?: boolean;
 }
 
 const AppLayout: React.FC<AppLayoutProps> = ({
@@ -51,6 +52,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   pgSchema,
   activePgTables,
   onPgTableSelect,
+  pgSchemaLoading,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -113,6 +115,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         pgSchema={pgSchema}
         activePgTables={activePgTables}
         onPgTableSelect={onPgTableSelect}
+        pgSchemaLoading={pgSchemaLoading}
       />
       <div className="qp-main">
         <AppTopBar
