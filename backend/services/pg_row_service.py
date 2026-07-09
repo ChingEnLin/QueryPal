@@ -7,6 +7,8 @@ Writes require a primary key so UPDATE/DELETE target exactly one row.
 """
 from typing import Iterable, List, Tuple
 
+import psycopg2
+
 from services.pg_query_service import _json_safe
 
 
@@ -124,22 +126,28 @@ def _fetch(cur) -> dict:
 def browse(conn, schema, table, allowed, pk_cols, filters, sort, limit, offset):
     dq, dp = build_browse(schema, table, allowed, filters, sort, limit, offset)
     cq, cp = build_count(schema, table, allowed, filters)
-    with conn.cursor() as cur:
-        cur.execute("SET TRANSACTION READ ONLY")
-        cur.execute(dq, dp)
-        result = _fetch(cur)
-        cur.execute(cq, cp)
-        result["total"] = cur.fetchone()[0]
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SET TRANSACTION READ ONLY")
+            cur.execute(dq, dp)
+            result = _fetch(cur)
+            cur.execute(cq, cp)
+            result["total"] = cur.fetchone()[0]
+    except psycopg2.Error as e:
+        raise RowError(str(e).strip())
     result["pk"] = sorted(pk_cols)
     return result
 
 
 def _write(conn, query, params) -> dict:
-    with conn.cursor() as cur:
-        cur.execute(query, params)
-        result = _fetch(cur)
-    conn.commit()
-    return result
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            result = _fetch(cur)
+        conn.commit()
+        return result
+    except psycopg2.Error as e:
+        raise RowError(str(e).strip())
 
 
 def insert_row(conn, schema, table, allowed, values):

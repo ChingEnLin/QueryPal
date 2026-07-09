@@ -80,3 +80,29 @@ def test_update_pk_mismatch_raises():
     with pytest.raises(s.RowError):
         s.build_update("public", "orders", {"status"}, ["id"],
                        {"wrong": 1}, {"status": "x"})
+
+
+def test_write_wraps_db_error_as_rowerror():
+    from unittest.mock import MagicMock
+    import psycopg2
+    cur = MagicMock()
+    cur.__enter__ = lambda self=cur: cur
+    cur.__exit__ = lambda *a: False
+    cur.execute.side_effect = psycopg2.Error("null value violates not-null constraint")
+    conn = MagicMock()
+    conn.cursor.return_value = cur
+    with pytest.raises(s.RowError):
+        s.insert_row(conn, "public", "orders", {"status"}, {"status": "x"})
+
+
+def test_browse_wraps_db_error_as_rowerror():
+    from unittest.mock import MagicMock
+    import psycopg2
+    cur = MagicMock()
+    cur.__enter__ = lambda self=cur: cur
+    cur.__exit__ = lambda *a: False
+    cur.execute.side_effect = psycopg2.Error("permission denied for table orders")
+    conn = MagicMock()
+    conn.cursor.return_value = cur
+    with pytest.raises(s.RowError):
+        s.browse(conn, "public", "orders", {"status"}, ["id"], [], None, 50, 0)
