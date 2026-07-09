@@ -270,3 +270,28 @@ def test_rows_unknown_table_is_404(client, mock_auth_header, patched, monkeypatc
         "table": "nonexistent", "filters": [], "limit": 50, "offset": 0,
     })
     assert resp.status_code == 404
+
+
+def test_writes_are_audited_with_row_data(client, mock_auth_header, patched, monkeypatch):
+    calls = []
+    monkeypatch.setattr(patched, "log_write_operation", lambda **k: calls.append(k))
+
+    # insert -> records the RETURNING row as after_data
+    _fake_conn_with_rows(monkeypatch, patched, [[2, "new"]], ["id", "status"])
+    r = client.post("/postgres/row", headers=mock_auth_header, json={
+        "server_id": SERVERS[0]["id"], "database": "app", "schema_name": "public",
+        "table": "orders", "values": {"status": "new"},
+    })
+    assert r.status_code == 200
+
+    # delete -> records the deleted row as before_data
+    _fake_conn_with_rows(monkeypatch, patched, [[7, "old"]], ["id", "status"])
+    r = client.request("DELETE", "/postgres/row", headers=mock_auth_header, json={
+        "server_id": SERVERS[0]["id"], "database": "app", "schema_name": "public",
+        "table": "orders", "pk": {"id": 7},
+    })
+    assert r.status_code == 200
+
+    ops = {c["operation"]: c for c in calls}
+    assert ops["insert"]["after_data"] == {"id": 2, "status": "new"}
+    assert ops["delete"]["before_data"] == {"id": 7, "status": "old"}

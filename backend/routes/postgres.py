@@ -209,6 +209,14 @@ def rows(
         conn.close()
 
 
+def _row_dict(result: dict):
+    """The single affected row (from RETURNING *) as a dict, for the audit log."""
+    rows = result.get("rows") or []
+    if not rows:
+        return None
+    return dict(zip(result.get("columns", []), rows[0]))
+
+
 @router.post("/row")
 def insert_row(
     data: PgRowInsertRequest = Body(...),
@@ -229,7 +237,7 @@ def insert_row(
         user_email=caller.email, operation="insert",
         database_name=data.server_id,
         collection_name=f"{data.schema_name}.{data.table}",
-        after_data=data.values,
+        after_data=_row_dict(result) or data.values,
     )
     return result
 
@@ -256,7 +264,7 @@ def update_row(
         user_email=caller.email, operation="update",
         database_name=data.server_id,
         collection_name=f"{data.schema_name}.{data.table}",
-        document_id=str(data.pk), after_data=data.values,
+        document_id=str(data.pk), after_data=_row_dict(result) or data.values,
     )
     return result
 
@@ -283,7 +291,7 @@ def delete_row(
         user_email=caller.email, operation="delete",
         database_name=data.server_id,
         collection_name=f"{data.schema_name}.{data.table}",
-        document_id=str(data.pk),
+        document_id=str(data.pk), before_data=_row_dict(result),
     )
     return result
 

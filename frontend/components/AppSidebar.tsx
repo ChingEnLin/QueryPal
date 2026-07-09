@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { CollectionSummary, DbInfo, CosmosDBAccount } from '../types';
 import { API_BASE_URL } from '../app.config';
-import { useRoles } from '../hooks/useRoles';
 import { getAuthenticatedToken, getAzureCosmosAccounts, listPostgresServers, PostgresServer } from '../services/dbService';
 
 interface AppSidebarProps {
@@ -74,6 +73,15 @@ const NAV_ITEMS: NavItem[] = [
       </svg>
     ),
   },
+  {
+    label: 'Audit',
+    href: '/audit',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+        <path d="M4 2h6l3 3v9H4z"/><path d="M6 7.5h5M6 10.5h5"/>
+      </svg>
+    ),
+  },
 ];
 
 const itemBase: React.CSSProperties = {
@@ -106,8 +114,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const isPg = location.pathname.startsWith('/postgres');
-  const { can } = useRoles();
-  const isAdmin = can('system:admin');
   const [showDbPicker, setShowDbPicker] = useState(false);
   const [pgServers, setPgServers] = useState<PostgresServer[]>([]);
   const [cosmosAccounts, setCosmosAccounts] = useState<CosmosDBAccount[]>([]);
@@ -479,31 +485,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             </Link>
           );
         })}
-
-        {isAdmin && (() => {
-          const active = location.pathname === '/admin';
-          return (
-            <Link
-              to="/admin"
-              style={{
-                ...itemBase,
-                color: active ? 'var(--fg)' : 'var(--muted)',
-                background: active ? 'var(--soft)' : 'transparent',
-                fontWeight: active ? 500 : 400,
-              }}
-              onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
-              onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-            >
-              <span style={{ color: active ? 'var(--accent)' : 'var(--muted)', display: 'flex', flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-                  <circle cx="8" cy="5" r="3"/>
-                  <path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/>
-                </svg>
-              </span>
-              Admin
-            </Link>
-          );
-        })()}
       </div>
 
       {collections && collections.length > 0 && (
