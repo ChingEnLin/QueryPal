@@ -168,7 +168,12 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
     : isPg
       ? `/postgres-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`
       : `/data-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`;
+  const pgAuditHref = isPg && accountId ? `/postgres-audit/${encodeURIComponent(accountId)}` : null;
   const isPgExplorer = location.pathname.startsWith('/postgres-explorer');
+  const isPgAudit = location.pathname.startsWith('/postgres-audit');
+  // Workspace paths are /postgres/:id[/db]; the -explorer/-audit variants don't
+  // start with '/postgres/' so they're correctly excluded here.
+  const isPgWorkspace = isPg && location.pathname.startsWith('/postgres/');
 
   // In a PG workspace the sidebar's own listPostgresServers fetch can lose the
   // race with the page's OBO calls (error swallowed above), so fall back to the
@@ -310,7 +315,16 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                         return (
                           <button
                             key={srv.id}
-                            onClick={() => { setShowDbPicker(false); if (!isCurrent) navigate(`/postgres/${encodeURIComponent(srv.id)}`); }}
+                            onClick={() => {
+                              setShowDbPicker(false);
+                              if (isCurrent) return;
+                              // Switching server keeps you in the current section
+                              // (audit / explorer), not always the workspace.
+                              const base = (isPgAudit || location.pathname === '/audit')
+                                ? '/postgres-audit'
+                                : isPgExplorer ? '/postgres-explorer' : '/postgres';
+                              navigate(`${base}/${encodeURIComponent(srv.id)}`);
+                            }}
                             style={{
                               width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                               padding: '7px 10px', border: 'none', textAlign: 'left',
@@ -399,11 +413,14 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
           let resolvedHref = item.href;
           if (item.label === 'Explorer') resolvedHref = explorerHref ?? item.href;
           else if (isPg && item.label === 'Workspace') resolvedHref = pgWorkspaceHref ?? item.href;
-          const active = item.label === 'Workspace'
-            ? (isPg ? !isPgExplorer : (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false))
-            : item.label === 'Explorer' && isPg
+          else if (isPg && item.label === 'Audit') resolvedHref = pgAuditHref ?? item.href;
+          const active = isPg && item.label === 'Workspace'
+            ? isPgWorkspace
+            : isPg && item.label === 'Explorer'
               ? isPgExplorer
-              : (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false);
+              : isPg && item.label === 'Audit'
+                ? isPgAudit
+                : (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false);
           const style: React.CSSProperties = {
             ...itemBase,
             color: active ? 'var(--fg)' : 'var(--muted)',

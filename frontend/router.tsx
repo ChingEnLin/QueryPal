@@ -37,6 +37,14 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: "/postgres-audit/:serverId",
+    element: (
+      <ProtectedRoute>
+        <AuditPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: "/analytics",
     element: (
       <ProtectedRoute>

@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useRoles } from '../hooks/useRoles';
 import { API_BASE_URL, USE_MSAL_AUTH } from '../app.config';
 import AppLayout from '../components/AppLayout';
 import ChartDisplay, { VisualizationConfig } from '../components/ChartDisplay';
 import { MOCK_AUDIT_EVENTS } from '../services/mockAuditData';
-import { getDatabasesForAccount, getAzureCosmosAccounts } from '../services/dbService';
+import { getDatabasesForAccount, getAzureCosmosAccounts, listPostgresServers } from '../services/dbService';
 import { CosmosDBAccount, DbInfo, CollectionSummary } from '../types';
 
 /* ── session connection (shared shape written by the connect flow) ────────── */
@@ -703,6 +703,28 @@ const AuditPage: React.FC = () => {
     const [conn, setConn] = useState<SessionConnection | null>(() => readSessionConnection());
     const [accountSwitching, setAccountSwitching] = useState(false);
 
+    // PostgreSQL audit: reached via /postgres-audit/:serverId. Keeps the PG
+    // shell (path starts with /postgres) and scopes events to that server,
+    // instead of falling back to the last Cosmos session connection.
+    const { serverId: rawServerId } = useParams<{ serverId?: string }>();
+    const pgServerId = rawServerId ? decodeURIComponent(rawServerId) : null;
+    const isPgAudit = !!pgServerId;
+    const [pgServerName, setPgServerName] = useState('');
+    useEffect(() => {
+        if (!isPgAudit) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const token = await getToken();
+                if (!token) return;
+                const servers = await listPostgresServers(token);
+                const srv = servers.find((s) => s.id === pgServerId);
+                if (!cancelled) setPgServerName(srv?.name ?? pgServerId!);
+            } catch { /* non-critical — fall back to the id */ }
+        })();
+        return () => { cancelled = true; };
+    }, [isPgAudit, pgServerId, getToken]);
+
     const [tab, setTab] = useState<'activity' | 'history' | 'ask'>('activity');
     const [range, setRange] = useState(7);
     const [opFilter, setOpFilter] = useState('all');
@@ -715,7 +737,7 @@ const AuditPage: React.FC = () => {
 
     // The audit log is scoped to the selected Cosmos account. database_name is
     // stored as "<account>.<database>", so we filter on the account segment.
-    const scopedAccount = conn?.accountName;
+    const scopedAccount = isPgAudit ? undefined : conn?.accountName;
 
     useEffect(() => {
         let cancelled = false;
@@ -758,10 +780,16 @@ const AuditPage: React.FC = () => {
         return () => { cancelled = true; };
     }, [getToken, scopedAccount]);
 
+    // In PG mode scope to this server's writes (database_name === serverId).
+    const baseEvents = useMemo(
+        () => (isPgAudit ? allEvents.filter((e) => e.database_name === pgServerId) : allEvents),
+        [allEvents, isPgAudit, pgServerId],
+    );
+
     const windowed = useMemo(() => {
         const cutoff = now - range * 86400000;
-        return allEvents.filter((e) => e.ts.getTime() >= cutoff);
-    }, [allEvents, range, now]);
+        return baseEvents.filter((e) => e.ts.getTime() >= cutoff);
+    }, [baseEvents, range, now]);
 
     const filtered = useMemo(() => windowed.filter((e) =>
         (opFilter === 'all' || e.operation === opFilter) &&
@@ -790,9 +818,9 @@ const AuditPage: React.FC = () => {
     }, [windowed, range, now]);
 
     const userOpts: DropdownOption[] = [{ value: 'all', label: 'All users' },
-        ...[...new Map(allEvents.map((e) => [e.user_email, e.person.name])).entries()].map(([email, name]) => ({ value: email, label: name }))];
+        ...[...new Map(baseEvents.map((e) => [e.user_email, e.person.name])).entries()].map(([email, name]) => ({ value: email, label: name }))];
     const collOpts: DropdownOption[] = [{ value: 'all', label: 'All collections' },
-        ...[...new Set(allEvents.map((e) => e.collection_name))].map((c) => ({ value: c, label: c }))];
+        ...[...new Set(baseEvents.map((e) => e.collection_name))].map((c) => ({ value: c, label: c }))];
     const opOpts: DropdownOption[] = [{ value: 'all', label: 'All operations' },
         ...OP_ORDER.map((k) => ({ value: k, label: OP[k].label, dot: OP[k].color }))];
     const ranges: [number, string][] = [[1, '24h'], [7, '7d'], [30, '30d'], [90, '90d']];
@@ -800,9 +828,13 @@ const AuditPage: React.FC = () => {
     // Prefer the live session connection (enables the chip switcher + Explorer
     // button); fall back to parsing the newest event's "account.database" string.
     const dbParts = (allEvents[0]?.database_name || '').split('.');
-    const accountId = conn?.accountId;
-    const accountName = conn?.accountName ?? dbParts[0] ?? undefined;
-    const databaseName = conn?.databaseName ?? dbParts.slice(1).join('.') ?? undefined;
+    const accountId = isPgAudit ? pgServerId! : conn?.accountId;
+    const accountName = isPgAudit
+        ? (pgServerName || pgServerId!)
+        : (conn?.accountName ?? dbParts[0] ?? undefined);
+    const databaseName = isPgAudit
+        ? undefined
+        : (conn?.databaseName ?? dbParts.slice(1).join('.') ?? undefined);
 
     const handleSwitchDatabase = useCallback((db: DbInfo) => {
         if (!conn) return;
@@ -840,9 +872,11 @@ const AuditPage: React.FC = () => {
     if (!isAdmin && !isAnalyst) {
         return (
             <AppLayout accountId={accountId} accountName={accountName} databaseName={databaseName}
-                collections={conn?.collections} availableAccounts={conn?.availableAccounts}
-                availableDbs={conn?.availableDbs} onSwitchDatabase={handleSwitchDatabase}
-                onSwitchAccount={handleSwitchAccount} chipLoading={accountSwitching}>
+                collections={isPgAudit ? undefined : conn?.collections}
+                availableAccounts={isPgAudit ? undefined : conn?.availableAccounts}
+                availableDbs={isPgAudit ? undefined : conn?.availableDbs}
+                onSwitchDatabase={isPgAudit ? undefined : handleSwitchDatabase}
+                onSwitchAccount={isPgAudit ? undefined : handleSwitchAccount} chipLoading={accountSwitching}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, color: 'var(--muted)', fontFamily: 'var(--font-body)' }}>
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -862,11 +896,11 @@ const AuditPage: React.FC = () => {
             accountId={accountId}
             accountName={accountName}
             databaseName={databaseName}
-            collections={conn?.collections}
-            availableAccounts={conn?.availableAccounts}
-            availableDbs={conn?.availableDbs}
-            onSwitchDatabase={handleSwitchDatabase}
-            onSwitchAccount={handleSwitchAccount}
+            collections={isPgAudit ? undefined : conn?.collections}
+            availableAccounts={isPgAudit ? undefined : conn?.availableAccounts}
+            availableDbs={isPgAudit ? undefined : conn?.availableDbs}
+            onSwitchDatabase={isPgAudit ? undefined : handleSwitchDatabase}
+            onSwitchAccount={isPgAudit ? undefined : handleSwitchAccount}
             chipLoading={accountSwitching}
         >
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, fontFamily: 'var(--font-body)' }}>
