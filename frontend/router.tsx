@@ -93,6 +93,14 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: "/postgres-explorer/:serverId",
+    element: (
+      <ProtectedRoute>
+        <PostgresDataExplorerPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: "/postgres-explorer/:serverId/:database",
     element: (
       <ProtectedRoute>

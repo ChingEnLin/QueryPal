@@ -336,13 +336,18 @@ const HubPage: React.FC = () => {
                 const isPg = engine === 'pg';
                 const account = accounts.find((a) => a.id === r.accountId);
                 const inert = !!busyAccountId;
-                const actionLabel = r.action === 'query' ? 'Query' : r.action === 'explorer' ? 'Explorer' : 'Workspace';
+                const actionLabel = r.action === 'explorer' ? 'Explorer' : 'Workspace';
                 return (
                   <button
                     key={`${r.accountId}-${r.action}`}
                     disabled={inert}
                     onClick={() => {
-                      if (isPg) { navigate(`/postgres/${encodeURIComponent(r.accountId)}`); return; }
+                      if (isPg) {
+                        navigate(r.action === 'explorer'
+                          ? `/postgres-explorer/${encodeURIComponent(r.accountId)}`
+                          : `/postgres/${encodeURIComponent(r.accountId)}`);
+                        return;
+                      }
                       const acc = account ?? ({ id: r.accountId, name: r.accountName } as CosmosDBAccount);
                       if (r.action === 'query') handleOpenAccount(acc);
                       else handleOpenExplorer(acc);
@@ -360,7 +365,7 @@ const HubPage: React.FC = () => {
                   >
                     <div style={{ width: 22, height: 22, borderRadius: 5, background: isPg ? '#31648c' : '#1a4f8c', color: '#fff', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{isPg ? 'P' : 'C'}</div>
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{r.accountName}</span>
-                    <span className={`qa-chip${r.action === 'query' ? ' accent' : ''}`} style={{ fontSize: 10 }}>
+                    <span className={`qa-chip${r.action === 'explorer' ? '' : ' accent'}`} style={{ fontSize: 10 }}>
                       {actionLabel}
                     </span>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>{formatRelativeTime(new Date(r.accessedAt).toISOString())}</span>
@@ -431,6 +436,11 @@ const HubPage: React.FC = () => {
                   saveRecent({ engine: 'pg', accountId: s.id, accountName: s.name, action: 'workspace' });
                   setRecents(loadRecents());
                   navigate(`/postgres/${encodeURIComponent(s.id)}`);
+                }}
+                onOpenExplorer={(s) => {
+                  saveRecent({ engine: 'pg', accountId: s.id, accountName: s.name, action: 'explorer' });
+                  setRecents(loadRecents());
+                  navigate(`/postgres-explorer/${encodeURIComponent(s.id)}`);
                 }}
               />
             ))}
@@ -660,8 +670,10 @@ const ConnectionCard: React.FC<{
 const PgConnectionCard: React.FC<{
   server: PostgresServer;
   onOpen: (s: PostgresServer) => void;
-}> = ({ server, onOpen }) => {
+  onOpenExplorer: (s: PostgresServer) => void;
+}> = ({ server, onOpen, onOpenExplorer }) => {
   const [hovered, setHovered] = useState(false);
+  const [explorerHovered, setExplorerHovered] = useState(false);
   return (
     <div
       onMouseEnter={() => setHovered(true)}
@@ -698,20 +710,41 @@ const PgConnectionCard: React.FC<{
 
       <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <span className="qa-chip ok">● live</span>
-        <button
-          onClick={() => onOpen(server)}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            fontSize: 12.5, padding: '5px 10px', borderRadius: 6,
-            border: 'none', background: 'none', color: 'var(--accent)',
-            cursor: 'pointer', fontFamily: 'var(--font-body)',
-          }}
-        >
-          Open
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-            <path d="M3 8h10M9 4l4 4-4 4"/>
-          </svg>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => onOpenExplorer(server)}
+            onMouseEnter={() => setExplorerHovered(true)}
+            onMouseLeave={() => setExplorerHovered(false)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 12, padding: '5px 10px', borderRadius: 6,
+              border: `1px solid ${explorerHovered ? 'var(--accent)' : 'var(--border)'}`,
+              background: explorerHovered ? 'var(--accent-soft)' : 'var(--soft)',
+              color: explorerHovered ? 'var(--accent)' : 'var(--muted)',
+              cursor: 'pointer', fontFamily: 'var(--font-body)',
+              transition: 'border-color 0.12s, background 0.12s, color 0.12s',
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M2 3h12v3H2zM2 7h12v3H2zM2 11h12v3H2z"/>
+            </svg>
+            Explorer
+          </button>
+          <button
+            onClick={() => onOpen(server)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 12.5, padding: '5px 10px', borderRadius: 6,
+              border: 'none', background: 'none', color: 'var(--accent)',
+              cursor: 'pointer', fontFamily: 'var(--font-body)',
+            }}
+          >
+            Open
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M3 8h10M9 4l4 4-4 4"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
