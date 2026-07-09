@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import PgRowDrawer from '../components/PgRowDrawer';
+import { DbInfo } from '../types';
 import {
   getAuthenticatedToken, getPgDatabases, getPgSchema, getPgTableInfo,
   getPgRows, pgInsertRow, pgUpdateRow, pgDeleteRow, listPostgresServers,
@@ -27,6 +28,7 @@ const PostgresDataExplorerPage: React.FC = () => {
   const database = rawDatabase ? decodeURIComponent(rawDatabase) : '';
 
   const [serverName, setServerName] = useState('');
+  const [databases, setDatabases] = useState<string[]>([]);
   const [schema, setSchema] = useState<SchemaGroup[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [columns, setColumns] = useState<Column[]>([]);
@@ -55,13 +57,16 @@ const PostgresDataExplorerPage: React.FC = () => {
         if (!srv) throw new Error('PostgreSQL server not found or not accessible.');
         if (cancelled) return;
         setServerName(srv.name);
+        const dbs = await getPgDatabases(token, serverId);
+        if (cancelled) return;
+        setDatabases(dbs);
         if (!database) {
-          const dbs = await getPgDatabases(token, serverId);
           const first = dbs[0];
           if (!first) throw new Error('No databases found on this server.');
           navigate(`/postgres-explorer/${encodeURIComponent(serverId)}/${encodeURIComponent(first)}`, { replace: true });
           return;
         }
+        setActiveKey(null); // dropping the selected table when the database changes
         const overview = await getPgSchema(token, serverId, database) as SchemaGroup[];
         if (!cancelled) setSchema(overview);
       } catch (e) {
@@ -113,6 +118,17 @@ const PostgresDataExplorerPage: React.FC = () => {
   const onPgTableSelect = useCallback((s: string, t: string) => {
     setActiveKey(`${s}.${t}`); setFilters([]); setSort(null); setPage(0);
   }, []);
+
+  // Connection-chip database switcher (parity with the Cosmos explorer). DbInfo
+  // needs name/collections/totalDocuments/size, but the chip only reads .name.
+  const availableDbs = useMemo<DbInfo[]>(
+    () => databases.map((name) => ({ name, collections: [], totalDocuments: 0, size: null })),
+    [databases],
+  );
+  const switchDatabase = useCallback((db: DbInfo) => {
+    if (db.name === database) return;
+    navigate(`/postgres-explorer/${encodeURIComponent(serverId)}/${encodeURIComponent(db.name)}`);
+  }, [database, serverId, navigate]);
 
   const toggleSort = (col: string) => setSort((prev) =>
     prev?.column === col ? { column: col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { column: col, dir: 'asc' });
@@ -170,6 +186,8 @@ const PostgresDataExplorerPage: React.FC = () => {
       pgSchema={schema}
       activePgTables={activeKey ? [activeKey] : []}
       onPgTableSelect={onPgTableSelect}
+      availableDbs={availableDbs}
+      onSwitchDatabase={switchDatabase}
     >
       <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg)', color: 'var(--fg)', fontFamily: 'var(--font-body)' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, padding: '18px 22px 0' }}>
