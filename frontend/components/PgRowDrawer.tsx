@@ -30,6 +30,7 @@ const PgRowDrawer: React.FC<{
     if (raw === '') return c.nullable ? null : '';
     if (isBool(c.type)) return raw === 'true';
     if (isNumber(c.type)) { const n = Number(raw); return Number.isNaN(n) ? raw : n; }
+    if (isJson(c.type)) { try { return JSON.parse(raw); } catch { return raw; } }
     return raw;
   };
 

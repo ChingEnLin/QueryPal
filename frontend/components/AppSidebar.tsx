@@ -374,7 +374,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
           if (item.label === 'Explorer') resolvedHref = explorerHref ?? item.href;
           else if (isPg && item.label === 'Workspace') resolvedHref = pgWorkspaceHref ?? item.href;
           const active = item.label === 'Workspace'
-            ? (isPg ? isPg && !isPgExplorer : (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false))
+            ? (isPg ? !isPgExplorer : (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false))
             : item.label === 'Explorer' && isPg
               ? isPgExplorer
               : (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false);

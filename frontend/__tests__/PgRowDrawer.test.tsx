@@ -8,6 +8,22 @@ const columns = [
 ];
 
 describe('PgRowDrawer', () => {
+  it('parses a json column value on save', () => {
+    const onSave = vi.fn();
+    const cols = [
+      { name: 'id', type: 'integer', nullable: false, pk: true, fk: null },
+      { name: 'meta', type: 'jsonb', nullable: true, pk: false, fk: null },
+    ];
+    render(
+      <PgRowDrawer columns={cols} pk={['id']} mode="edit"
+        row={{ id: 1, meta: {} }} onClose={() => {}} onSave={onSave} onDelete={() => {}} />,
+    );
+    const ta = screen.getByLabelText('meta') as HTMLTextAreaElement;
+    fireEvent.change(ta, { target: { value: '{"a":1}' } });
+    fireEvent.click(screen.getByText('Save'));
+    expect(onSave).toHaveBeenCalledWith({ meta: { a: 1 } });
+  });
+
   it('edits a field and saves only non-pk values', async () => {
     const onSave = vi.fn();
     render(
