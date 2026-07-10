@@ -692,6 +692,7 @@ function AskPanel({ getToken }: { getToken: () => Promise<string | null> }) {
 /* ── main dashboard ───────────────────────────────────────────────────────── */
 const AuditPage: React.FC = () => {
     const { getToken } = useUnifiedAuth();
+    const navigate = useNavigate();
     const { can } = useRoles();
     const isAdmin = can('audit:read');
     const isAnalyst = !isAdmin && can('self:manage');
@@ -844,7 +845,7 @@ const AuditPage: React.FC = () => {
     }, [conn]);
 
     const handleSwitchAccount = useCallback(async (account: CosmosDBAccount) => {
-        if (!conn || account.id === conn.accountId) return;
+        if (account.id === conn?.accountId) return;
         setAccountSwitching(true);
         try {
             const databases = await getDatabasesForAccount(account.id);
@@ -855,17 +856,20 @@ const AuditPage: React.FC = () => {
                 accountName: account.name,
                 databaseName: firstDb.name,
                 collections: firstDb.collections,
-                availableAccounts: conn.availableAccounts,
+                availableAccounts: conn?.availableAccounts,
                 availableDbs: databases,
             };
             writeSessionConnection(next);
             setConn(next);
+            // Coming from PG audit: leave the PG shell for the Cosmos audit,
+            // scoped to the account we just wrote to the session.
+            if (isPgAudit) navigate('/audit');
         } catch (e) {
             console.error('Failed to switch account:', e);
         } finally {
             setAccountSwitching(false);
         }
-    }, [conn]);
+    }, [conn, isPgAudit, navigate]);
 
     const hasFilters = opFilter !== 'all' || userFilter !== 'all' || collFilter !== 'all' || !!search;
 
@@ -876,7 +880,7 @@ const AuditPage: React.FC = () => {
                 availableAccounts={isPgAudit ? undefined : conn?.availableAccounts}
                 availableDbs={isPgAudit ? undefined : conn?.availableDbs}
                 onSwitchDatabase={isPgAudit ? undefined : handleSwitchDatabase}
-                onSwitchAccount={isPgAudit ? undefined : handleSwitchAccount} chipLoading={accountSwitching}>
+                onSwitchAccount={handleSwitchAccount} chipLoading={accountSwitching}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, color: 'var(--muted)', fontFamily: 'var(--font-body)' }}>
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -900,7 +904,7 @@ const AuditPage: React.FC = () => {
             availableAccounts={isPgAudit ? undefined : conn?.availableAccounts}
             availableDbs={isPgAudit ? undefined : conn?.availableDbs}
             onSwitchDatabase={isPgAudit ? undefined : handleSwitchDatabase}
-            onSwitchAccount={isPgAudit ? undefined : handleSwitchAccount}
+            onSwitchAccount={handleSwitchAccount}
             chipLoading={accountSwitching}
         >
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, fontFamily: 'var(--font-body)' }}>
