@@ -108,7 +108,7 @@ function deriveEvent(r: RawAuditEvent, i: number): AuditEvent {
 
 /* ── operation badge ──────────────────────────────────────────────────────── */
 function OpBadge({ op, withLabel = true }: { op: Operation; withLabel?: boolean }) {
-    const o = OP[op];
+    const o = OP[op] ?? { label: op, verb: op, color: 'var(--muted)' };
     const icon = {
         insert: <path d="M8 3v10M3 8h10" />,
         update: <path d="M3 11l6-6 2 2-6 6H3zM10 4l2 2" />,
@@ -742,8 +742,13 @@ const AuditPage: React.FC = () => {
 
     useEffect(() => {
         let cancelled = false;
+        // This dashboard is a data-write view (insert/update/delete). Drop other
+        // recorded operations — e.g. PG grant/revoke access changes, which share
+        // the audit log — so counts, charts and badges stay coherent.
+        const CRUD = new Set(['insert', 'update', 'delete']);
         const toEvents = (raw: RawAuditEvent[]) =>
-            raw.map(deriveEvent).sort((a, b) => b.ts.getTime() - a.ts.getTime());
+            raw.filter((r) => CRUD.has(r.operation)).map(deriveEvent)
+                .sort((a, b) => b.ts.getTime() - a.ts.getTime());
         const load = async () => {
             setLoading(true); setLoadError(null);
             try {
