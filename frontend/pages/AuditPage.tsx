@@ -851,6 +851,16 @@ const AuditPage: React.FC = () => {
 
     const handleSwitchAccount = useCallback(async (account: CosmosDBAccount) => {
         if (account.id === conn?.accountId) return;
+        // Coming from PG audit: the Cosmos audit only scopes by account name, so
+        // switch immediately and leave the PG shell. Don't block on (or fail
+        // silently in) a Cosmos databases fetch — the chip refetches on /audit.
+        if (isPgAudit) {
+            const next: SessionConnection = { accountId: account.id, accountName: account.name };
+            writeSessionConnection(next);
+            setConn(next);
+            navigate('/audit');
+            return;
+        }
         setAccountSwitching(true);
         try {
             const databases = await getDatabasesForAccount(account.id);
@@ -866,9 +876,6 @@ const AuditPage: React.FC = () => {
             };
             writeSessionConnection(next);
             setConn(next);
-            // Coming from PG audit: leave the PG shell for the Cosmos audit,
-            // scoped to the account we just wrote to the session.
-            if (isPgAudit) navigate('/audit');
         } catch (e) {
             console.error('Failed to switch account:', e);
         } finally {
