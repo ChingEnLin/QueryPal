@@ -163,11 +163,16 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   const pgWorkspaceHref = isPg && accountId
     ? `/postgres/${encodeURIComponent(accountId)}${databaseName ? '/' + encodeURIComponent(databaseName) : ''}`
     : null;
-  const explorerHref = !accountId || !databaseName
-    ? null
-    : isPg
-      ? `/postgres-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`
-      : `/data-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`;
+  // PG explorer works from just the server (the page redirects to the first
+  // database), so it stays enabled on pages without a database (e.g. audit).
+  // Cosmos still needs both account + database.
+  const explorerHref = isPg
+    ? (accountId
+      ? `/postgres-explorer/${encodeURIComponent(accountId)}${databaseName ? '/' + encodeURIComponent(databaseName) : ''}`
+      : null)
+    : (accountId && databaseName
+      ? `/data-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`
+      : null);
   const pgAuditHref = isPg && accountId ? `/postgres-audit/${encodeURIComponent(accountId)}` : null;
   const isPgExplorer = location.pathname.startsWith('/postgres-explorer');
   const isPgAudit = location.pathname.startsWith('/postgres-audit');
