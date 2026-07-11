@@ -47,6 +47,7 @@ const PgRowDrawer: React.FC<{
     })));
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   const noPk = pk.length === 0;
 
   const coerce = (c: Column, raw: string): unknown => {
@@ -60,9 +61,29 @@ const PgRowDrawer: React.FC<{
 
   const submit = async () => {
     setBusy(true);
+    setErr(null);
     try {
-      const values = Object.fromEntries(editable.map((c) => [c.name, coerce(c, form[c.name])]));
+      // On insert, omit fields the user left blank so the column's DB default
+      // (serial, now(), etc.) applies instead of sending '' into a typed column.
+      const values: Record<string, unknown> = {};
+      for (const c of editable) {
+        const raw = form[c.name];
+        if (mode === 'new' && raw === '') continue;
+        values[c.name] = coerce(c, raw);
+      }
       await onSave(values);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally { setBusy(false); }
+  };
+
+  const doDelete = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await onDelete();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
     } finally { setBusy(false); }
   };
 
@@ -105,11 +126,16 @@ const PgRowDrawer: React.FC<{
           </label>
         ))}
       </div>
+      {err && (
+        <div style={{ margin: '0 14px 10px', padding: '8px 10px', borderRadius: 'var(--radius-sm)', fontSize: 11.5, lineHeight: 1.45, background: 'color-mix(in oklch, var(--status-err) 10%, var(--bg))', border: '1px solid color-mix(in oklch, var(--status-err) 30%, var(--border))', color: 'var(--status-err)', fontFamily: 'var(--font-mono)', wordBreak: 'break-word' }}>
+          {err}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
         <button className="qa-btn primary" disabled={noPk || busy} onClick={submit}>Save</button>
         {mode === 'edit' && (
           confirmDelete
-            ? <button className="qa-btn" style={{ color: 'var(--status-err)', borderColor: 'var(--status-err)' }} disabled={busy} onClick={onDelete}>Confirm delete</button>
+            ? <button className="qa-btn" style={{ color: 'var(--status-err)', borderColor: 'var(--status-err)' }} disabled={busy} onClick={doDelete}>Confirm delete</button>
             : <button className="qa-btn" style={{ color: 'var(--status-err)' }} disabled={noPk} onClick={() => setConfirmDelete(true)}>Delete</button>
         )}
         <button className="qa-btn" style={{ marginLeft: 'auto' }} onClick={onClose}>Cancel</button>

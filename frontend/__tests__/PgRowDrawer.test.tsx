@@ -51,6 +51,22 @@ describe('PgRowDrawer', () => {
     expect(onSave).toHaveBeenCalledWith({ tags: [1, 3] });
   });
 
+  it('omits blank fields on insert so DB defaults apply', () => {
+    const onSave = vi.fn();
+    const cols = [
+      { name: 'id', type: 'integer', nullable: false, pk: true, fk: null },
+      { name: 'name', type: 'text', nullable: false, pk: false, fk: null },
+      { name: 'note', type: 'text', nullable: true, pk: false, fk: null },
+    ];
+    render(
+      <PgRowDrawer columns={cols} pk={['id']} mode="new"
+        row={null} onClose={() => {}} onSave={onSave} onDelete={() => {}} />,
+    );
+    fireEvent.change(screen.getByLabelText('name'), { target: { value: 'Ada' } });
+    fireEvent.click(screen.getByText('Save'));
+    expect(onSave).toHaveBeenCalledWith({ name: 'Ada' }); // note omitted
+  });
+
   it('edits a field and saves only non-pk values', async () => {
     const onSave = vi.fn();
     render(
