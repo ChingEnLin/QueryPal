@@ -106,3 +106,18 @@ def test_browse_wraps_db_error_as_rowerror():
     conn.cursor.return_value = cur
     with pytest.raises(s.RowError):
         s.browse(conn, "public", "orders", {"status"}, ["id"], [], None, 50, 0)
+
+
+def test_update_row_captures_before_image_for_diff():
+    from unittest.mock import MagicMock
+    cur = MagicMock()
+    cur.__enter__ = lambda self=cur: cur
+    cur.__exit__ = lambda *a: False
+    cur.description = [("id",), ("status",)]
+    cur.fetchone.return_value = (7, "old")     # SELECT pre-image
+    cur.fetchall.return_value = [(7, "new")]   # UPDATE ... RETURNING *
+    conn = MagicMock()
+    conn.cursor.return_value = cur
+    result = s.update_row(conn, "public", "orders", {"status"}, ["id"], {"id": 7}, {"status": "new"})
+    assert result["before"] == {"id": 7, "status": "old"}
+    assert result["rows"] == [[7, "new"]]

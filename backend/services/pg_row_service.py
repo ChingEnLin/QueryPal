@@ -123,6 +123,18 @@ def _fetch(cur) -> dict:
     return {"columns": columns, "rows": rows}
 
 
+def _select_by_pk(conn, schema, table, pk_cols, pk) -> dict | None:
+    """The current row keyed by pk, as a dict — the pre-image for an update's
+    audit diff. None if the row doesn't exist."""
+    where, params = _pk_where(pk, pk_cols)
+    q = f"SELECT * FROM {_qt(schema, table)} WHERE {where}"
+    with conn.cursor() as cur:
+        cur.execute(q, params)
+        columns = [d[0] for d in (cur.description or [])]
+        row = cur.fetchone()
+    return dict(zip(columns, [_json_safe(v) for v in row])) if row else None
+
+
 def browse(conn, schema, table, allowed, pk_cols, filters, sort, limit, offset):
     dq, dp = build_browse(schema, table, allowed, filters, sort, limit, offset)
     cq, cp = build_count(schema, table, allowed, filters)
@@ -157,7 +169,12 @@ def insert_row(conn, schema, table, allowed, values):
 
 def update_row(conn, schema, table, allowed, pk_cols, pk, values):
     q, params = build_update(schema, table, allowed, pk_cols, pk, values)
-    return _write(conn, q, params)
+    # Capture the pre-image (same txn, before the write) so the audit records a
+    # real before/after diff instead of the whole new row.
+    before = _select_by_pk(conn, schema, table, pk_cols, pk)
+    result = _write(conn, q, params)
+    result["before"] = before
+    return result
 
 
 def delete_row(conn, schema, table, pk_cols, pk):

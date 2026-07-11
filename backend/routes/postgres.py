@@ -266,7 +266,9 @@ def update_row(
         user_email=caller.email, operation="update",
         database_name=data.server_id,
         collection_name=f"{data.schema_name}.{data.table}",
-        document_id=str(data.pk), after_data=_row_dict(result) or data.values,
+        document_id=str(data.pk),
+        before_data=result.get("before"),
+        after_data=_row_dict(result) or data.values,
     )
     return result
 
