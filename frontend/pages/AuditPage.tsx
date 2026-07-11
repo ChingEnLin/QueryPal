@@ -947,7 +947,14 @@ const AuditPage: React.FC = () => {
                     </div>
                 </div>
 
-                {tab === 'ask' ? (
+                {loading && allEvents.length === 0 && tab !== 'ask' ? (
+                    <div style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: 'var(--muted)' }}>
+                            <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" style={{ animation: 'ws-spin 0.7s linear infinite', color: 'var(--accent)' }}><path d="M8 2a6 6 0 1 0 6 6" /></svg>
+                            <span style={{ fontSize: 12.5 }}>Loading audit log…</span>
+                        </div>
+                    </div>
+                ) : tab === 'ask' ? (
                     <div style={{ flex: 1, overflowY: 'auto', padding: '22px 28px' }}><AskPanel getToken={getToken} isPg={isPgAudit} /></div>
                 ) : tab === 'history' ? (
                     <div style={{ flex: 1, overflowY: 'auto', padding: '18px 28px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
