@@ -237,8 +237,19 @@ export default function AdminPage() {
         )}
 
         {pgAccessError && (
-          <div style={{ marginBottom: 16, padding: '10px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: 'color-mix(in oklch, var(--status-err) 10%, var(--bg))', border: '1px solid color-mix(in oklch, var(--status-err) 30%, var(--border))', color: 'var(--status-err)', fontFamily: 'var(--font-mono)', wordBreak: 'break-word' }}>
-            Couldn&apos;t load PostgreSQL access: {pgAccessError}
+          <div style={{ marginBottom: 16, padding: '11px 13px', borderRadius: 8, fontSize: 12.5, lineHeight: 1.55, background: 'color-mix(in oklch, var(--status-err) 10%, var(--bg))', border: '1px solid color-mix(in oklch, var(--status-err) 30%, var(--border))', color: 'var(--status-err)', wordBreak: 'break-word' }}>
+            {/timeout|connection .*failed|could not connect|no pg_hba|could not translate host/i.test(pgAccessError) ? (
+              <>
+                <strong>Can&apos;t reach the PostgreSQL server.</strong> Your current IP is most likely not
+                allow-listed on the server firewall — this commonly happens after switching networks or connecting
+                to a VPN. Ask a tenant / Azure admin to whitelist your current public IP on{' '}
+                <span style={{ fontFamily: 'var(--font-mono)' }}>{pgServers.find((s) => s.id === pgServerId)?.name ?? 'the server'}</span> so you can manage
+                database access, then reload this page.
+                <div style={{ marginTop: 6, fontSize: 10.5, opacity: 0.75, fontFamily: 'var(--font-mono)' }}>{pgAccessError}</div>
+              </>
+            ) : (
+              <span style={{ fontFamily: 'var(--font-mono)' }}>Couldn&apos;t load PostgreSQL access: {pgAccessError}</span>
+            )}
           </div>
         )}
 
