@@ -651,10 +651,12 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
                         fontFamily: 'var(--font-mono)', fontSize: 11.5,
                       }}>{t.name}</span>
-                      <span style={{
-                        fontSize: 10, color: 'var(--muted)', flexShrink: 0, marginLeft: 4,
-                        fontFamily: 'var(--font-mono)',
-                      }}>{t.rowEstimate.toLocaleString()}</span>
+                      <span
+                        title={t.rowEstimate < 0 ? 'Row count unknown — table not analyzed yet (run ANALYZE)' : `~${t.rowEstimate.toLocaleString()} rows (estimate)`}
+                        style={{
+                          fontSize: 10, color: 'var(--muted)', flexShrink: 0, marginLeft: 4,
+                          fontFamily: 'var(--font-mono)',
+                        }}>{t.rowEstimate < 0 ? '—' : t.rowEstimate.toLocaleString()}</span>
                     </button>
                   );
                 })}

@@ -134,7 +134,9 @@ const SchemaCard: React.FC<{
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M2 6.5h12M6 6.5V13" /></svg>
         </span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13.5, fontWeight: 500 }}>{info.schema}.{info.table}</span>
-        {rowEstimate != null && <span className="qa-tag">~{rowEstimate.toLocaleString()} rows</span>}
+        {rowEstimate != null && (rowEstimate >= 0
+          ? <span className="qa-tag">~{rowEstimate.toLocaleString()} rows</span>
+          : <span className="qa-tag" title="Row count unknown — table not analyzed yet (run ANALYZE)">rows: —</span>)}
         <span className="qa-tag">{info.columns.length} cols</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 7, alignItems: 'center' }}>
           <button className="qa-btn primary" style={{ height: 27, gap: 6 }} onClick={onQueryTable}>
