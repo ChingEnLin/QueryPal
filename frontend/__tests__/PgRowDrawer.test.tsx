@@ -24,6 +24,33 @@ describe('PgRowDrawer', () => {
     expect(onSave).toHaveBeenCalledWith({ meta: { a: 1 } });
   });
 
+  const arrayCols = [
+    { name: 'id', type: 'integer', nullable: false, pk: true, fk: null },
+    { name: 'tags', type: 'ARRAY', nullable: true, pk: false, fk: null },
+  ];
+
+  it('parses JSON array input into a JS array on save', () => {
+    const onSave = vi.fn();
+    render(
+      <PgRowDrawer columns={arrayCols} pk={['id']} mode="edit"
+        row={{ id: 1, tags: null }} onClose={() => {}} onSave={onSave} onDelete={() => {}} />,
+    );
+    fireEvent.change(screen.getByLabelText('tags'), { target: { value: '[1,3]' } });
+    fireEvent.click(screen.getByText('Save'));
+    expect(onSave).toHaveBeenCalledWith({ tags: [1, 3] });
+  });
+
+  it('parses PG {..} array literal input into a JS array on save', () => {
+    const onSave = vi.fn();
+    render(
+      <PgRowDrawer columns={arrayCols} pk={['id']} mode="edit"
+        row={{ id: 1, tags: null }} onClose={() => {}} onSave={onSave} onDelete={() => {}} />,
+    );
+    fireEvent.change(screen.getByLabelText('tags'), { target: { value: '{1,3}' } });
+    fireEvent.click(screen.getByText('Save'));
+    expect(onSave).toHaveBeenCalledWith({ tags: [1, 3] });
+  });
+
   it('edits a field and saves only non-pk values', async () => {
     const onSave = vi.fn();
     render(

@@ -5,6 +5,29 @@ interface Column { name: string; type: string; nullable: boolean; pk?: boolean; 
 const isBool = (t: string) => t === 'boolean';
 const isNumber = (t: string) => /int|numeric|real|double|decimal|serial/i.test(t);
 const isJson = (t: string) => /json/i.test(t);
+// information_schema reports array columns as data_type "ARRAY"; some setups
+// surface "integer[]" etc. Match both.
+const isArray = (t: string) => /array|\[\]/i.test(t);
+
+// One-line input help for types that aren't obvious to type by hand.
+const typeHint = (t: string): string =>
+  isArray(t) ? 'array — {1,2,3} or ["a","b"]'
+    : isJson(t) ? 'JSON — e.g. {"key": "value"}'
+    : '';
+
+// Parse array input into a real JS array (sent as JSON; psycopg2 adapts a list
+// to a PG array and handles quoting). Accepts JSON [1,3], PG {1,3}, or 1,3.
+const parseArray = (raw: string): unknown => {
+  const s = raw.trim();
+  try { const v = JSON.parse(s); if (Array.isArray(v)) return v; } catch { /* not JSON */ }
+  const inner = s.replace(/^\{/, '').replace(/\}$/, '');
+  if (inner.trim() === '') return [];
+  return inner.split(',').map((x) => {
+    const el = x.trim().replace(/^["']|["']$/g, '');
+    const n = Number(el);
+    return el !== '' && !Number.isNaN(n) ? n : el;
+  });
+};
 
 const PgRowDrawer: React.FC<{
   columns: Column[];
@@ -29,6 +52,7 @@ const PgRowDrawer: React.FC<{
   const coerce = (c: Column, raw: string): unknown => {
     if (raw === '') return c.nullable ? null : '';
     if (isBool(c.type)) return raw === 'true';
+    if (isArray(c.type)) return parseArray(raw);
     if (isNumber(c.type)) { const n = Number(raw); return Number.isNaN(n) ? raw : n; }
     if (isJson(c.type)) { try { return JSON.parse(raw); } catch { return raw; } }
     return raw;
@@ -65,13 +89,18 @@ const PgRowDrawer: React.FC<{
                 style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--panel)', color: 'var(--fg)' }}>
                 <option value="">(null)</option><option value="true">true</option><option value="false">false</option>
               </select>
-            ) : isJson(c.type) ? (
-              <textarea aria-label={c.name} disabled={noPk} rows={3} value={form[c.name]} onChange={(e) => setForm((f) => ({ ...f, [c.name]: e.target.value }))}
-                style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--panel)', color: 'var(--fg)', fontFamily: 'var(--font-mono)', fontSize: 12 }} />
+            ) : (isJson(c.type) || isArray(c.type)) ? (
+              <textarea aria-label={c.name} disabled={noPk} rows={isArray(c.type) ? 1 : 3} value={form[c.name]}
+                placeholder={isArray(c.type) ? '{1,2,3}' : '{"key": "value"}'}
+                onChange={(e) => setForm((f) => ({ ...f, [c.name]: e.target.value }))}
+                style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--panel)', color: 'var(--fg)', fontFamily: 'var(--font-mono)', fontSize: 12, resize: 'vertical' }} />
             ) : (
               <input aria-label={c.name} disabled={noPk} type={isNumber(c.type) ? 'number' : 'text'} value={form[c.name]}
                 onChange={(e) => setForm((f) => ({ ...f, [c.name]: e.target.value }))}
                 style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--panel)', color: 'var(--fg)', fontFamily: 'var(--font-mono)', fontSize: 12 }} />
+            )}
+            {typeHint(c.type) && (
+              <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>{typeHint(c.type)}</span>
             )}
           </label>
         ))}
