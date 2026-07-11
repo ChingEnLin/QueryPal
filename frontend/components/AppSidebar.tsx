@@ -179,6 +179,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   // Workspace paths are /postgres/:id[/db]; the -explorer/-audit variants don't
   // start with '/postgres/' so they're correctly excluded here.
   const isPgWorkspace = isPg && location.pathname.startsWith('/postgres/');
+  const isAdminPage = location.pathname.startsWith('/admin');
 
   // In a PG workspace the sidebar's own listPostgresServers fetch can lose the
   // race with the page's OBO calls (error swallowed above), so fall back to the
@@ -438,6 +439,21 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               {item.icon}
             </span>
           );
+
+          // Role management is a standalone, connection-less page — the
+          // connection-scoped tabs don't apply here.
+          if (isAdminPage && (item.label === 'Workspace' || item.label === 'Audit')) {
+            return (
+              <span
+                key={item.label}
+                style={{ ...style, opacity: 0.4, cursor: 'not-allowed' }}
+                title="Not available on the role management page"
+              >
+                {iconSpan}
+                {item.label}
+              </span>
+            );
+          }
 
           if (item.panel) {
             return (

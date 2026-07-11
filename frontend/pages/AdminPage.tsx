@@ -16,6 +16,14 @@ const chipColor: Record<string, string> = {
   Viewer: 'var(--muted)',
 };
 
+// Human-readable capabilities per role (cumulative). Kept in sync with the
+// permission sets in hooks/useRoles.ts + backend services/rbac.py.
+const ROLE_INFO: { name: string; caps: string[] }[] = [
+  { name: 'Viewer', caps: ['Run queries & browse data (read-only)', 'See own write activity'] },
+  { name: 'Analyst', caps: ['Everything a Viewer can', 'Create, edit & delete data', 'Run data-quality audits'] },
+  { name: 'Admin', caps: ['Everything an Analyst can', 'View the full audit log (all users)', 'Manage roles & database access (this page)'] },
+];
+
 export default function AdminPage() {
   const { can } = useRoles();
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -182,6 +190,34 @@ export default function AdminPage() {
           <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '6px 0 0' }}>
             Changes take effect on the user&apos;s next sign-in.
           </p>
+        </div>
+
+        {/* Roles & permissions reference */}
+        <div className="qa-card" style={{ padding: 16, marginBottom: 20 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>Roles &amp; permissions</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {ROLE_INFO.map((r) => (
+              <div key={r.name} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <span style={{
+                  flexShrink: 0, width: 62, textAlign: 'center', fontSize: 11, fontWeight: 600, padding: '2px 0',
+                  borderRadius: 5, color: chipColor[r.name], background: `color-mix(in oklch, ${chipColor[r.name]} 14%, var(--panel))`,
+                  border: `1px solid color-mix(in oklch, ${chipColor[r.name]} 35%, var(--border))`,
+                }}>{r.name}</span>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.6 }}>
+                  {r.caps.join(' · ')}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ height: 1, background: 'var(--border)', margin: '14px 0 12px' }} />
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.6 }}>
+            <strong style={{ color: 'var(--fg)', fontWeight: 500 }}>Scope:</strong> roles are cumulative and apply
+            app-wide (across every connection).{pgServers.length > 0 && (
+              <> <strong style={{ color: 'var(--fg)', fontWeight: 500 }}>PostgreSQL access</strong> (right column below)
+              is separate and scoped to a single server via Entra: <em>Read</em> grants SELECT; <em>Write</em> adds
+              INSERT / UPDATE / DELETE. Editing rows needs an Analyst/Admin role <em>and</em> PostgreSQL write access.</>
+            )}
+          </div>
         </div>
 
         {pgServers.length > 0 && (
