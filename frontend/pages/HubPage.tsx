@@ -42,7 +42,7 @@ interface RecentActivityItem {
   database_name: string;
   collection_name: string;
   operation: string;
-  document_id: string;
+  document_id: string | null;
   user_email: string;
   timestamp_utc: string;
 }
