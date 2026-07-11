@@ -38,8 +38,13 @@ const PgRowDrawer: React.FC<{
   onSave: (values: Record<string, unknown>) => void | Promise<void>;
   onDelete: () => void | Promise<void>;
 }> = ({ columns, pk, mode, row, onClose, onSave, onDelete }) => {
-  // Editable = every non-pk column (serial/default pks are filled by the DB).
-  const editable = useMemo(() => columns.filter((c) => !pk.includes(c.name)), [columns, pk]);
+  // On insert, PK columns are editable too — natural/text keys must be typed
+  // (serial ones can be left blank and the DB fills them). On edit the PK is
+  // immutable, shown read-only below.
+  const editable = useMemo(
+    () => (mode === 'new' ? columns : columns.filter((c) => !pk.includes(c.name))),
+    [columns, pk, mode],
+  );
   const [form, setForm] = useState<Record<string, string>>(() =>
     Object.fromEntries(editable.map((c) => {
       const v = row?.[c.name];
@@ -104,7 +109,11 @@ const PgRowDrawer: React.FC<{
         ))}
         {editable.map((c) => (
           <label key={c.name} style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--fg)' }}>
-            <span>{c.name} <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{c.type}{c.fk ? ` -> ${c.fk}` : ''}</span></span>
+            <span>
+              {c.name}{' '}
+              {pk.includes(c.name) && <span className="ws-keybadge pk">PK</span>}{' '}
+              <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{c.type}{c.fk ? ` -> ${c.fk}` : ''}</span>
+            </span>
             {isBool(c.type) ? (
               <select aria-label={c.name} disabled={noPk} value={form[c.name]} onChange={(e) => setForm((f) => ({ ...f, [c.name]: e.target.value }))}
                 style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--panel)', color: 'var(--fg)' }}>
@@ -120,8 +129,10 @@ const PgRowDrawer: React.FC<{
                 onChange={(e) => setForm((f) => ({ ...f, [c.name]: e.target.value }))}
                 style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--panel)', color: 'var(--fg)', fontFamily: 'var(--font-mono)', fontSize: 12 }} />
             )}
-            {typeHint(c.type) && (
-              <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>{typeHint(c.type)}</span>
+            {(pk.includes(c.name) || typeHint(c.type)) && (
+              <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>
+                {pk.includes(c.name) ? 'primary key — leave blank if auto-generated' : typeHint(c.type)}
+              </span>
             )}
           </label>
         ))}

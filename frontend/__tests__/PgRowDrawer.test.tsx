@@ -67,6 +67,21 @@ describe('PgRowDrawer', () => {
     expect(onSave).toHaveBeenCalledWith({ name: 'Ada' }); // note omitted
   });
 
+  it('includes a typed (natural) primary key on insert', () => {
+    const onSave = vi.fn();
+    const cols = [
+      { name: 'project_name', type: 'text', nullable: false, pk: true, fk: null },
+      { name: 'status', type: 'text', nullable: true, pk: false, fk: null },
+    ];
+    render(
+      <PgRowDrawer columns={cols} pk={['project_name']} mode="new"
+        row={null} onClose={() => {}} onSave={onSave} onDelete={() => {}} />,
+    );
+    fireEvent.change(screen.getByLabelText('project_name'), { target: { value: 'Apollo' } });
+    fireEvent.click(screen.getByText('Save'));
+    expect(onSave).toHaveBeenCalledWith({ project_name: 'Apollo' });
+  });
+
   it('edits a field and saves only non-pk values', async () => {
     const onSave = vi.fn();
     render(
