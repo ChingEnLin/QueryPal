@@ -629,8 +629,10 @@ function HistoryTimeline({ events, onOpen, now, isPg }: { events: AuditEvent[]; 
 /* ── Ask the log (NL → SQL via existing backend) ──────────────────────────── */
 interface AskResult { sql_query: string; results: any[]; summary: string; visualization?: VisualizationConfig }
 
-function AskPanel({ getToken }: { getToken: () => Promise<string | null> }) {
-    const [q, setQ] = useState('How many documents were updated in the last 7 days, grouped by collection?');
+function AskPanel({ getToken, isPg }: { getToken: () => Promise<string | null>; isPg: boolean }) {
+    const [q, setQ] = useState(isPg
+        ? 'How many rows were updated in the last 7 days, grouped by table?'
+        : 'How many documents were updated in the last 7 days, grouped by collection?');
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<AskResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -946,7 +948,7 @@ const AuditPage: React.FC = () => {
                 </div>
 
                 {tab === 'ask' ? (
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '22px 28px' }}><AskPanel getToken={getToken} /></div>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '22px 28px' }}><AskPanel getToken={getToken} isPg={isPgAudit} /></div>
                 ) : tab === 'history' ? (
                     <div style={{ flex: 1, overflowY: 'auto', padding: '18px 28px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
