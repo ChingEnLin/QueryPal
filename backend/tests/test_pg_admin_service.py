@@ -1,6 +1,12 @@
 from unittest.mock import MagicMock
 
-from services.pg_admin_service import grant_access, revoke_access, list_access
+from services.pg_admin_service import (
+    grant_access,
+    grant_write_access,
+    list_access,
+    revoke_access,
+    revoke_write_access,
+)
 
 
 def _conn_with_cursor():
@@ -48,8 +54,31 @@ def test_revoke_drops_role():
     assert "lin@virtonomy.io" in blob
 
 
-def test_list_access_returns_user_emails():
+def test_list_access_returns_emails_with_write_flag():
     conn, cur = _conn_with_cursor()
-    cur.fetchall.return_value = [("a@x.io",), ("b@x.io",)]
-    assert list_access(conn) == ["a@x.io", "b@x.io"]
-    assert "pgaadauth_list_principals" in _executed_sql(cur)
+    cur.fetchall.return_value = [("a@x.io", True), ("b@x.io", False)]
+    assert list_access(conn) == [
+        {"email": "a@x.io", "write": True},
+        {"email": "b@x.io", "write": False},
+    ]
+    blob = _executed_sql(cur)
+    assert "pgaadauth_list_principals" in blob
+    assert "pg_write_all_data" in blob
+
+
+def test_grant_write_grants_write_role():
+    conn, cur = _conn_with_cursor()
+    out = grant_write_access(conn, "lin@virtonomy.io")
+    assert out == {"granted_write": "lin@virtonomy.io"}
+    blob = _executed_sql(cur)
+    assert "GRANT pg_write_all_data" in blob
+    assert "lin@virtonomy.io" in blob
+
+
+def test_revoke_write_revokes_write_role():
+    conn, cur = _conn_with_cursor()
+    out = revoke_write_access(conn, "lin@virtonomy.io")
+    assert out == {"revoked_write": "lin@virtonomy.io"}
+    blob = _executed_sql(cur)
+    assert "REVOKE pg_write_all_data" in blob
+    assert "lin@virtonomy.io" in blob

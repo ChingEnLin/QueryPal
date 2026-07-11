@@ -939,7 +939,9 @@ export async function pgAnalyze(token: string, body: {
 }
 
 // --- PostgreSQL access provisioning (admin only) ---
-export async function pgListAccess(token: string, serverId: string): Promise<string[]> {
+export interface PgAccessEntry { email: string; write: boolean }
+
+export async function pgListAccess(token: string, serverId: string): Promise<PgAccessEntry[]> {
   return _pgPost(token, '/postgres/access', { server_id: serverId });
 }
 
@@ -949,6 +951,14 @@ export async function pgGrantAccess(token: string, serverId: string, userEmail: 
 
 export async function pgRevokeAccess(token: string, serverId: string, userEmail: string) {
   return _pgPost(token, '/postgres/revoke', { server_id: serverId, user_email: userEmail });
+}
+
+export async function pgGrantWrite(token: string, serverId: string, userEmail: string) {
+  return _pgPost(token, '/postgres/grant_write', { server_id: serverId, user_email: userEmail });
+}
+
+export async function pgRevokeWrite(token: string, serverId: string, userEmail: string) {
+  return _pgPost(token, '/postgres/revoke_write', { server_id: serverId, user_email: userEmail });
 }
 
 // --- PostgreSQL data explorer (row browse + CRUD) ---

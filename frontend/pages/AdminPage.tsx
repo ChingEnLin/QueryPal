@@ -4,7 +4,7 @@ import { useRoles } from '../hooks/useRoles';
 import {
   getAdminUsers, assignUserRole, removeUserRole, AdminUser,
   getAuthenticatedToken, listPostgresServers, pgListAccess, pgGrantAccess, pgRevokeAccess,
-  PostgresServer,
+  pgGrantWrite, pgRevokeWrite, PostgresServer,
 } from '../services/dbService';
 import AppLayout from '../components/AppLayout';
 
@@ -28,6 +28,7 @@ export default function AdminPage() {
   const [pgServers, setPgServers] = useState<PostgresServer[]>([]);
   const [pgServerId, setPgServerId] = useState<string>('');
   const [pgAccess, setPgAccess] = useState<Set<string>>(new Set());
+  const [pgWrite, setPgWrite] = useState<Set<string>>(new Set());
   const [pgAccessLoading, setPgAccessLoading] = useState(false);
   const [pgBusy, setPgBusy] = useState<Record<string, boolean>>({});
 
@@ -66,18 +67,24 @@ export default function AdminPage() {
     setPgAccessLoading(true);
     getAuthenticatedToken()
       .then((token) => pgListAccess(token, pgServerId))
-      .then((emails) => { if (!cancelled) setPgAccess(new Set(emails.map((e) => e.toLowerCase()))); })
-      .catch(() => { if (!cancelled) setPgAccess(new Set()); })
+      .then((entries) => {
+        if (cancelled) return;
+        setPgAccess(new Set(entries.map((e) => e.email.toLowerCase())));
+        setPgWrite(new Set(entries.filter((e) => e.write).map((e) => e.email.toLowerCase())));
+      })
+      .catch(() => { if (!cancelled) { setPgAccess(new Set()); setPgWrite(new Set()); } })
       .finally(() => { if (!cancelled) setPgAccessLoading(false); });
     return () => { cancelled = true; };
   }, [pgServerId]);
 
-  const setPgAccessFor = (email: string, has: boolean) =>
-    setPgAccess((prev) => {
+  const setMembership = (setter: typeof setPgAccess) => (email: string, has: boolean) =>
+    setter((prev) => {
       const next = new Set(prev);
       if (has) next.add(email.toLowerCase()); else next.delete(email.toLowerCase());
       return next;
     });
+  const setPgAccessFor = setMembership(setPgAccess);
+  const setPgWriteFor = setMembership(setPgWrite);
 
   const handlePgGrant = async (oid: string, email: string) => {
     setPgBusy((p) => ({ ...p, [oid]: true }));
@@ -100,6 +107,35 @@ export default function AdminPage() {
       const token = await getAuthenticatedToken();
       await pgRevokeAccess(token, pgServerId, email);
       setPgAccessFor(email, false);
+      setPgWriteFor(email, false); // dropping the role removes write too
+    } catch (e: any) {
+      setActionError((p) => ({ ...p, [oid]: e.message }));
+    } finally {
+      setPgBusy((p) => ({ ...p, [oid]: false }));
+    }
+  };
+
+  const handlePgGrantWrite = async (oid: string, email: string) => {
+    setPgBusy((p) => ({ ...p, [oid]: true }));
+    setActionError((p) => ({ ...p, [oid]: '' }));
+    try {
+      const token = await getAuthenticatedToken();
+      await pgGrantWrite(token, pgServerId, email);
+      setPgWriteFor(email, true);
+    } catch (e: any) {
+      setActionError((p) => ({ ...p, [oid]: e.message }));
+    } finally {
+      setPgBusy((p) => ({ ...p, [oid]: false }));
+    }
+  };
+
+  const handlePgRevokeWrite = async (oid: string, email: string) => {
+    setPgBusy((p) => ({ ...p, [oid]: true }));
+    setActionError((p) => ({ ...p, [oid]: '' }));
+    try {
+      const token = await getAuthenticatedToken();
+      await pgRevokeWrite(token, pgServerId, email);
+      setPgWriteFor(email, false);
     } catch (e: any) {
       setActionError((p) => ({ ...p, [oid]: e.message }));
     } finally {
@@ -246,13 +282,38 @@ export default function AdminPage() {
                       {pgAccessLoading ? (
                         <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Checking…</span>
                       ) : pgAccess.has(u.email.toLowerCase()) ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span className="qa-chip ok" style={{ fontSize: 11 }}>● granted</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span className="qa-chip ok" style={{ fontSize: 11 }}>● read</span>
+                          {pgWrite.has(u.email.toLowerCase()) ? (
+                            <>
+                              <span className="qa-chip accent" style={{ fontSize: 11 }}>● write</span>
+                              <button
+                                className="qa-btn"
+                                disabled={pgBusy[u.oid]}
+                                onClick={() => handlePgRevokeWrite(u.oid, u.email)}
+                                style={{ fontSize: 12, padding: '4px 10px' }}
+                                title="Remove INSERT/UPDATE/DELETE, keep read"
+                              >
+                                {pgBusy[u.oid] ? '…' : 'Revoke write'}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              className="qa-btn"
+                              disabled={pgBusy[u.oid]}
+                              onClick={() => handlePgGrantWrite(u.oid, u.email)}
+                              style={{ fontSize: 12, padding: '4px 10px' }}
+                              title="Allow INSERT/UPDATE/DELETE (pg_write_all_data)"
+                            >
+                              {pgBusy[u.oid] ? '…' : 'Grant write'}
+                            </button>
+                          )}
                           <button
                             className="qa-btn"
                             disabled={pgBusy[u.oid]}
                             onClick={() => handlePgRevoke(u.oid, u.email)}
                             style={{ fontSize: 12, padding: '4px 10px' }}
+                            title="Remove all access"
                           >
                             {pgBusy[u.oid] ? '…' : 'Revoke'}
                           </button>

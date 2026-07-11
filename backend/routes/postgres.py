@@ -28,8 +28,10 @@ from services.gemini_service import analyze_pg_result
 from services.pg_admin_service import (
     get_pg_admin_connection,
     grant_access,
+    grant_write_access,
     list_access,
     revoke_access,
+    revoke_write_access,
 )
 from services import pg_row_service
 from services.pg_connection_obo import get_pg_connection
@@ -336,6 +338,52 @@ def revoke(
     log_write_operation(
         user_email=caller.email,
         operation="revoke",
+        database_name=data.server_id,
+        collection_name="pg_access",
+        document_id=data.user_email,
+    )
+    return result
+
+
+@router.post("/grant_write")
+def grant_write(
+    data: PgGrantRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("system:admin")),
+):
+    conn = _admin_connect(authorization, data.server_id)
+    try:
+        result = grant_write_access(conn, data.user_email)
+    except Exception as e:
+        raise HTTPException(status_code=409, detail=f"Cannot grant write: {e}")
+    finally:
+        conn.close()
+    log_write_operation(
+        user_email=caller.email,
+        operation="grant_write",
+        database_name=data.server_id,
+        collection_name="pg_access",
+        document_id=data.user_email,
+    )
+    return result
+
+
+@router.post("/revoke_write")
+def revoke_write(
+    data: PgRevokeRequest = Body(...),
+    authorization: str = Header(...),
+    caller: Caller = Depends(require("system:admin")),
+):
+    conn = _admin_connect(authorization, data.server_id)
+    try:
+        result = revoke_write_access(conn, data.user_email)
+    except Exception as e:
+        raise HTTPException(status_code=409, detail=f"Cannot revoke write: {e}")
+    finally:
+        conn.close()
+    log_write_operation(
+        user_email=caller.email,
+        operation="revoke_write",
         database_name=data.server_id,
         collection_name="pg_access",
         document_id=data.user_email,

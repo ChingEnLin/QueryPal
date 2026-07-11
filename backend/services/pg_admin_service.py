@@ -53,6 +53,31 @@ def grant_access(conn, user_email: str) -> dict:
     return {"granted": user_email, "created": not existed}
 
 
+def grant_write_access(conn, user_email: str) -> dict:
+    """Add write privileges (INSERT/UPDATE/DELETE on all tables) on top of the
+    caller's existing read access, via the built-in pg_write_all_data role.
+
+    Opt-in and separate from grant_access, which stays read-only. Assumes the
+    user already has a login principal + read (granted from the same admin UI).
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("GRANT pg_write_all_data TO {}").format(sql.Identifier(user_email))
+        )
+    return {"granted_write": user_email}
+
+
+def revoke_write_access(conn, user_email: str) -> dict:
+    """Drop write privileges while leaving read access intact."""
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("REVOKE pg_write_all_data FROM {}").format(
+                sql.Identifier(user_email)
+            )
+        )
+    return {"revoked_write": user_email}
+
+
 def revoke_access(conn, user_email: str) -> dict:
     """Revoke `user_email` PG access by dropping the role.
 
@@ -67,20 +92,23 @@ def revoke_access(conn, user_email: str) -> dict:
 
 
 def list_access(conn) -> list:
-    """Emails of Entra user principals that actually have read access.
+    """Entra user principals with read access + whether they also have write.
 
     "Has access" = member of pg_read_all_data (what grant_access confers), NOT
     merely having a login principal — otherwise a created-but-ungranted user
-    would show as granted yet fail every query with permission denied.
+    would show as granted yet fail every query with permission denied. The
+    `write` flag reflects membership in pg_write_all_data (grant_write_access).
+    Returns [{"email": str, "write": bool}].
     """
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT p.rolname
+            SELECT p.rolname,
+                   pg_has_role(u.oid, 'pg_write_all_data', 'member')
             FROM pgaadauth_list_principals(false) p
             JOIN pg_roles u ON u.rolname = p.rolname
             WHERE p.principaltype = 'user'
               AND pg_has_role(u.oid, 'pg_read_all_data', 'member')
             """
         )
-        return [r[0] for r in cur.fetchall()]
+        return [{"email": r[0], "write": bool(r[1])} for r in cur.fetchall()]
