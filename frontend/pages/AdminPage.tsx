@@ -38,6 +38,7 @@ export default function AdminPage() {
   const [pgAccess, setPgAccess] = useState<Set<string>>(new Set());
   const [pgWrite, setPgWrite] = useState<Set<string>>(new Set());
   const [pgAccessLoading, setPgAccessLoading] = useState(false);
+  const [pgAccessError, setPgAccessError] = useState<string | null>(null);
   const [pgBusy, setPgBusy] = useState<Record<string, boolean>>({});
 
   // All hooks must be called before any early return (rules of hooks).
@@ -73,6 +74,7 @@ export default function AdminPage() {
     if (!pgServerId) return;
     let cancelled = false;
     setPgAccessLoading(true);
+    setPgAccessError(null);
     getAuthenticatedToken()
       .then((token) => pgListAccess(token, pgServerId))
       .then((entries) => {
@@ -80,7 +82,7 @@ export default function AdminPage() {
         setPgAccess(new Set(entries.map((e) => e.email.toLowerCase())));
         setPgWrite(new Set(entries.filter((e) => e.write).map((e) => e.email.toLowerCase())));
       })
-      .catch(() => { if (!cancelled) { setPgAccess(new Set()); setPgWrite(new Set()); } })
+      .catch((e) => { if (!cancelled) { setPgAccess(new Set()); setPgWrite(new Set()); setPgAccessError(e?.message || 'Failed to load PostgreSQL access'); } })
       .finally(() => { if (!cancelled) setPgAccessLoading(false); });
     return () => { cancelled = true; };
   }, [pgServerId]);
@@ -230,6 +232,13 @@ export default function AdminPage() {
             >
               {pgServers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {pgAccessLoading && <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Loading access…</span>}
+          </div>
+        )}
+
+        {pgAccessError && (
+          <div style={{ marginBottom: 16, padding: '10px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: 'color-mix(in oklch, var(--status-err) 10%, var(--bg))', border: '1px solid color-mix(in oklch, var(--status-err) 30%, var(--border))', color: 'var(--status-err)', fontFamily: 'var(--font-mono)', wordBreak: 'break-word' }}>
+            Couldn&apos;t load PostgreSQL access: {pgAccessError}
           </div>
         )}
 

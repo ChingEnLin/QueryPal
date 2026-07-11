@@ -1,3 +1,6 @@
+import logging
+import os
+
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
 
 from models.schemas import (
@@ -57,6 +60,9 @@ def _connect(authorization: str, server_id: str, database: str, caller: Caller):
     try:
         return get_pg_connection(fqdn, database, caller.email, pg_token)
     except Exception as e:
+        logging.getLogger("querypal.postgres").warning(
+            "OBO PG connect failed for %s: %r", fqdn, e
+        )
         raise HTTPException(
             status_code=502, detail=f"PostgreSQL connection failed: {e}"
         )
@@ -76,6 +82,10 @@ def _admin_connect(authorization: str, server_id: str):
     try:
         return get_pg_admin_connection(fqdn)
     except Exception as e:
+        logging.getLogger("querypal.postgres").warning(
+            "SP-admin PG connect failed for %s (login=%s): %r",
+            fqdn, os.environ.get("PG_ADMIN_LOGIN"), e
+        )
         raise HTTPException(
             status_code=502, detail=f"PostgreSQL connection failed: {e}"
         )
