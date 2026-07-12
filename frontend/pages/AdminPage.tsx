@@ -292,10 +292,10 @@ export default function AdminPage() {
                   <td style={{ padding: '10px 10px' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                       {u.roles.length === 0 && (
-                        <span className="qa-chip" style={{ color: 'var(--muted)', fontSize: 11 }}>Viewer (default)</span>
+                        <span className="qa-chip" style={{ color: 'var(--muted)', fontSize: 11, whiteSpace: 'nowrap' }}>Viewer (default)</span>
                       )}
                       {u.roles.map((r) => (
-                        <span key={r.assignment_id} className="qa-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, color: chipColor[r.role_name] ?? 'var(--fg)' }}>
+                        <span key={r.assignment_id} className="qa-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', color: chipColor[r.role_name] ?? 'var(--fg)' }}>
                           {r.role_name}
                           <button
                             onClick={() => handleRemove(u.oid, r.assignment_id)}
@@ -334,11 +334,11 @@ export default function AdminPage() {
                   </td>
 
                   {pgServers.length > 0 && (
-                    <td style={{ padding: '10px 10px', minWidth: 120 }}>
+                    <td style={{ padding: '10px 10px', whiteSpace: 'nowrap', width: 1 }}>
                       {pgAccessLoading ? (
                         <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Checking…</span>
                       ) : pgAccess.has(u.email.toLowerCase()) ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span className="qa-chip ok" style={{ fontSize: 11 }}>● read</span>
                           {pgWrite.has(u.email.toLowerCase()) ? (
                             <>
