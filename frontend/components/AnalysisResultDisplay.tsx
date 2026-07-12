@@ -25,7 +25,6 @@ ChartJS.register(
 
 interface AnalysisResultDisplayProps {
   result: AnalysisResult;
-  onFollowup?: (prompt: string) => void;
 }
 
 const SparkleIcon = () => (
@@ -45,7 +44,7 @@ const CHART_TYPE_LABELS: Record<string, string> = {
   bubble: 'Bubble chart',
 };
 
-const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ result, onFollowup }) => {
+const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ result }) => {
   const { theme } = useTheme();
 
   const themedChartOptions = React.useMemo(() => {
@@ -130,57 +129,13 @@ const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ result, o
         </span>
       </div>
 
-      {/* Body — insight + chart side by side */}
-      <div style={{ display: 'flex', minHeight: 320 }}>
-        {/* Insight panel */}
-        <div style={{
-          width: 220, flexShrink: 0,
-          padding: '16px 18px',
-          borderRight: '1px solid var(--border)',
-          display: 'flex', flexDirection: 'column', gap: 10,
-          background: 'var(--soft)',
-        }}>
-          <div style={{
-            fontSize: 10.5, fontWeight: 500,
-            textTransform: 'uppercase', letterSpacing: '0.08em',
-            color: 'var(--muted)', fontFamily: 'var(--font-body)',
-          }}>
-            Insight
-          </div>
-          <p style={{
-            fontSize: 13, color: 'var(--fg)', lineHeight: 1.65,
-            fontFamily: 'var(--font-body)', margin: 0,
-          }}>
-            {result.insight}
-          </p>
-          {result.followups && result.followups.length > 0 && onFollowup && (
-            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)' }}>
-                Follow-ups
-              </div>
-              {result.followups.map((f, i) => (
-                <button
-                  key={i}
-                  onClick={() => onFollowup(f)}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 9px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--panel)', font: 'inherit', fontSize: 12, color: 'var(--fg)', cursor: 'pointer' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--soft)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--panel)'; }}
-                >
-                  <span style={{ color: 'var(--accent)', marginRight: 6 }}>→</span>{f}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Chart panel */}
-        <div style={{ flex: 1, padding: '20px 24px', position: 'relative', minWidth: 0 }}>
-          <Chart
-            type={result.chartType}
-            data={result.chartData}
-            options={themedChartOptions}
-          />
-        </div>
+      {/* Body — chart only (insight + follow-ups live in the workspace Insights rail) */}
+      <div style={{ padding: '20px 24px', position: 'relative', height: 360, boxSizing: 'border-box' }}>
+        <Chart
+          type={result.chartType}
+          data={result.chartData}
+          options={themedChartOptions}
+        />
       </div>
     </div>
   );

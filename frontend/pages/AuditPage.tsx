@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useRoles } from '../hooks/useRoles';
 import { API_BASE_URL, USE_MSAL_AUTH } from '../app.config';
 import AppLayout from '../components/AppLayout';
 import ChartDisplay, { VisualizationConfig } from '../components/ChartDisplay';
 import { MOCK_AUDIT_EVENTS } from '../services/mockAuditData';
-import { getDatabasesForAccount, getAzureCosmosAccounts } from '../services/dbService';
+import { getDatabasesForAccount, getAzureCosmosAccounts, listPostgresServers } from '../services/dbService';
 import { CosmosDBAccount, DbInfo, CollectionSummary } from '../types';
 
 /* ── session connection (shared shape written by the connect flow) ────────── */
@@ -108,7 +108,7 @@ function deriveEvent(r: RawAuditEvent, i: number): AuditEvent {
 
 /* ── operation badge ──────────────────────────────────────────────────────── */
 function OpBadge({ op, withLabel = true }: { op: Operation; withLabel?: boolean }) {
-    const o = OP[op];
+    const o = OP[op] ?? { label: op, verb: op, color: 'var(--muted)' };
     const icon = {
         insert: <path d="M8 3v10M3 8h10" />,
         update: <path d="M3 11l6-6 2 2-6 6H3zM10 4l2 2" />,
@@ -305,12 +305,14 @@ function ValueCell({ value }: { value: any }) {
     return <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg)', wordBreak: 'break-word' }}>{typeof value === 'string' ? `"${value}"` : String(value)}</span>;
 }
 
-function DiffDrawer({ event, onClose, now, availableAccounts }: {
+function DiffDrawer({ event, onClose, now, availableAccounts, isPg }: {
     event: AuditEvent | null; onClose: () => void; now: number;
-    availableAccounts: CosmosDBAccount[];
+    availableAccounts: CosmosDBAccount[]; isPg: boolean;
 }) {
     const navigate = useNavigate();
     if (!event) return null;
+    const noun = isPg ? 'row' : 'document';
+    const Noun = isPg ? 'Row' : 'Document';
 
     // event.database_name is stored as "accountName.databaseName"
     const dbParts = event.database_name.split('.');
@@ -339,7 +341,7 @@ function DiffDrawer({ event, onClose, now, availableAccounts }: {
                     <OpBadge op={event.operation} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 500 }}>
-                            {event.person.name} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>{o.verb} a document in</span> <span style={{ fontFamily: 'var(--font-mono)' }}>{event.collection_name}</span>
+                            {event.person.name} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>{o.verb} a {noun} in</span> <span style={{ fontFamily: 'var(--font-mono)' }}>{event.collection_name}</span>
                         </div>
                         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{absTime(event.ts)} · {relTime(event.ts, now)}</div>
                     </div>
@@ -349,7 +351,7 @@ function DiffDrawer({ event, onClose, now, availableAccounts }: {
                 </div>
 
                 <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '7px 14px', fontSize: 12 }}>
-                    {[['Actor', event.user_email], ['Database', event.database_name], ['Collection', event.collection_name], ['Document', event.document_id]].map(([k, v]) => (
+                    {[['Actor', event.user_email], ['Database', event.database_name], [isPg ? 'Table' : 'Collection', event.collection_name], [Noun, event.document_id]].map(([k, v]) => (
                         <React.Fragment key={k}>
                             <span style={{ color: 'var(--muted)' }}>{k}</span>
                             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, wordBreak: 'break-all' }}>{v}</span>
@@ -383,7 +385,7 @@ function DiffDrawer({ event, onClose, now, availableAccounts }: {
 
                     {event.operation === 'insert' && (
                         <div>
-                            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#3a8c5f', marginBottom: 9, fontWeight: 600 }}>Document created with</div>
+                            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#3a8c5f', marginBottom: 9, fontWeight: 600 }}>{Noun} created with</div>
                             <JsonBlock value={doc} />
                         </div>
                     )}
@@ -392,7 +394,7 @@ function DiffDrawer({ event, onClose, now, availableAccounts }: {
                         <div>
                             <div style={{ fontSize: 12.5, color: '#c94250', fontWeight: 500, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 7 }}>
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 5v4M8 11h.01M8 1.5L1 14h14z" /></svg>
-                                Document was deleted. Snapshot at time of deletion:
+                                {Noun} was deleted. Snapshot at time of deletion:
                             </div>
                             <JsonBlock value={doc} />
                         </div>
@@ -404,8 +406,8 @@ function DiffDrawer({ event, onClose, now, availableAccounts }: {
                         className="qa-btn"
                         disabled={!canOpen}
                         title={
-                            event.operation === 'delete' ? 'Document was deleted' :
-                            (event.document_id === '—' || !event.document_id) ? 'Document ID unknown' :
+                            event.operation === 'delete' ? `${Noun} was deleted` :
+                            (event.document_id === '—' || !event.document_id) ? `${Noun} id unknown` :
                             !resolvedAccountId ? 'Account not found in your connections' :
                             undefined
                         }
@@ -417,7 +419,7 @@ function DiffDrawer({ event, onClose, now, availableAccounts }: {
                         }}
                     >
                         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 8l3 3 7-7" /></svg>
-                        Open document
+                        Open {noun}
                     </button>
                     <button className="qa-btn" style={{ marginLeft: 'auto', gap: 6 }} onClick={() => navigator.clipboard?.writeText(JSON.stringify(event.diff_data, null, 2))}>
                         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="3" y="3" width="8" height="10" rx="1" /><path d="M5 3V1.5h6V11" /></svg>
@@ -440,11 +442,12 @@ function FieldChips({ fields }: { fields: string[] }) {
     );
 }
 
-function EventRow({ e, onOpen, now }: { e: AuditEvent; onOpen: (e: AuditEvent) => void; now: number }) {
+function EventRow({ e, onOpen, now, isPg }: { e: AuditEvent; onOpen: (e: AuditEvent) => void; now: number; isPg: boolean }) {
     let summary: React.ReactNode;
     const d = e.diff_data || {};
+    const noun = isPg ? 'row' : 'document';
     if (e.operation === 'update') summary = <FieldChips fields={e.changedFields} />;
-    else summary = <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{d.studyId || d.name || d.title || (e.operation === 'insert' ? 'new document' : 'document removed')}</span>;
+    else summary = <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{d.studyId || d.name || d.title || (e.operation === 'insert' ? `new ${noun}` : `${noun} removed`)}</span>;
 
     return (
         <tr className="ad-row" onClick={() => onOpen(e)}>
@@ -505,8 +508,8 @@ function Dropdown({ label, value, options, onChange }: { label: string; value: s
     );
 }
 
-function EventLog({ events, onOpen, now }: { events: AuditEvent[]; onOpen: (e: AuditEvent) => void; now: number }) {
-    const cols = ['Operation', 'Actor', 'Collection', 'Document', 'What changed', 'When', ''];
+function EventLog({ events, onOpen, now, isPg }: { events: AuditEvent[]; onOpen: (e: AuditEvent) => void; now: number; isPg: boolean }) {
+    const cols = ['Operation', 'Actor', isPg ? 'Table' : 'Collection', isPg ? 'Row' : 'Document', 'What changed', 'When', ''];
 
     const exportCsv = () => {
         const header = ['operation', 'user_email', 'collection_name', 'document_id', 'timestamp_utc'];
@@ -542,7 +545,7 @@ function EventLog({ events, onOpen, now }: { events: AuditEvent[]; onOpen: (e: A
                     <tbody>
                         {events.length === 0 ? (
                             <tr><td colSpan={cols.length} style={{ padding: '40px 14px', textAlign: 'center', color: 'var(--muted)', fontSize: 12.5 }}>No events match these filters.</td></tr>
-                        ) : events.map((e) => <EventRow key={e.id} e={e} onOpen={onOpen} now={now} />)}
+                        ) : events.map((e) => <EventRow key={e.id} e={e} onOpen={onOpen} now={now} isPg={isPg} />)}
                     </tbody>
                 </table>
             </div>
@@ -561,7 +564,7 @@ function dayLabel(d: Date, now: number): string {
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
-function HistoryTimeline({ events, onOpen, now }: { events: AuditEvent[]; onOpen: (e: AuditEvent) => void; now: number }) {
+function HistoryTimeline({ events, onOpen, now, isPg }: { events: AuditEvent[]; onOpen: (e: AuditEvent) => void; now: number; isPg: boolean }) {
     const groups = useMemo(() => {
         const m = new Map<string, { key: string; label: string; date: Date; items: AuditEvent[] }>();
         events.forEach((e) => {
@@ -603,7 +606,7 @@ function HistoryTimeline({ events, onOpen, now }: { events: AuditEvent[]; onOpen
                                     <div style={{ flex: 1, minWidth: 0, paddingBottom: idx < g.items.length - 1 ? 10 : 0 }}>
                                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
                                             <span style={{ fontSize: 12.5, fontWeight: 500 }}>{e.person.name}</span>
-                                            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{o.verb} a document in</span>
+                                            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{o.verb} a {isPg ? 'row' : 'document'} in</span>
                                             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{e.collection_name}</span>
                                             <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }} title={absTime(e.ts)}>{relTime(e.ts, now)}</span>
                                         </div>
@@ -626,8 +629,10 @@ function HistoryTimeline({ events, onOpen, now }: { events: AuditEvent[]; onOpen
 /* ── Ask the log (NL → SQL via existing backend) ──────────────────────────── */
 interface AskResult { sql_query: string; results: any[]; summary: string; visualization?: VisualizationConfig }
 
-function AskPanel({ getToken }: { getToken: () => Promise<string | null> }) {
-    const [q, setQ] = useState('How many documents were updated in the last 7 days, grouped by collection?');
+function AskPanel({ getToken, isPg }: { getToken: () => Promise<string | null>; isPg: boolean }) {
+    const [q, setQ] = useState(isPg
+        ? 'How many rows were updated in the last 7 days, grouped by table?'
+        : 'How many documents were updated in the last 7 days, grouped by collection?');
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<AskResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -692,6 +697,7 @@ function AskPanel({ getToken }: { getToken: () => Promise<string | null> }) {
 /* ── main dashboard ───────────────────────────────────────────────────────── */
 const AuditPage: React.FC = () => {
     const { getToken } = useUnifiedAuth();
+    const navigate = useNavigate();
     const { can } = useRoles();
     const isAdmin = can('audit:read');
     const isAnalyst = !isAdmin && can('self:manage');
@@ -702,6 +708,28 @@ const AuditPage: React.FC = () => {
 
     const [conn, setConn] = useState<SessionConnection | null>(() => readSessionConnection());
     const [accountSwitching, setAccountSwitching] = useState(false);
+
+    // PostgreSQL audit: reached via /postgres-audit/:serverId. Keeps the PG
+    // shell (path starts with /postgres) and scopes events to that server,
+    // instead of falling back to the last Cosmos session connection.
+    const { serverId: rawServerId } = useParams<{ serverId?: string }>();
+    const pgServerId = rawServerId ? decodeURIComponent(rawServerId) : null;
+    const isPgAudit = !!pgServerId;
+    const [pgServerName, setPgServerName] = useState('');
+    useEffect(() => {
+        if (!isPgAudit) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const token = await getToken();
+                if (!token) return;
+                const servers = await listPostgresServers(token);
+                const srv = servers.find((s) => s.id === pgServerId);
+                if (!cancelled) setPgServerName(srv?.name ?? pgServerId!);
+            } catch { /* non-critical — fall back to the id */ }
+        })();
+        return () => { cancelled = true; };
+    }, [isPgAudit, pgServerId, getToken]);
 
     const [tab, setTab] = useState<'activity' | 'history' | 'ask'>('activity');
     const [range, setRange] = useState(7);
@@ -715,12 +743,17 @@ const AuditPage: React.FC = () => {
 
     // The audit log is scoped to the selected Cosmos account. database_name is
     // stored as "<account>.<database>", so we filter on the account segment.
-    const scopedAccount = conn?.accountName;
+    const scopedAccount = isPgAudit ? undefined : conn?.accountName;
 
     useEffect(() => {
         let cancelled = false;
+        // This dashboard is a data-write view (insert/update/delete). Drop other
+        // recorded operations — e.g. PG grant/revoke access changes, which share
+        // the audit log — so counts, charts and badges stay coherent.
+        const CRUD = new Set(['insert', 'update', 'delete']);
         const toEvents = (raw: RawAuditEvent[]) =>
-            raw.map(deriveEvent).sort((a, b) => b.ts.getTime() - a.ts.getTime());
+            raw.filter((r) => CRUD.has(r.operation)).map(deriveEvent)
+                .sort((a, b) => b.ts.getTime() - a.ts.getTime());
         const load = async () => {
             setLoading(true); setLoadError(null);
             try {
@@ -758,10 +791,16 @@ const AuditPage: React.FC = () => {
         return () => { cancelled = true; };
     }, [getToken, scopedAccount]);
 
+    // In PG mode scope to this server's writes (database_name === serverId).
+    const baseEvents = useMemo(
+        () => (isPgAudit ? allEvents.filter((e) => e.database_name === pgServerId) : allEvents),
+        [allEvents, isPgAudit, pgServerId],
+    );
+
     const windowed = useMemo(() => {
         const cutoff = now - range * 86400000;
-        return allEvents.filter((e) => e.ts.getTime() >= cutoff);
-    }, [allEvents, range, now]);
+        return baseEvents.filter((e) => e.ts.getTime() >= cutoff);
+    }, [baseEvents, range, now]);
 
     const filtered = useMemo(() => windowed.filter((e) =>
         (opFilter === 'all' || e.operation === opFilter) &&
@@ -790,9 +829,9 @@ const AuditPage: React.FC = () => {
     }, [windowed, range, now]);
 
     const userOpts: DropdownOption[] = [{ value: 'all', label: 'All users' },
-        ...[...new Map(allEvents.map((e) => [e.user_email, e.person.name])).entries()].map(([email, name]) => ({ value: email, label: name }))];
+        ...[...new Map(baseEvents.map((e) => [e.user_email, e.person.name])).entries()].map(([email, name]) => ({ value: email, label: name }))];
     const collOpts: DropdownOption[] = [{ value: 'all', label: 'All collections' },
-        ...[...new Set(allEvents.map((e) => e.collection_name))].map((c) => ({ value: c, label: c }))];
+        ...[...new Set(baseEvents.map((e) => e.collection_name))].map((c) => ({ value: c, label: c }))];
     const opOpts: DropdownOption[] = [{ value: 'all', label: 'All operations' },
         ...OP_ORDER.map((k) => ({ value: k, label: OP[k].label, dot: OP[k].color }))];
     const ranges: [number, string][] = [[1, '24h'], [7, '7d'], [30, '30d'], [90, '90d']];
@@ -800,9 +839,13 @@ const AuditPage: React.FC = () => {
     // Prefer the live session connection (enables the chip switcher + Explorer
     // button); fall back to parsing the newest event's "account.database" string.
     const dbParts = (allEvents[0]?.database_name || '').split('.');
-    const accountId = conn?.accountId;
-    const accountName = conn?.accountName ?? dbParts[0] ?? undefined;
-    const databaseName = conn?.databaseName ?? dbParts.slice(1).join('.') ?? undefined;
+    const accountId = isPgAudit ? pgServerId! : conn?.accountId;
+    const accountName = isPgAudit
+        ? (pgServerName || pgServerId!)
+        : (conn?.accountName ?? dbParts[0] ?? undefined);
+    const databaseName = isPgAudit
+        ? undefined
+        : (conn?.databaseName ?? dbParts.slice(1).join('.') ?? undefined);
 
     const handleSwitchDatabase = useCallback((db: DbInfo) => {
         if (!conn) return;
@@ -812,7 +855,17 @@ const AuditPage: React.FC = () => {
     }, [conn]);
 
     const handleSwitchAccount = useCallback(async (account: CosmosDBAccount) => {
-        if (!conn || account.id === conn.accountId) return;
+        if (account.id === conn?.accountId) return;
+        // Coming from PG audit: the Cosmos audit only scopes by account name, so
+        // switch immediately and leave the PG shell. Don't block on (or fail
+        // silently in) a Cosmos databases fetch — the chip refetches on /audit.
+        if (isPgAudit) {
+            const next: SessionConnection = { accountId: account.id, accountName: account.name };
+            writeSessionConnection(next);
+            setConn(next);
+            navigate('/audit');
+            return;
+        }
         setAccountSwitching(true);
         try {
             const databases = await getDatabasesForAccount(account.id);
@@ -823,7 +876,7 @@ const AuditPage: React.FC = () => {
                 accountName: account.name,
                 databaseName: firstDb.name,
                 collections: firstDb.collections,
-                availableAccounts: conn.availableAccounts,
+                availableAccounts: conn?.availableAccounts,
                 availableDbs: databases,
             };
             writeSessionConnection(next);
@@ -833,15 +886,17 @@ const AuditPage: React.FC = () => {
         } finally {
             setAccountSwitching(false);
         }
-    }, [conn]);
+    }, [conn, isPgAudit, navigate]);
 
     const hasFilters = opFilter !== 'all' || userFilter !== 'all' || collFilter !== 'all' || !!search;
 
     if (!isAdmin && !isAnalyst) {
         return (
             <AppLayout accountId={accountId} accountName={accountName} databaseName={databaseName}
-                collections={conn?.collections} availableAccounts={conn?.availableAccounts}
-                availableDbs={conn?.availableDbs} onSwitchDatabase={handleSwitchDatabase}
+                collections={isPgAudit ? undefined : conn?.collections}
+                availableAccounts={isPgAudit ? undefined : conn?.availableAccounts}
+                availableDbs={isPgAudit ? undefined : conn?.availableDbs}
+                onSwitchDatabase={isPgAudit ? undefined : handleSwitchDatabase}
                 onSwitchAccount={handleSwitchAccount} chipLoading={accountSwitching}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, color: 'var(--muted)', fontFamily: 'var(--font-body)' }}>
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -862,10 +917,10 @@ const AuditPage: React.FC = () => {
             accountId={accountId}
             accountName={accountName}
             databaseName={databaseName}
-            collections={conn?.collections}
-            availableAccounts={conn?.availableAccounts}
-            availableDbs={conn?.availableDbs}
-            onSwitchDatabase={handleSwitchDatabase}
+            collections={isPgAudit ? undefined : conn?.collections}
+            availableAccounts={isPgAudit ? undefined : conn?.availableAccounts}
+            availableDbs={isPgAudit ? undefined : conn?.availableDbs}
+            onSwitchDatabase={isPgAudit ? undefined : handleSwitchDatabase}
             onSwitchAccount={handleSwitchAccount}
             chipLoading={accountSwitching}
         >
@@ -892,8 +947,15 @@ const AuditPage: React.FC = () => {
                     </div>
                 </div>
 
-                {tab === 'ask' ? (
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '22px 28px' }}><AskPanel getToken={getToken} /></div>
+                {loading && allEvents.length === 0 && tab !== 'ask' ? (
+                    <div style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: 'var(--muted)' }}>
+                            <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" style={{ animation: 'ws-spin 0.7s linear infinite', color: 'var(--accent)' }}><path d="M8 2a6 6 0 1 0 6 6" /></svg>
+                            <span style={{ fontSize: 12.5 }}>Loading audit log…</span>
+                        </div>
+                    </div>
+                ) : tab === 'ask' ? (
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '22px 28px' }}><AskPanel getToken={getToken} isPg={isPgAudit} /></div>
                 ) : tab === 'history' ? (
                     <div style={{ flex: 1, overflowY: 'auto', padding: '18px 28px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -908,7 +970,7 @@ const AuditPage: React.FC = () => {
                         {loadError && (
                             <div style={{ padding: '12px 16px', borderRadius: 10, background: 'color-mix(in oklch, var(--status-err) 12%, var(--bg))', border: '1px solid color-mix(in oklch, var(--status-err) 25%, var(--border))', color: 'var(--status-err)', fontSize: 13 }}>{loadError}</div>
                         )}
-                        <HistoryTimeline events={windowed} onOpen={setSelected} now={now} />
+                        <HistoryTimeline events={windowed} onOpen={setSelected} now={now} isPg={isPgAudit} />
                     </div>
                 ) : (
                     <div style={{ flex: 1, overflowY: 'auto', padding: '18px 28px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -922,8 +984,8 @@ const AuditPage: React.FC = () => {
                             </div>
                             <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
                                 {isAdmin
-                                    ? `${counts.total} writes by ${counts.users} actors across ${counts.docs} documents`
-                                    : `${counts.total} writes across ${counts.docs} documents`
+                                    ? `${counts.total} writes by ${counts.users} actors across ${counts.docs} ${isPgAudit ? 'rows' : 'documents'}`
+                                    : `${counts.total} writes across ${counts.docs} ${isPgAudit ? 'rows' : 'documents'}`
                                 }
                             </span>
                         </div>
@@ -951,7 +1013,7 @@ const AuditPage: React.FC = () => {
                             <Dropdown label="Collection" value={collFilter} options={collOpts} onChange={setCollFilter} />
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 30, padding: '0 10px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 7, minWidth: 200 }}>
                                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.4"><circle cx="7" cy="7" r="4.5" /><path d="M11 11l3 3" /></svg>
-                                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search document id or actor…"
+                                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={isPgAudit ? 'Search row id or actor…' : 'Search document id or actor…'}
                                     style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: 'inherit', fontSize: 12, color: 'var(--fg)', flex: 1, minWidth: 0 }} />
                             </div>
                             {hasFilters && (
@@ -963,7 +1025,7 @@ const AuditPage: React.FC = () => {
 
                         {/* log + insights */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 290px', gap: 16, alignItems: 'start' }}>
-                            <EventLog events={filtered} onOpen={setSelected} now={now} />
+                            <EventLog events={filtered} onOpen={setSelected} now={now} isPg={isPgAudit} />
                             <InsightsPanel events={windowed} />
                         </div>
 
@@ -973,7 +1035,7 @@ const AuditPage: React.FC = () => {
                     </div>
                 )}
 
-                <DiffDrawer event={selected} onClose={() => setSelected(null)} now={now} availableAccounts={cosmosAccounts} />
+                <DiffDrawer event={selected} onClose={() => setSelected(null)} now={now} availableAccounts={cosmosAccounts} isPg={isPgAudit} />
             </div>
         </AppLayout>
     );

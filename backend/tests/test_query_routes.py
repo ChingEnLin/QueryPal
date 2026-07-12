@@ -204,6 +204,7 @@ def test_analyze_query(client):
             "chartType": "bar",
             "chartData": {"labels": ["A", "B"], "data": [1, 2]},
             "chartOptions": {"title": "Test Chart"},
+            "followups": ["Break down by province", "Show the newest 10"],
         }
 
         analyze_request = AnalyzeRequest(
@@ -221,10 +222,38 @@ def test_analyze_query(client):
         assert data["chartType"] == "bar"
         assert "chartData" in data
         assert "chartOptions" in data
+        assert data["followups"] == ["Break down by province", "Show the newest 10"]
 
         mock_analyze.assert_called_once_with(
             [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}],
             model="gemini-2.5-flash",
+        )
+
+
+def test_explain_query(client):
+    """Plain-English explanation of a generated Mongo query."""
+    from models.schemas import ExplainQueryResponse
+
+    with (
+        patch("routes.query.explain_mongo_query") as mock_explain,
+        patch(
+            "services.rbac.extract_claims_from_token",
+            return_value=TokenClaims(email="user@test.com", roles=["Analyst"]),
+        ),
+    ):
+        mock_explain.return_value = ExplainQueryResponse(
+            explanation="Finds all users in Canada, newest first."
+        )
+        headers = {"authorization": "Bearer valid-token"}
+        response = client.post(
+            "/query/explain",
+            json={"query": "db['users'].find({'country': 'Canada'})"},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["explanation"].startswith("Finds all users")
+        mock_explain.assert_called_once_with(
+            "db['users'].find({'country': 'Canada'})", model="gemini-2.5-flash"
         )
 
 

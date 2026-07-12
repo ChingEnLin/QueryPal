@@ -43,16 +43,18 @@ const getAccessToken = async (): Promise<string> => {
  * Fetches the user's saved queries from the backend.
  * This includes queries they own and queries shared with them.
  */
-export const getSavedQueries = async (): Promise<SavedQuery[]> => {
+export const getSavedQueries = async (engine?: 'cosmos' | 'pg'): Promise<SavedQuery[]> => {
     if (!USE_MSAL_AUTH) {
         console.log("DEV MODE: Returning mock saved queries.");
         await mockDelay(800);
         // The mock data is already structured for sharing.
-        return Promise.resolve(mockSavedQueries);
+        const all = mockSavedQueries;
+        return Promise.resolve(engine ? all.filter(q => (q.engine ?? 'cosmos') === engine) : all);
     }
 
     const token = await getAccessToken();
-    const response = await fetch(`${API_BASE_URL}/user/queries`, {
+    const url = engine ? `${API_BASE_URL}/user/queries?engine=${engine}` : `${API_BASE_URL}/user/queries`;
+    const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) {
@@ -65,7 +67,7 @@ export const getSavedQueries = async (): Promise<SavedQuery[]> => {
  * Saves a new query to the backend.
  * @param queryData The data for the new query (name, prompt, code).
  */
-export const saveQuery = async (queryData: Pick<SavedQuery, 'name' | 'prompt' | 'code'>): Promise<SavedQuery> => {
+export const saveQuery = async (queryData: Pick<SavedQuery, 'name' | 'prompt' | 'code'> & { engine?: 'cosmos' | 'pg' }): Promise<SavedQuery> => {
     if (!USE_MSAL_AUTH) {
         console.log("DEV MODE: Mock saving query.", queryData);
         await mockDelay(500);

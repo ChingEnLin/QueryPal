@@ -858,3 +858,151 @@ export async function removeUserRole(oid: string, assignmentId: string): Promise
   });
   if (!response.ok) throw new Error('Failed to remove role');
 }
+
+// --- PostgreSQL (Azure Flexible Server) client ---------------------------
+// These mirror the Cosmos helpers but take the bearer token explicitly so they
+// stay trivially testable; callers acquire it via getAuthenticatedToken().
+
+export type DbEngine = 'cosmos' | 'postgres';
+
+export interface PostgresServer { name: string; id: string; fqdn: string; }
+
+export async function listPostgresServers(token: string): Promise<PostgresServer[]> {
+  if (!USE_MSAL_AUTH) return []; // dev/mock mode: no Azure PG discovery
+  const cached = _getCached<PostgresServer[]>('pg_servers');
+  if (cached) return cached;
+  const res = await fetch(`${API_BASE_URL}/postgres/servers`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`postgres/servers ${res.status}`);
+  const data: PostgresServer[] = await res.json();
+  _setCached('pg_servers', data);
+  return data;
+}
+
+async function _pgPost(token: string, path: string, body: unknown, method: string = 'POST') {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    // Surface the backend's error detail (e.g. the real Postgres message)
+    // instead of a bare status code.
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail || `${path} ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getPgDatabases(token: string, serverId: string): Promise<string[]> {
+  const key = `pg_dbs:${serverId}`;
+  const cached = _getCached<string[]>(key);
+  if (cached) return cached;
+  const data = await _pgPost(token, '/postgres/databases', { server_id: serverId }) as string[];
+  _setCached(key, data);
+  return data;
+}
+
+export async function getPgSchema(token: string, serverId: string, database: string) {
+  const key = `pg_schema:${serverId}:${database}`;
+  const cached = _getCached<unknown>(key);
+  if (cached) return cached;
+  const data = await _pgPost(token, '/postgres/schema', { server_id: serverId, database });
+  _setCached(key, data);
+  return data;
+}
+
+export async function getPgTableInfo(
+  token: string, serverId: string, database: string, schemaName: string, table: string,
+) {
+  return _pgPost(token, '/postgres/table_info', {
+    server_id: serverId, database, schema_name: schemaName, table,
+  });
+}
+
+export async function pgNl2Sql(token: string, body: {
+  server_id: string; database: string; schema_context: string;
+  user_input: string; model?: string; max_iterations?: number;
+}) {
+  return _pgPost(token, '/postgres/nl2sql', body);
+}
+
+export async function pgExecute(token: string, serverId: string, database: string, sql: string) {
+  return _pgPost(token, '/postgres/execute', { server_id: serverId, database, sql });
+}
+
+export async function pgAnalyze(token: string, body: {
+  columns: string[]; rows: unknown[][]; user_input?: string; model?: string;
+}): Promise<{ summary: string; points: string[]; followups: string[] }> {
+  return _pgPost(token, '/postgres/analyze', body);
+}
+
+// --- PostgreSQL access provisioning (admin only) ---
+export interface PgAccessEntry { email: string; write: boolean }
+
+export async function pgListAccess(token: string, serverId: string): Promise<PgAccessEntry[]> {
+  return _pgPost(token, '/postgres/access', { server_id: serverId });
+}
+
+export async function pgGrantAccess(token: string, serverId: string, userEmail: string) {
+  return _pgPost(token, '/postgres/grant', { server_id: serverId, user_email: userEmail });
+}
+
+export async function pgRevokeAccess(token: string, serverId: string, userEmail: string) {
+  return _pgPost(token, '/postgres/revoke', { server_id: serverId, user_email: userEmail });
+}
+
+export async function pgGrantWrite(token: string, serverId: string, userEmail: string) {
+  return _pgPost(token, '/postgres/grant_write', { server_id: serverId, user_email: userEmail });
+}
+
+export async function pgRevokeWrite(token: string, serverId: string, userEmail: string) {
+  return _pgPost(token, '/postgres/revoke_write', { server_id: serverId, user_email: userEmail });
+}
+
+// --- PostgreSQL data explorer (row browse + CRUD) ---
+export interface PgFilter { column: string; op: string; value?: unknown }
+export interface PgSort { column: string; dir: 'asc' | 'desc' }
+
+export async function getPgRows(token: string, args: {
+  serverId: string; database: string; schema: string; table: string;
+  filters?: PgFilter[]; sort?: PgSort | null; limit?: number; offset?: number;
+}): Promise<{ columns: string[]; rows: unknown[][]; total: number; pk: string[] }> {
+  return _pgPost(token, '/postgres/rows', {
+    server_id: args.serverId, database: args.database,
+    schema_name: args.schema, table: args.table,
+    filters: args.filters ?? [], sort: args.sort ?? null,
+    limit: args.limit ?? 50, offset: args.offset ?? 0,
+  });
+}
+
+export async function pgInsertRow(token: string, args: {
+  serverId: string; database: string; schema: string; table: string;
+  values: Record<string, unknown>;
+}): Promise<{ columns: string[]; rows: unknown[][] }> {
+  return _pgPost(token, '/postgres/row', {
+    server_id: args.serverId, database: args.database,
+    schema_name: args.schema, table: args.table, values: args.values,
+  });
+}
+
+export async function pgUpdateRow(token: string, args: {
+  serverId: string; database: string; schema: string; table: string;
+  pk: Record<string, unknown>; values: Record<string, unknown>;
+}): Promise<{ columns: string[]; rows: unknown[][] }> {
+  return _pgPost(token, '/postgres/row', {
+    server_id: args.serverId, database: args.database,
+    schema_name: args.schema, table: args.table, pk: args.pk, values: args.values,
+  }, 'PATCH');
+}
+
+export async function pgDeleteRow(token: string, args: {
+  serverId: string; database: string; schema: string; table: string;
+  pk: Record<string, unknown>;
+}): Promise<{ columns: string[]; rows: unknown[][] }> {
+  return _pgPost(token, '/postgres/row', {
+    server_id: args.serverId, database: args.database,
+    schema_name: args.schema, table: args.table, pk: args.pk,
+  }, 'DELETE');
+}

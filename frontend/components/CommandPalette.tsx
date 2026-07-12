@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { savedQueriesTarget } from './UserMenuButton';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useRoles } from '../hooks/useRoles';
@@ -64,6 +65,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   onNewQuery,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { logout } = useUnifiedAuth();
   const { can } = useRoles();
@@ -168,7 +170,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
           <path d="M6 7h5M6 10h3" />
         </svg>
       ),
-      action: () => navigate('/query-generator?panel=saved'),
+      action: () => navigate(savedQueriesTarget(location.pathname)),
     });
 
     cmds.push({
@@ -268,7 +270,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
 
     return cmds;
-  }, [navigate, explorerHref, databaseName, accountId, theme, toggleTheme, logout, canAudit, onNewQuery, availableDbs, availableAccounts, collections, onSwitchDatabase, onSwitchAccount, onCollectionSelect]);
+  }, [navigate, location.pathname, explorerHref, databaseName, accountId, theme, toggleTheme, logout, canAudit, onNewQuery, availableDbs, availableAccounts, collections, onSwitchDatabase, onSwitchAccount, onCollectionSelect]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return commands;

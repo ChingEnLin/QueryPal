@@ -28,7 +28,7 @@ class RecentActivityItem(BaseModel):
     database_name: str
     collection_name: str
     operation: str
-    document_id: str
+    document_id: Optional[str] = None  # inserts have no doc/row id
     user_email: str
     timestamp_utc: str
 

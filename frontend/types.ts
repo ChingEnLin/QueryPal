@@ -122,6 +122,7 @@ export interface SavedQuery {
     name: string;
     prompt: string;
     code: string;
+    engine?: 'cosmos' | 'pg'; // absent on legacy rows => cosmos
     // New fields for sharing and collaboration
     ownerEmail: string;
     sharedWith: string[];

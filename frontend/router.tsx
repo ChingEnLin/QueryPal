@@ -3,6 +3,8 @@ import LoginPage from './pages/LoginPage';
 import HubPage from './pages/HubPage';
 import QueryGeneratorPageWrapper from './pages/QueryGeneratorPageWrapper';
 import DataExplorerPageWrapper from './pages/DataExplorerPageWrapper';
+import PostgresWorkspacePage from './pages/PostgresWorkspacePage';
+import PostgresDataExplorerPage from './pages/PostgresDataExplorerPage';
 import AnalyticsPageWrapper from './pages/AnalyticsPageWrapper';
 import NotFoundPage from './pages/NotFoundPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -28,6 +30,14 @@ export const router = createBrowserRouter([
   },
   {
     path: "/audit",
+    element: (
+      <ProtectedRoute>
+        <AuditPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/postgres-audit/:serverId",
     element: (
       <ProtectedRoute>
         <AuditPage />
@@ -71,6 +81,38 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <DataExplorerPageWrapper />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/postgres/:serverId",
+    element: (
+      <ProtectedRoute>
+        <PostgresWorkspacePage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/postgres/:serverId/:database",
+    element: (
+      <ProtectedRoute>
+        <PostgresWorkspacePage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/postgres-explorer/:serverId",
+    element: (
+      <ProtectedRoute>
+        <PostgresDataExplorerPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/postgres-explorer/:serverId/:database",
+    element: (
+      <ProtectedRoute>
+        <PostgresDataExplorerPage />
       </ProtectedRoute>
     ),
   },
