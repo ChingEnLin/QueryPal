@@ -64,6 +64,15 @@ class DebugSuggestionResponse(BaseModel):
     suggestion: str
 
 
+class ExplainQueryRequest(BaseModel):
+    query: str
+    model: str = "gemini-2.5-flash"
+
+
+class ExplainQueryResponse(BaseModel):
+    explanation: str
+
+
 class SchemaRelationshipsRequest(BaseModel):
     account_id: str
     database_name: str
@@ -113,3 +122,91 @@ class UserWithRoles(BaseModel):
 
 class AssignRoleRequest(BaseModel):
     role: Literal["Admin", "Analyst", "Viewer"]
+
+
+class PgDatabasesRequest(BaseModel):
+    server_id: str
+
+
+class PgSchemaRequest(BaseModel):
+    server_id: str
+    database: str
+
+
+class PgTableInfoRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_name: str
+    table: str
+
+
+class PgNl2SqlRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_context: str
+    user_input: str
+    model: str = "gemini-2.5-flash"
+    max_iterations: int = Field(default=3, ge=1, le=10)
+
+
+class PgExecuteRequest(BaseModel):
+    server_id: str
+    database: str
+    sql: str
+
+
+class PgAnalyzeRequest(BaseModel):
+    columns: list[str]
+    rows: list[list]
+    user_input: str = ""
+    model: str = "gemini-2.5-flash"
+
+
+class PgGrantRequest(BaseModel):
+    server_id: str
+    user_email: str
+
+
+class PgRevokeRequest(BaseModel):
+    server_id: str
+    user_email: str
+
+
+class PgAccessListRequest(BaseModel):
+    server_id: str
+
+
+class PgRowsRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_name: str
+    table: str
+    filters: list[dict] = Field(default_factory=list)
+    sort: dict | None = None
+    limit: int = Field(default=50, ge=1, le=500)
+    offset: int = Field(default=0, ge=0)
+
+
+class PgRowInsertRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_name: str
+    table: str
+    values: dict
+
+
+class PgRowUpdateRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_name: str
+    table: str
+    pk: dict
+    values: dict
+
+
+class PgRowDeleteRequest(BaseModel):
+    server_id: str
+    database: str
+    schema_name: str
+    table: str
+    pk: dict

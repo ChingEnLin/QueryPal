@@ -4,7 +4,7 @@ import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useTheme } from '../contexts/ThemeContext';
 import UserMenuButton from '../components/UserMenuButton';
 import CommandPalette from '../components/CommandPalette';
-import { getAzureCosmosAccounts } from '../services/dbService';
+import { getAzureCosmosAccounts, listPostgresServers, PostgresServer } from '../services/dbService';
 import { CosmosDBAccount } from '../types';
 import { API_BASE_URL } from '../app.config';
 
@@ -12,9 +12,10 @@ const RECENT_KEY = 'qp_recent_connections';
 const MAX_RECENTS = 3;
 
 interface RecentConnection {
-  accountId: string;
+  engine?: 'cosmos' | 'pg'; // absent on legacy entries => cosmos
+  accountId: string; // cosmos account id, or PG server id
   accountName: string;
-  action: 'query' | 'explorer';
+  action: 'query' | 'explorer' | 'workspace'; // pg uses 'workspace'
   accessedAt: number;
 }
 
@@ -41,7 +42,7 @@ interface RecentActivityItem {
   database_name: string;
   collection_name: string;
   operation: string;
-  document_id: string;
+  document_id: string | null;
   user_email: string;
   timestamp_utc: string;
 }
@@ -116,10 +117,9 @@ const DB_ENGINES = [
     markBg: '#326690',
     label: 'PostgreSQL',
     sub: 'Azure Flexible Server',
-    badge: 'Unavailable',
-    badgeOk: false,
-    locked: true,
-    opacity: 0.4,
+    badge: 'Generally available',
+    badgeOk: true,
+    locked: false,
   },
   {
     key: 'snow',
@@ -181,12 +181,23 @@ const HubPage: React.FC = () => {
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
   const [recents, setRecents] = useState<RecentConnection[]>(loadRecents);
 
+  const [pgServers, setPgServers] = useState<PostgresServer[]>([]);
+  // Filter "Your connections" by engine when an enabled engine card is clicked.
+  const [engineFilter, setEngineFilter] = useState<'cosmos' | 'pg' | null>(null);
+
   useEffect(() => {
     getAzureCosmosAccounts()
       .then((accs) => { setAccounts(accs); })
       .catch((err) => { setError(err.message || 'Failed to load accounts'); })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    getToken()
+      .then((token) => (token ? listPostgresServers(token) : []))
+      .then(setPgServers)
+      .catch(() => { /* PG discovery is best-effort; absence just hides the section */ });
+  }, [getToken]);
 
   useEffect(() => {
     const fetchRecent = async () => {
@@ -321,13 +332,22 @@ const HubPage: React.FC = () => {
             </h2>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {recents.map((r) => {
+                const engine = r.engine ?? 'cosmos';
+                const isPg = engine === 'pg';
                 const account = accounts.find((a) => a.id === r.accountId);
                 const inert = !!busyAccountId;
+                const actionLabel = r.action === 'explorer' ? 'Explorer' : 'Workspace';
                 return (
                   <button
                     key={`${r.accountId}-${r.action}`}
                     disabled={inert}
                     onClick={() => {
+                      if (isPg) {
+                        navigate(r.action === 'explorer'
+                          ? `/postgres-explorer/${encodeURIComponent(r.accountId)}`
+                          : `/postgres/${encodeURIComponent(r.accountId)}`);
+                        return;
+                      }
                       const acc = account ?? ({ id: r.accountId, name: r.accountName } as CosmosDBAccount);
                       if (r.action === 'query') handleOpenAccount(acc);
                       else handleOpenExplorer(acc);
@@ -343,10 +363,10 @@ const HubPage: React.FC = () => {
                     onMouseEnter={(e) => { if (!inert) { (e.currentTarget as HTMLButtonElement).style.borderColor = 'color-mix(in oklch, var(--accent) 35%, var(--border))'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--soft)'; } }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--panel)'; }}
                   >
-                    <div style={{ width: 22, height: 22, borderRadius: 5, background: '#1a4f8c', color: '#fff', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>C</div>
+                    <div style={{ width: 22, height: 22, borderRadius: 5, background: isPg ? '#31648c' : '#1a4f8c', color: '#fff', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{isPg ? 'P' : 'C'}</div>
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{r.accountName}</span>
-                    <span className={`qa-chip${r.action === 'query' ? ' accent' : ''}`} style={{ fontSize: 10 }}>
-                      {r.action === 'query' ? 'Query' : 'Explorer'}
+                    <span className={`qa-chip${r.action === 'explorer' ? '' : ' accent'}`} style={{ fontSize: 10 }}>
+                      {actionLabel}
                     </span>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>{formatRelativeTime(new Date(r.accessedAt).toISOString())}</span>
                   </button>
@@ -362,6 +382,15 @@ const HubPage: React.FC = () => {
             <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', margin: 0 }}>
               Your connections
             </h2>
+            {engineFilter && (
+              <button
+                onClick={() => setEngineFilter(null)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+              >
+                Filtered: {engineFilter === 'pg' ? 'PostgreSQL' : 'Cosmos DB'}
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+              </button>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
@@ -381,15 +410,15 @@ const HubPage: React.FC = () => {
                 {error}
               </div>
             )}
-            {!loading && !error && accounts.length === 0 && (
+            {!loading && !error && accounts.length === 0 && pgServers.length === 0 && (
               <div style={{
                 background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14,
                 padding: 22, color: 'var(--muted)', fontSize: 13,
               }}>
-                No Cosmos DB accounts found. Add a connection below.
+                No database connections found. Add a connection below.
               </div>
             )}
-            {accounts.map((account) => (
+            {engineFilter !== 'pg' && accounts.map((account) => (
               <ConnectionCard
                 key={account.id}
                 account={account}
@@ -397,6 +426,22 @@ const HubPage: React.FC = () => {
                 onOpenExplorer={handleOpenExplorer}
                 busyAction={busyAccountId === account.id ? busyAction : null}
                 disabled={!!busyAccountId && busyAccountId !== account.id}
+              />
+            ))}
+            {engineFilter !== 'cosmos' && pgServers.map((srv) => (
+              <PgConnectionCard
+                key={srv.id}
+                server={srv}
+                onOpen={(s) => {
+                  saveRecent({ engine: 'pg', accountId: s.id, accountName: s.name, action: 'workspace' });
+                  setRecents(loadRecents());
+                  navigate(`/postgres/${encodeURIComponent(s.id)}`);
+                }}
+                onOpenExplorer={(s) => {
+                  saveRecent({ engine: 'pg', accountId: s.id, accountName: s.name, action: 'explorer' });
+                  setRecents(loadRecents());
+                  navigate(`/postgres-explorer/${encodeURIComponent(s.id)}`);
+                }}
               />
             ))}
           </div>
@@ -411,9 +456,21 @@ const HubPage: React.FC = () => {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-            {DB_ENGINES.map((engine) => (
-              <DbEngineCard key={engine.key} engine={engine} />
-            ))}
+            {DB_ENGINES.map((engine) => {
+              const filterable = engine.key === 'cosmos' || engine.key === 'pg';
+              return (
+                <DbEngineCard
+                  key={engine.key}
+                  engine={engine}
+                  active={filterable && engineFilter === engine.key}
+                  onSelect={
+                    filterable
+                      ? () => setEngineFilter((f) => (f === engine.key ? null : (engine.key as 'cosmos' | 'pg')))
+                      : undefined
+                  }
+                />
+              );
+            })}
           </div>
         </section>
 
@@ -609,16 +666,111 @@ const ConnectionCard: React.FC<{
   );
 };
 
-/* ── DB engine card ── */
-const DbEngineCard: React.FC<{ engine: typeof DB_ENGINES[0] }> = ({ engine }) => {
+/* ── PostgreSQL connection card (mirrors ConnectionCard for visual coherence) ── */
+const PgConnectionCard: React.FC<{
+  server: PostgresServer;
+  onOpen: (s: PostgresServer) => void;
+  onOpenExplorer: (s: PostgresServer) => void;
+}> = ({ server, onOpen, onOpenExplorer }) => {
+  const [hovered, setHovered] = useState(false);
+  const [explorerHovered, setExplorerHovered] = useState(false);
   return (
     <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        background: engine.locked ? 'var(--soft)' : 'var(--panel)',
-        border: '1px solid var(--border)', borderRadius: 12,
+        background: 'var(--panel)',
+        border: `1px solid ${hovered ? 'color-mix(in oklch, var(--accent) 35%, var(--border))' : 'var(--border)'}`,
+        borderRadius: 14, padding: 22,
+        display: 'flex', flexDirection: 'column', gap: 14,
+        transform: hovered ? 'translateY(-1px)' : 'none',
+        boxShadow: hovered ? '0 12px 24px -16px rgba(20,18,14,0.18)' : 'none',
+        transition: 'transform 0.12s, border-color 0.12s, box-shadow 0.12s',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          width: 38, height: 38, borderRadius: 9, background: '#326690', color: '#fff',
+          display: 'grid', placeItems: 'center',
+          fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500, letterSpacing: '-0.03em',
+          flexShrink: 0,
+        }}>P</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {server.name}
+          </div>
+          <div style={{
+            fontSize: 11.5, color: 'var(--muted)', fontFamily: 'var(--font-mono)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2,
+          }}>
+            {server.fqdn}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span className="qa-chip ok">● live</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => onOpenExplorer(server)}
+            onMouseEnter={() => setExplorerHovered(true)}
+            onMouseLeave={() => setExplorerHovered(false)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 12, padding: '5px 10px', borderRadius: 6,
+              border: `1px solid ${explorerHovered ? 'var(--accent)' : 'var(--border)'}`,
+              background: explorerHovered ? 'var(--accent-soft)' : 'var(--soft)',
+              color: explorerHovered ? 'var(--accent)' : 'var(--muted)',
+              cursor: 'pointer', fontFamily: 'var(--font-body)',
+              transition: 'border-color 0.12s, background 0.12s, color 0.12s',
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M2 3h12v3H2zM2 7h12v3H2zM2 11h12v3H2z"/>
+            </svg>
+            Explorer
+          </button>
+          <button
+            onClick={() => onOpen(server)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 12.5, padding: '5px 10px', borderRadius: 6,
+              border: 'none', background: 'none', color: 'var(--accent)',
+              cursor: 'pointer', fontFamily: 'var(--font-body)',
+            }}
+          >
+            Open
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M3 8h10M9 4l4 4-4 4"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── DB engine card ── */
+const DbEngineCard: React.FC<{
+  engine: typeof DB_ENGINES[0];
+  active?: boolean;
+  onSelect?: () => void;
+}> = ({ engine, active, onSelect }) => {
+  const [hovered, setHovered] = useState(false);
+  const clickable = !!onSelect;
+  return (
+    <div
+      onClick={onSelect}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: engine.locked ? 'var(--soft)' : active ? 'var(--accent-soft)' : 'var(--panel)',
+        border: `1px solid ${active ? 'var(--accent)' : clickable && hovered ? 'color-mix(in oklch, var(--accent) 35%, var(--border))' : 'var(--border)'}`,
+        borderRadius: 12,
         padding: 18, display: 'flex', flexDirection: 'column', gap: 10,
         minHeight: 160, opacity: engine.opacity ?? 1,
-        cursor: engine.locked ? 'default' : 'pointer',
+        cursor: clickable ? 'pointer' : 'default',
+        transition: 'border-color 0.12s, background 0.12s',
       }}
     >
       <div style={{

@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { parseQueryForHandover } from '../utils/queryHandover';
-import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, inferSchemaRelationships, evaluateWriteResult, getAvailableModels } from '../services/geminiService';
+import { generateMongoQuery, debugMongoQuery, analyzeQueryResult, explainMongoQuery, inferSchemaRelationships, evaluateWriteResult, getAvailableModels } from '../services/geminiService';
 import { getAzureCosmosAccounts, getDatabasesForAccount, runMongoQuery, getCollectionInfo, clearSystemCache } from '../services/dbService';
 import { getSavedQueries, saveQuery, updateSavedQuery, deleteSavedQuery } from '../services/userDataService';
 import { generateIpynbContent, downloadFile } from '../services/notebookService';
@@ -10,6 +10,7 @@ import { QueryResultData, DbInfo, CollectionInfo, CosmosDBAccount, SelectedResou
 import { mockECommerceDbInfo, mockCollectionInfoMap, mockFindUsersQuery, mockUserFindResult, mockSavedQueries } from '../services/mockData';
 import { getAuthErrorMessage, isAuthenticationExpiredError } from '../utils/authErrorHandler';
 import QueryDisplay from '../components/QueryDisplay';
+import AgentVerdict from '../components/AgentVerdict';
 import { useRoles } from '../hooks/useRoles';
 import QueryResult from '../components/QueryResult';
 import Loader from '../components/Loader';
@@ -507,6 +508,8 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [isExplaining, setIsExplaining] = useState<boolean>(false);
 
   // State for write evaluation
   const [isEvaluatingWrite, setIsEvaluatingWrite] = useState<boolean>(false);
@@ -1019,6 +1022,30 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     }
   }, [selectedModel]);
 
+  const handleExplainQuery = useCallback(async () => {
+    if (!editableCode) return;
+    setIsExplaining(true);
+    setExplanation(null);
+    try {
+      const res = await explainMongoQuery(editableCode, selectedModel);
+      setExplanation(res.explanation);
+    } catch (e) {
+      setExplanation(e instanceof Error ? e.message : 'Failed to explain the query.');
+    } finally {
+      setIsExplaining(false);
+    }
+  }, [editableCode, selectedModel]);
+
+  // Clear a stale explanation whenever the query code changes.
+  useEffect(() => { setExplanation(null); }, [editableCode]);
+
+  const handleAnalysisFollowup = useCallback((prompt: string) => {
+    setUserInput(prompt);
+    const primaryContext = selectedCollections.length > 0 ? collectionDetailsMap[selectedCollections[0]] : undefined;
+    setLastSuccessfulPrompt(prompt);
+    handleGenerateQuery(prompt, primaryContext);
+  }, [selectedCollections, collectionDetailsMap, handleGenerateQuery]);
+
   const handleEvaluateWrite = useCallback(async () => {
     if (!editableCode || !executionResult || !lastSuccessfulPrompt || !selectedAccountId || !connectedDbInfo) return;
 
@@ -1267,6 +1294,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     setHistoryIndex(0);
     setIsSavedQueriesPanelOpen(false);
   };
+
+  const handleSeedCollectionQuery = useCallback((code: string) => {
+    setUserInput('Preview documents');
+    setLastSuccessfulPrompt('');
+    setEditableCode(code);
+    setCodeHistory([code]);
+    setHistoryIndex(0);
+  }, []);
 
   const handleLoadAndRunSavedQuery = (query: SavedQuery) => {
     clearQueryState();
@@ -1699,6 +1734,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                                     // Deselect this collection
                                     setSelectedCollections(prev => prev.filter(c => c !== colName));
                                   }}
+                                  onSeedQuery={handleSeedCollectionQuery}
                                 />
                               ) : (
                                 <div className="py-4 text-center text-red-500 text-sm">Failed to load details.</div>
@@ -2051,7 +2087,17 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                         historyCount={codeHistory.length}
                         historyIndex={historyIndex}
                         onNavigateHistory={handleNavigateHistory}
+                        onExplain={handleExplainQuery}
+                        isExplaining={isExplaining}
                       />
+                      <AgentVerdict isValid={_queryResult?.is_valid} explanation={_queryResult?.explanation} />
+                      {explanation && (
+                        <div className="qa-card" style={{ padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <span className="qa-chip accent" style={{ flexShrink: 0 }}>Explanation</span>
+                          <span style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.55, flex: 1 }}>{explanation}</span>
+                          <button onClick={() => setExplanation(null)} className="qa-btn" style={{ fontSize: 11, padding: '2px 8px' }} title="Dismiss">Dismiss</button>
+                        </div>
+                      )}
                       <QueryResult
                         isExecuting={isExecuting}
                         executionError={executionError}
@@ -2219,6 +2265,9 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
   }
 
   // ── Embedded: connected — 2-column workspace layout ──────────────────
+  const resultIsAnalyzable = Array.isArray(executionResult) && executionResult.length > 0
+    && typeof executionResult[0] === 'object' && executionResult[0] !== null;
+
   const insightsRail = (
     <aside style={{
       width: 300, flexShrink: 0,
@@ -2236,12 +2285,32 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         <span className="qa-chip" style={{ marginLeft: 'auto', fontSize: 10 }}>auto</span>
       </div>
 
-      {/* Analysis result */}
-      {analysisResult && (
+      {/* AI analysis: trigger button (moved here from the results toolbar) + result */}
+      {analysisResult ? (
         <div className="qa-card animate-fade-in" style={{ padding: '10px 12px' }}>
-          <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 6 }}>Analysis</div>
+          <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 6 }}>Summary</div>
           <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>{analysisResult.insight}</div>
         </div>
+      ) : resultIsAnalyzable ? (
+        <div className="qa-card animate-fade-in" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>Results ready. Analyze them for patterns, anomalies and suggested follow-ups.</div>
+          <button
+            id="tutorial-analyze-button"
+            className="qa-btn primary"
+            style={{ width: '100%', justifyContent: 'center' }}
+            disabled={isAnalyzing}
+            onClick={() => handleAnalyzeQuery(executionResult)}
+          >
+            {isAnalyzing ? (
+              <><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" style={{ animation: 'qp-spin 0.7s linear infinite' }}><path d="M8 2a6 6 0 1 0 6 6" /></svg> Analyzing…</>
+            ) : (
+              <><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 1.5l1.4 3.8L13 6.5l-3.6 1.2L8 11.5 6.6 7.7 3 6.5l3.6-1.2z" /></svg> Analyze results</>
+            )}
+          </button>
+        </div>
+      ) : null}
+      {analysisError && (
+        <div className="qa-card" style={{ padding: '10px 12px', color: 'var(--status-err)', fontSize: 12 }}>{analysisError}</div>
       )}
 
       {/* Debug result */}
@@ -2261,10 +2330,23 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       )}
 
       {/* Empty state */}
-      {!analysisResult && !debuggingResult && !writeEvaluationResult && (
+      {!analysisResult && !resultIsAnalyzable && !debuggingResult && !writeEvaluationResult && (
         <div style={{ background: 'var(--soft)', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', padding: '12px 14px' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Run a query to see AI insights</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>After executing, use "Analyze" on the results to get patterns, anomalies, and follow-up suggestions.</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>After executing, use "Analyze results" here to get patterns, anomalies, and follow-up suggestions.</div>
+        </div>
+      )}
+
+      {/* Suggested follow-ups + notebook, anchored to the bottom (matches the PG Insights panel) */}
+      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {analysisResult && analysisResult.followups && analysisResult.followups.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', fontWeight: 500, marginBottom: 3 }}>Suggested follow-ups</div>
+          {analysisResult.followups.map((f, i) => (
+            <button key={i} className="ws-sug" onClick={() => handleAnalysisFollowup(f)}>
+              <span style={{ color: 'var(--accent)', marginRight: 6 }}>→</span>{f}
+            </button>
+          ))}
         </div>
       )}
 
@@ -2272,13 +2354,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
       <button
         onClick={() => setIsNotebookPanelOpen(true)}
         className="qa-btn"
-        style={{ width: '100%', justifyContent: 'center', marginTop: 'auto' }}
+        style={{ width: '100%', justifyContent: 'center' }}
       >
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
           <path d="M4 2h8a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM6 6h4M6 9h4M6 12h2"/>
         </svg>
         View notebook
       </button>
+      </div>
     </aside>
   );
 
@@ -2409,7 +2492,7 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
                     {isColLoading ? (
                       <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--muted)' }}>Loading schema…</div>
                     ) : info ? (
-                      <CollectionActionPanel info={info} onClose={() => setSelectedCollections(prev => prev.filter(c => c !== colName))} />
+                      <CollectionActionPanel info={info} onClose={() => setSelectedCollections(prev => prev.filter(c => c !== colName))} onSeedQuery={handleSeedCollectionQuery} />
                     ) : (
                       <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--status-err)' }}>Failed to load schema.</div>
                     )}
@@ -2558,7 +2641,15 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
           {(!isLoading && !error && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep && !isDemoModeForSaveStep) && (
             editableCode ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} isTransferable={!!handover} onOpenInExplorer={handleOpenInExplorer} canWrite={can('data:write')} />
+                <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} isTransferable={!!handover} onOpenInExplorer={handleOpenInExplorer} canWrite={can('data:write')} onExplain={handleExplainQuery} isExplaining={isExplaining} />
+                <AgentVerdict isValid={_queryResult?.is_valid} explanation={_queryResult?.explanation} />
+                {explanation && (
+                  <div className="qa-card" style={{ padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <span className="qa-chip accent" style={{ flexShrink: 0 }}>Explanation</span>
+                    <span style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.55, flex: 1 }}>{explanation}</span>
+                    <button onClick={() => setExplanation(null)} className="qa-btn" style={{ fontSize: 11, padding: '2px 8px' }} title="Dismiss">Dismiss</button>
+                  </div>
+                )}
                 <QueryResult isExecuting={isExecuting} executionError={executionError} executionResult={executionResult} onDebug={handleDebugQuery} isDebugging={isDebugging} debuggingResult={debuggingResult} debugError={debugError} sourceCollection={querySourceCollection} onSetIntermediateContext={handleSetIntermediateContext} intermediateContext={intermediateContext} onAnalyze={handleAnalyzeQuery} isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError} onEvaluateWrite={handleEvaluateWrite} isEvaluatingWrite={isEvaluatingWrite} writeEvaluationResult={writeEvaluationResult} writeEvaluationError={writeEvaluationError} />
               </div>
             ) : (

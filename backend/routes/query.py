@@ -9,6 +9,8 @@ from models.schemas import (
     ExecuteInput,
     DebugQueryRequest,
     DebugSuggestionResponse,
+    ExplainQueryRequest,
+    ExplainQueryResponse,
     SchemaRelationshipsRequest,
     SchemaRelationshipsResponse,
     EvaluateWriteRequest,
@@ -18,6 +20,7 @@ from services.react_agent_service import run_query_generator
 from services.gemini_service import (
     generate_suggestion_from_query_error,
     generate_schema_relationships,
+    explain_mongo_query,
 )
 from services.mongo_service import (
     execute_mongo_query,
@@ -236,6 +239,15 @@ def debug(
     return generate_suggestion_from_query_error(
         body.query, body.error_message, model=body.model
     )
+
+
+@router.post("/explain", response_model=ExplainQueryResponse)
+def explain(
+    body: ExplainQueryRequest = Body(...),
+    caller: Caller = Depends(require("query:read")),
+):
+    """Return a plain-English description of a generated Mongo query."""
+    return explain_mongo_query(body.query, model=body.model)
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)

@@ -13,11 +13,13 @@ You are a data analyst assistant. Given the following MongoDB query result, prov
 1. A concise textual insight or summary of the data.
 2. A recommended chart type (bar, line, pie, etc.) for visualization.
 3. Chart.js compatible data and options objects for the recommended chart.
+4. Exactly three follow-up prompts the user could run next as new queries. Each must be a short, actionable natural-language request phrased so it can be handed straight to a query generator (e.g. "show the 10 most recent orders", "count documents grouped by status"), grounded in this data or the collection it came from. This field is REQUIRED and must always contain three non-empty strings — never return an empty list.
 
 Query result (JSON array):
 {query_result}
 
-Respond in JSON with keys: insight, chartType, chartData, chartOptions.
+Respond in JSON with keys: insight, chartType, chartData, chartOptions, followups.
+The followups value must be a JSON array of exactly three non-empty strings.
 """
     client = genai.Client()
     response = client.models.generate_content(

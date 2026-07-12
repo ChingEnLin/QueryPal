@@ -1,9 +1,42 @@
 import base64
 import json
 import uuid
-from typing import List
+from typing import List, Optional
 from models.user_queries import SavedQuery, SavedQueryCreate, SavedQueryUpdate
 from services.pg_connection import get_connection
+
+_COLS = "id, name, prompt, code, engine, owner_email, shared_with, last_modified_by, updated_at"
+
+# Additive migration: existing deployments created saved_queries without an
+# engine column. Add it once per process (ALTER ... IF NOT EXISTS is idempotent).
+_engine_col_ready = False
+
+
+def _ensure_engine_column(conn):
+    global _engine_col_ready
+    if _engine_col_ready:
+        return
+    c = conn.cursor()
+    c.execute(
+        "ALTER TABLE saved_queries "
+        "ADD COLUMN IF NOT EXISTS engine TEXT NOT NULL DEFAULT 'cosmos'"
+    )
+    _engine_col_ready = True
+
+
+def _row_to_query(row) -> SavedQuery:
+    shared_with = row[6].split(",") if row[6] else []
+    return SavedQuery(
+        id=row[0],
+        name=row[1],
+        prompt=row[2],
+        code=row[3],
+        engine=row[4] or "cosmos",
+        ownerEmail=row[5],
+        sharedWith=shared_with,
+        lastModifiedBy=row[7],
+        updatedAt=row[8],
+    )
 
 
 def get_user_id_from_token(token: str) -> str:
@@ -23,32 +56,23 @@ def get_user_id_from_token(token: str) -> str:
         return token
 
 
-def get_saved_queries(user_id: str) -> List[SavedQuery]:
+def get_saved_queries(user_id: str, engine: Optional[str] = None) -> List[SavedQuery]:
     conn = get_connection()
+    _ensure_engine_column(conn)
     c = conn.cursor()
-    # Return queries owned by or shared with user
-    c.execute(
-        "SELECT id, name, prompt, code, owner_email, shared_with, last_modified_by, updated_at FROM saved_queries WHERE owner_email = %s OR position(%s in shared_with) > 0",
-        (user_id, user_id),
+    # Return queries owned by or shared with user, optionally filtered by engine.
+    sql = (
+        f"SELECT {_COLS} FROM saved_queries "
+        "WHERE (owner_email = %s OR position(%s in shared_with) > 0)"
     )
+    params = [user_id, user_id]
+    if engine:
+        sql += " AND engine = %s"
+        params.append(engine)
+    c.execute(sql, tuple(params))
     rows = c.fetchall()
     conn.close()
-    result = []
-    for row in rows:
-        shared_with = row[5].split(",") if row[5] else []
-        result.append(
-            SavedQuery(
-                id=row[0],
-                name=row[1],
-                prompt=row[2],
-                code=row[3],
-                ownerEmail=row[4],
-                sharedWith=shared_with,
-                lastModifiedBy=row[6],
-                updatedAt=row[7],
-            )
-        )
-    return result
+    return [_row_to_query(row) for row in rows]
 
 
 def create_saved_query(user_id: str, data: SavedQueryCreate) -> SavedQuery:
@@ -57,10 +81,24 @@ def create_saved_query(user_id: str, data: SavedQueryCreate) -> SavedQuery:
     query_id = str(uuid.uuid4())
     now = datetime.datetime.utcnow().isoformat() + "Z"
     conn = get_connection()
+    _ensure_engine_column(conn)
     c = conn.cursor()
     c.execute(
-        "INSERT INTO saved_queries (id, name, prompt, code, owner_email, shared_with, last_modified_by, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-        (query_id, data.name, data.prompt, data.code, user_id, "", user_id, now),
+        "INSERT INTO saved_queries "
+        "(id, name, prompt, code, engine, owner_email, shared_with, "
+        "last_modified_by, updated_at) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        (
+            query_id,
+            data.name,
+            data.prompt,
+            data.code,
+            data.engine,
+            user_id,
+            "",
+            user_id,
+            now,
+        ),
     )
     conn.close()
     return SavedQuery(
@@ -68,6 +106,7 @@ def create_saved_query(user_id: str, data: SavedQueryCreate) -> SavedQuery:
         name=data.name,
         prompt=data.prompt,
         code=data.code,
+        engine=data.engine,
         ownerEmail=user_id,
         sharedWith=[],
         lastModifiedBy=user_id,
@@ -82,6 +121,7 @@ def update_saved_query(
 
     # Only owner or shared user can update
     conn = get_connection()
+    _ensure_engine_column(conn)
     c = conn.cursor()
     c.execute(
         "SELECT owner_email, shared_with FROM saved_queries WHERE id = %s", (query_id,)
@@ -96,8 +136,10 @@ def update_saved_query(
         conn.close()
         raise PermissionError("Not allowed to update this query")
     now = datetime.datetime.utcnow().isoformat() + "Z"
+    # engine is immutable after creation; not updated here.
     c.execute(
-        "UPDATE saved_queries SET name = %s, prompt = %s, code = %s, shared_with = %s, last_modified_by = %s, updated_at = %s WHERE id = %s",
+        "UPDATE saved_queries SET name = %s, prompt = %s, code = %s, shared_with = %s, "
+        "last_modified_by = %s, updated_at = %s WHERE id = %s",
         (
             data.name,
             data.prompt,
@@ -108,23 +150,10 @@ def update_saved_query(
             query_id,
         ),
     )
-    c.execute(
-        "SELECT id, name, prompt, code, owner_email, shared_with, last_modified_by, updated_at FROM saved_queries WHERE id = %s",
-        (query_id,),
-    )
+    c.execute(f"SELECT {_COLS} FROM saved_queries WHERE id = %s", (query_id,))
     row = c.fetchone()
     conn.close()
-    shared_with = row[5].split(",") if row[5] else []
-    return SavedQuery(
-        id=row[0],
-        name=row[1],
-        prompt=row[2],
-        code=row[3],
-        ownerEmail=row[4],
-        sharedWith=shared_with,
-        lastModifiedBy=row[6],
-        updatedAt=row[7],
-    )
+    return _row_to_query(row)
 
 
 def delete_saved_query(user_id: str, query_id: str):

@@ -129,39 +129,13 @@ const AnalysisResultDisplay: React.FC<AnalysisResultDisplayProps> = ({ result })
         </span>
       </div>
 
-      {/* Body — insight + chart side by side */}
-      <div style={{ display: 'flex', minHeight: 320 }}>
-        {/* Insight panel */}
-        <div style={{
-          width: 220, flexShrink: 0,
-          padding: '16px 18px',
-          borderRight: '1px solid var(--border)',
-          display: 'flex', flexDirection: 'column', gap: 10,
-          background: 'var(--soft)',
-        }}>
-          <div style={{
-            fontSize: 10.5, fontWeight: 500,
-            textTransform: 'uppercase', letterSpacing: '0.08em',
-            color: 'var(--muted)', fontFamily: 'var(--font-body)',
-          }}>
-            Insight
-          </div>
-          <p style={{
-            fontSize: 13, color: 'var(--fg)', lineHeight: 1.65,
-            fontFamily: 'var(--font-body)', margin: 0,
-          }}>
-            {result.insight}
-          </p>
-        </div>
-
-        {/* Chart panel */}
-        <div style={{ flex: 1, padding: '20px 24px', position: 'relative', minWidth: 0 }}>
-          <Chart
-            type={result.chartType}
-            data={result.chartData}
-            options={themedChartOptions}
-          />
-        </div>
+      {/* Body — chart only (insight + follow-ups live in the workspace Insights rail) */}
+      <div style={{ padding: '20px 24px', position: 'relative', height: 360, boxSizing: 'border-box' }}>
+        <Chart
+          type={result.chartType}
+          data={result.chartData}
+          options={themedChartOptions}
+        />
       </div>
     </div>
   );

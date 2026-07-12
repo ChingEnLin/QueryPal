@@ -1,12 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUnifiedAuth } from '../hooks/useUnifiedAuth';
 import { useRoles } from '../hooks/useRoles';
+
+// Saved queries live per-workspace: open the PG panel when in a PG workspace,
+// otherwise the Cosmos query generator.
+export const savedQueriesTarget = (pathname: string): string =>
+  pathname.startsWith('/postgres') ? `${pathname}?panel=saved` : '/query-generator?panel=saved';
 
 const UserMenuButton: React.FC = () => {
   const { user, logout } = useUnifiedAuth();
   const { can } = useRoles();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -78,7 +84,7 @@ const UserMenuButton: React.FC = () => {
           {/* Saved queries */}
           <div style={{ padding: '6px 6px' }}>
             <button
-              onClick={() => { setShowUserMenu(false); navigate('/query-generator?panel=saved'); }}
+              onClick={() => { setShowUserMenu(false); navigate(savedQueriesTarget(location.pathname)); }}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 9,
                 padding: '7px 10px', borderRadius: 7, border: 'none',

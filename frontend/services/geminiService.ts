@@ -124,9 +124,11 @@ export const debugMongoQuery = async (query: string, errorMessage: string, model
 
     console.log("Sending failed query to backend for debugging...");
 
+    const token = await getAuthenticatedToken();
     const response = await fetch(`${API_BASE_URL}/query/debug`, {
         method: 'POST',
         headers: {
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -144,6 +146,27 @@ export const debugMongoQuery = async (query: string, errorMessage: string, model
 
     const result: DebuggingResult = await response.json();
     return result;
+};
+
+/**
+ * Asks the backend for a plain-English explanation of what a Mongo query does.
+ */
+export const explainMongoQuery = async (code: string, model: string = 'gemini-2.5-flash'): Promise<{ explanation: string }> => {
+    if (!USE_MSAL_AUTH) {
+        await mockDelay(600);
+        return Promise.resolve({ explanation: 'This query returns documents from the selected collection (mock explanation).' });
+    }
+    const token = await getAuthenticatedToken();
+    const response = await fetch(`${API_BASE_URL}/query/explain`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: code, model }),
+    });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || 'Failed to explain the query.');
+    }
+    return response.json();
 };
 
 /**
@@ -168,9 +191,10 @@ export const analyzeQueryResult = async (queryResult: any, model: string = 'gemi
 
     console.log("Sending query result to backend for analysis...");
 
+    const token = await getAuthenticatedToken();
     const response = await fetch(`${API_BASE_URL}/query/analyze`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ query_result: queryResult, model }),
     });
 

@@ -12,8 +12,11 @@ router = APIRouter()
 
 
 @router.get("/queries", response_model=list[SavedQuery])
-def list_saved_queries(caller: Caller = Depends(require("self:manage"))):
-    return get_saved_queries(caller.email)
+def list_saved_queries(
+    engine: str | None = None,
+    caller: Caller = Depends(require("self:manage")),
+):
+    return get_saved_queries(caller.email, engine)
 
 
 @router.post("/queries", response_model=SavedQuery, status_code=201)

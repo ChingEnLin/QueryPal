@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { CollectionSummary, DbInfo, CosmosDBAccount } from '../types';
 import { API_BASE_URL } from '../app.config';
-import { useRoles } from '../hooks/useRoles';
+import { getAuthenticatedToken, getAzureCosmosAccounts, listPostgresServers, PostgresServer } from '../services/dbService';
 
 interface AppSidebarProps {
   accountName?: string;
@@ -19,7 +19,23 @@ interface AppSidebarProps {
   availableAccounts?: CosmosDBAccount[];
   onSwitchAccount?: (account: CosmosDBAccount) => void;
   chipLoading?: boolean;
+  // PostgreSQL workspace: table tree + database switching live in the sidebar,
+  // mirroring how Cosmos collections do.
+  pgSchema?: { schema: string; tables: { name: string; rowEstimate: number }[] }[];
+  activePgTables?: string[]; // ["schema.table", ...]
+  onPgTableSelect?: (schema: string, table: string, ev?: { ctrlKey?: boolean; metaKey?: boolean }) => void;
+  // True while the PG schema/tables (and thus the switched-to database) are
+  // loading — drives the small spinners in the chip dropdown + tables panel.
+  pgSchemaLoading?: boolean;
 }
+
+// Small spinner reused by the PG database/table loading indicators.
+const MiniSpinner: React.FC<{ size?: number }> = ({ size = 11 }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"
+    style={{ animation: 'ws-spin 0.7s linear infinite', flexShrink: 0, color: 'var(--accent)' }}>
+    <path d="M8 2a6 6 0 1 0 6 6" />
+  </svg>
+);
 
 type NavItem =
   | { label: string; href: string; matchPrefix?: boolean; panel?: never; icon: React.ReactNode }
@@ -57,6 +73,15 @@ const NAV_ITEMS: NavItem[] = [
       </svg>
     ),
   },
+  {
+    label: 'Audit',
+    href: '/audit',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+        <path d="M4 2h6l3 3v9H4z"/><path d="M6 7.5h5M6 10.5h5"/>
+      </svg>
+    ),
+  },
 ];
 
 const itemBase: React.CSSProperties = {
@@ -81,13 +106,30 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   availableAccounts,
   onSwitchAccount,
   chipLoading,
+  pgSchema,
+  activePgTables,
+  onPgTableSelect,
+  pgSchemaLoading,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { can } = useRoles();
-  const isAdmin = can('system:admin');
+  const isPg = location.pathname.startsWith('/postgres');
   const [showDbPicker, setShowDbPicker] = useState(false);
+  const [pgServers, setPgServers] = useState<PostgresServer[]>([]);
+  const [cosmosAccounts, setCosmosAccounts] = useState<CosmosDBAccount[]>([]);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    getAuthenticatedToken()
+      .then((token) => listPostgresServers(token))
+      .then(setPgServers)
+      .catch(() => { /* best-effort; absence just hides the PostgreSQL group */ });
+    // Fetch Cosmos accounts too, so the account switcher is available from any
+    // workspace (including PostgreSQL), not just Cosmos pages that pass them in.
+    getAzureCosmosAccounts()
+      .then(setCosmosAccounts)
+      .catch(() => { /* best-effort; absence just hides the Cosmos group */ });
+  }, []);
   const [collectionSort, setCollectionSort] = useState<'name_asc' | 'name_desc' | 'count_desc' | 'count_asc' | 'findings_desc' | 'findings_asc'>('name_asc');
   const chipRef = useRef<HTMLDivElement>(null);
 
@@ -118,9 +160,47 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
     return () => clearInterval(id);
   }, []);
 
-  const explorerHref = accountId && databaseName
-    ? `/data-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`
+  const pgWorkspaceHref = isPg && accountId
+    ? `/postgres/${encodeURIComponent(accountId)}${databaseName ? '/' + encodeURIComponent(databaseName) : ''}`
     : null;
+  // PG explorer works from just the server (the page redirects to the first
+  // database), so it stays enabled on pages without a database (e.g. audit).
+  // Cosmos still needs both account + database.
+  const explorerHref = isPg
+    ? (accountId
+      ? `/postgres-explorer/${encodeURIComponent(accountId)}${databaseName ? '/' + encodeURIComponent(databaseName) : ''}`
+      : null)
+    : (accountId && databaseName
+      ? `/data-explorer/${encodeURIComponent(accountId)}/${encodeURIComponent(databaseName)}`
+      : null);
+  const pgAuditHref = isPg && accountId ? `/postgres-audit/${encodeURIComponent(accountId)}` : null;
+  const isPgExplorer = location.pathname.startsWith('/postgres-explorer');
+  const isPgAudit = location.pathname.startsWith('/postgres-audit');
+  // Workspace paths are /postgres/:id[/db]; the -explorer/-audit variants don't
+  // start with '/postgres/' so they're correctly excluded here.
+  const isPgWorkspace = isPg && location.pathname.startsWith('/postgres/');
+  const isAdminPage = location.pathname.startsWith('/admin');
+
+  // In a PG workspace the sidebar's own listPostgresServers fetch can lose the
+  // race with the page's OBO calls (error swallowed above), so fall back to the
+  // current server we already know — keeps the PostgreSQL group consistent with
+  // the Cosmos workspace, which always shows it.
+  const pgServerList = React.useMemo(() => {
+    if (!isPg || !accountId || !accountName || pgServers.some((s) => s.id === accountId)) {
+      return pgServers;
+    }
+    return [{ id: accountId, name: accountName, fqdn: '' }, ...pgServers];
+  }, [isPg, accountId, accountName, pgServers]);
+
+  // Cosmos accounts: the page passes them on Cosmos pages; otherwise fall back to
+  // the sidebar's own fetch so the switcher is present in the PG workspace too.
+  const accountList = availableAccounts && availableAccounts.length > 0 ? availableAccounts : cosmosAccounts;
+
+  const showAccounts = accountList.length > 0;
+  const showDbs = !!availableDbs && availableDbs.length > 1;
+  const showPgServers = pgServerList.length > 0;
+
+  const hasPicker = showAccounts || showDbs || showPgServers;
 
   const isActive = (href: string, matchPrefix?: boolean) => {
     if (matchPrefix) return location.pathname.startsWith(href);
@@ -158,11 +238,11 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
           ) : (
             <>
               <div
-                onClick={() => ((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1)) ? setShowDbPicker(v => !v) : undefined}
+                onClick={() => hasPicker ? setShowDbPicker(v => !v) : undefined}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 7,
                   padding: '5px 9px', background: 'var(--soft)', borderRadius: 7,
-                  cursor: ((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1)) ? 'pointer' : 'default',
+                  cursor: hasPicker ? 'pointer' : 'default',
                 }}
               >
                 <span style={{ width: 14, height: 14, borderRadius: 4, background: '#1d6cf2', flexShrink: 0 }} />
@@ -176,7 +256,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                     </div>
                   )}
                 </div>
-                {((availableAccounts && availableAccounts.length > 1) || (availableDbs && availableDbs.length > 1)) && (
+                {hasPicker && (
                   <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ color: 'var(--muted)', flexShrink: 0 }}>
                     <path d="M4 6l4 4 4-4"/>
                   </svg>
@@ -189,17 +269,22 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                   background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8,
                   boxShadow: '0 4px 16px rgba(0,0,0,0.10)', overflow: 'hidden',
                 }}>
-                  {availableAccounts && availableAccounts.length > 1 && (
+                  {showAccounts && (
                     <>
                       <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
                         Cosmos account
                       </div>
-                      {availableAccounts.map(acc => {
+                      {accountList.map(acc => {
                         const isCurrent = acc.id === accountId;
                         return (
                           <button
                             key={acc.id}
-                            onClick={() => { if (!isCurrent) { setShowDbPicker(false); onSwitchAccount?.(acc); } }}
+                            onClick={() => {
+                              if (isCurrent) return;
+                              setShowDbPicker(false);
+                              if (onSwitchAccount) onSwitchAccount(acc);
+                              else navigate('/query-generator', { state: { preselectedAccountId: acc.id, preselectedAccountName: acc.name } });
+                            }}
                             style={{
                               width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                               padding: '7px 10px', border: 'none', textAlign: 'left',
@@ -223,11 +308,57 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                       })}
                     </>
                   )}
-                  {availableAccounts && availableAccounts.length > 1 && availableDbs && availableDbs.length > 1 && (
-                    <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
-                  )}
-                  {availableDbs && availableDbs.length > 1 && (
+                  {showPgServers && (
                     <>
+                      {showAccounts && (
+                        <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                      )}
+                      <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
+                        PostgreSQL
+                      </div>
+                      {pgServerList.map(srv => {
+                        const isCurrent = srv.id === accountId;
+                        return (
+                          <button
+                            key={srv.id}
+                            onClick={() => {
+                              setShowDbPicker(false);
+                              if (isCurrent) return;
+                              // Switching server keeps you in the current section
+                              // (audit / explorer), not always the workspace.
+                              const base = (isPgAudit || location.pathname === '/audit')
+                                ? '/postgres-audit'
+                                : isPgExplorer ? '/postgres-explorer' : '/postgres';
+                              navigate(`${base}/${encodeURIComponent(srv.id)}`);
+                            }}
+                            style={{
+                              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '7px 10px', border: 'none', textAlign: 'left',
+                              cursor: isCurrent ? 'default' : 'pointer',
+                              background: isCurrent ? 'var(--accent-soft)' : 'transparent',
+                              color: isCurrent ? 'var(--accent)' : 'var(--fg)',
+                              fontSize: 12.5, fontFamily: 'var(--font-body)',
+                            }}
+                            onMouseEnter={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                            onMouseLeave={(e) => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            <span style={{ width: 10, height: 10, borderRadius: 3, background: isCurrent ? '#1d6cf2' : 'var(--muted)', flexShrink: 0 }} />
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{srv.name}</span>
+                            {isCurrent && (
+                              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--accent)', flexShrink: 0 }}>
+                                <path d="M3 8l4 4 6-6"/>
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                  {showDbs && (
+                    <>
+                      {(showAccounts || showPgServers) && (
+                        <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                      )}
                       <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', fontWeight: 500 }}>
                         Database
                       </div>
@@ -236,7 +367,13 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                         return (
                           <button
                             key={db.name}
-                            onClick={() => { if (!isCurrent) { setShowDbPicker(false); onSwitchDatabase?.(db); } }}
+                            onClick={() => {
+                              if (isCurrent) return;
+                              // Keep the picker open during a PG switch so its
+                              // spinner is visible; Cosmos (no loading flag) closes.
+                              if (pgSchemaLoading === undefined) setShowDbPicker(false);
+                              onSwitchDatabase?.(db);
+                            }}
                             style={{
                               width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                               padding: '7px 10px', border: 'none', cursor: 'pointer', textAlign: 'left',
@@ -251,11 +388,13 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                               <ellipse cx="8" cy="4" rx="6" ry="2"/><path d="M2 4v8c0 1.1 2.7 2 6 2s6-.9 6-2V4M2 8c0 1.1 2.7 2 6 2s6-.9 6-2"/>
                             </svg>
                             {db.name}
-                            {isCurrent && (
+                            {isCurrent && pgSchemaLoading ? (
+                              <span style={{ marginLeft: 'auto', display: 'flex' }}><MiniSpinner /></span>
+                            ) : isCurrent ? (
                               <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 'auto', color: 'var(--accent)', flexShrink: 0 }}>
                                 <path d="M3 8l4 4 6-6"/>
                               </svg>
-                            )}
+                            ) : null}
                           </button>
                         );
                       })}
@@ -277,8 +416,17 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         }}>Workspace</div>
 
         {NAV_ITEMS.map((item) => {
-          const resolvedHref = item.label === 'Explorer' ? (explorerHref ?? item.href) : item.href;
-          const active = resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false;
+          let resolvedHref = item.href;
+          if (item.label === 'Explorer') resolvedHref = explorerHref ?? item.href;
+          else if (isPg && item.label === 'Workspace') resolvedHref = pgWorkspaceHref ?? item.href;
+          else if (isPg && item.label === 'Audit') resolvedHref = pgAuditHref ?? item.href;
+          const active = isPg && item.label === 'Workspace'
+            ? isPgWorkspace
+            : isPg && item.label === 'Explorer'
+              ? isPgExplorer
+              : isPg && item.label === 'Audit'
+                ? isPgAudit
+                : (resolvedHref ? isActive(resolvedHref, item.matchPrefix) : false);
           const style: React.CSSProperties = {
             ...itemBase,
             color: active ? 'var(--fg)' : 'var(--muted)',
@@ -292,6 +440,21 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             </span>
           );
 
+          // Role management is a standalone, connection-less page — the
+          // connection-scoped tabs don't apply here.
+          if (isAdminPage && (item.label === 'Workspace' || item.label === 'Audit')) {
+            return (
+              <span
+                key={item.label}
+                style={{ ...style, opacity: 0.4, cursor: 'not-allowed' }}
+                title="Not available on the role management page"
+              >
+                {iconSpan}
+                {item.label}
+              </span>
+            );
+          }
+
           if (item.panel) {
             return (
               <button
@@ -304,6 +467,20 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                 {iconSpan}
                 {item.label}
               </button>
+            );
+          }
+
+          // PostgreSQL has no Analytics page.
+          if (isPg && item.label === 'Analytics') {
+            return (
+              <span
+                key={item.label}
+                style={{ ...style, opacity: 0.4, cursor: 'not-allowed' }}
+                title="Not available for PostgreSQL"
+              >
+                {iconSpan}
+                {item.label}
+              </span>
             );
           }
 
@@ -346,31 +523,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             </Link>
           );
         })}
-
-        {isAdmin && (() => {
-          const active = location.pathname === '/admin';
-          return (
-            <Link
-              to="/admin"
-              style={{
-                ...itemBase,
-                color: active ? 'var(--fg)' : 'var(--muted)',
-                background: active ? 'var(--soft)' : 'transparent',
-                fontWeight: active ? 500 : 400,
-              }}
-              onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
-              onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-            >
-              <span style={{ color: active ? 'var(--accent)' : 'var(--muted)', display: 'flex', flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-                  <circle cx="8" cy="5" r="3"/>
-                  <path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/>
-                </svg>
-              </span>
-              Admin
-            </Link>
-          );
-        })()}
       </div>
 
       {collections && collections.length > 0 && (
@@ -463,6 +615,69 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {((pgSchema && pgSchema.length > 0) || pgSchemaLoading) && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 12 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0 8px 6px 8px',
+            fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em',
+            color: 'var(--muted)',
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Tables {pgSchemaLoading
+              ? <MiniSpinner size={10} />
+              : <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{(pgSchema ?? []).reduce((n, g) => n + g.tables.length, 0)}</span>}
+            </span>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
+            {pgSchemaLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px', fontSize: 12, color: 'var(--muted)' }}>
+                <MiniSpinner /> Loading tables…
+              </div>
+            ) : (pgSchema ?? []).map((g) => (
+              <div key={g.schema} style={{ marginBottom: 8 }}>
+                {(pgSchema?.length ?? 0) > 1 && (
+                  <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, padding: '2px 6px', fontFamily: 'var(--font-mono)' }}>{g.schema}</div>
+                )}
+                {g.tables.map((t) => {
+                  const active = activePgTables?.includes(`${g.schema}.${t.name}`) ?? false;
+                  return (
+                    <button
+                      key={t.name}
+                      title="Click to open · ⌘/Ctrl-click to add for a cross-table query"
+                      onClick={(e) => onPgTableSelect?.(g.schema, t.name, { ctrlKey: e.ctrlKey, metaKey: e.metaKey })}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center',
+                        padding: '5px 8px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                        background: active ? 'var(--accent-soft)' : 'transparent',
+                        color: active ? 'var(--fg)' : 'var(--muted)',
+                        fontSize: 12.5, fontFamily: 'var(--font-body)', marginBottom: 1,
+                        textAlign: 'left', transition: 'background 0.1s',
+                      }}
+                      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--soft)'; }}
+                      onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" style={{ marginRight: 7, flexShrink: 0, color: active ? 'var(--accent)' : 'var(--muted)' }}>
+                        <rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12M6 6.5V13"/>
+                      </svg>
+                      <span style={{
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                        fontFamily: 'var(--font-mono)', fontSize: 11.5,
+                      }}>{t.name}</span>
+                      <span
+                        title={t.rowEstimate < 0 ? 'Row count unknown — table not analyzed yet (run ANALYZE)' : `~${t.rowEstimate.toLocaleString()} rows (estimate)`}
+                        style={{
+                          fontSize: 10, color: 'var(--muted)', flexShrink: 0, marginLeft: 4,
+                          fontFamily: 'var(--font-mono)',
+                        }}>{t.rowEstimate < 0 ? '—' : t.rowEstimate.toLocaleString()}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </div>
       )}

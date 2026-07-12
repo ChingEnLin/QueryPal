@@ -64,11 +64,12 @@ Respond ONLY with a suggestion for how to fix the query. Do not repeat the error
 
 def extract_python_code(text: str) -> str:
     """
-    Extracts code from a string wrapped in triple backticks (```python ... ```), or returns the original if not wrapped.
+    Extracts code from a string wrapped in triple backticks (```python ... ```,
+    ```sql ... ```, or an untagged ``` ... ```), or returns the original if not wrapped.
     """
     import re
 
-    match = re.search(r"```python\s*([\s\S]+?)\s*```", text)
+    match = re.search(r"```[a-zA-Z]*\s*([\s\S]+?)\s*```", text)
     if match:
         return match.group(1).strip()
     return text.strip()
@@ -324,3 +325,82 @@ def generate_schema_relationships(
     except Exception as e:
         print(f"Error parsing Gemini relationship response: {e}")
         return SchemaRelationshipsResponse(relationships=[])
+
+
+class PgInsight(BaseModel):
+    summary: str
+    points: List[str] = Field(default_factory=list)
+    followups: List[str] = Field(default_factory=list)
+
+
+PROMPT_TEMPLATE_PG_INSIGHT = """You are a data analyst reviewing a PostgreSQL query result.
+
+User's request (if any): {user_input}
+Columns: {columns}
+Rows (sample, may be truncated):
+{rows}
+
+Return a JSON object:
+- "summary": one or two sentences describing what the result shows.
+- "points": up to 4 short bullet strings — notable patterns, anomalies, or distributions.
+- "followups": up to 3 short natural-language follow-up questions the user could ask next.
+Base everything only on the data shown. Do not invent columns or values.
+"""
+
+
+def analyze_pg_result(
+    columns: list, rows: list, user_input: str = "", model: str = "gemini-2.5-flash"
+) -> PgInsight:
+    """Summarize a SQL result set into {summary, points, followups}."""
+    rows_str = str(rows)[:8000]
+    full_prompt = PROMPT_TEMPLATE_PG_INSIGHT.format(
+        user_input=user_input or "(none)", columns=columns, rows=rows_str
+    )
+    client = genai.Client()
+    response = client.models.generate_content(
+        model=model,
+        contents=full_prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=PgInsight,
+            thinking_config=thinking_config_for(model),
+        ),
+    )
+    if hasattr(response, "parsed") and response.parsed:
+        return response.parsed
+    import json
+
+    try:
+        return PgInsight(**json.loads(response.text))
+    except Exception as e:
+        print(f"Error parsing Gemini insight response: {e}")
+        return PgInsight(
+            summary="Could not analyze the result.", points=[], followups=[]
+        )
+
+
+PROMPT_TEMPLATE_EXPLAIN = """
+You are a MongoDB expert. Explain, in one or two plain-English sentences, exactly what the following PyMongo query does — the collection, filters, sorting, limits, and any aggregation stages. Do not restate the code or add caveats.
+
+Query:
+{query}
+"""
+
+
+def explain_mongo_query(code: str, model: str = "gemini-2.5-flash"):
+    from models.schemas import ExplainQueryResponse
+
+    prompt = PROMPT_TEMPLATE_EXPLAIN.format(query=code)
+    try:
+        client = genai.Client()
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                thinking_config=thinking_config_for(model)
+            ),
+        )
+        text = (response.text or "").strip()
+    except Exception as e:
+        text = f"Could not generate an explanation: {e}"
+    return ExplainQueryResponse(explanation=text or "No explanation available.")

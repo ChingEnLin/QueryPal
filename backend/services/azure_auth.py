@@ -97,14 +97,32 @@ def _get_msal_app() -> msal.ConfidentialClientApplication:
     return _app
 
 
-def exchange_token_obo(user_token: str) -> str:
-    """Exchange user token for access token using On-Behalf-Of flow."""
+def exchange_token_obo(user_token: str, scope: Optional[str] = None) -> str:
+    """Exchange user token for an access token via the On-Behalf-Of flow.
+
+    Defaults to ARM_SCOPE (Cosmos/ARM discovery). Pass an explicit scope (e.g.
+    the OSS-RDBMS scope for PostgreSQL) to target another resource.
+    """
     app = _get_msal_app()
     result = app.acquire_token_on_behalf_of(
-        user_assertion=user_token, scopes=[ARM_SCOPE]
+        user_assertion=user_token, scopes=[scope or ARM_SCOPE]
     )
     if "access_token" not in result:
         raise Exception(f"OBO token exchange failed: {result}")
+    return result["access_token"]
+
+
+def get_app_token(scope: str) -> str:
+    """Acquire an app-only (client-credentials) token for `scope`.
+
+    Used for actions QueryPal performs as itself (the backend service principal)
+    rather than on behalf of a user — e.g. running PostgreSQL grant/revoke as the
+    SP that is a permanent PG Entra admin.
+    """
+    app = _get_msal_app()
+    result = app.acquire_token_for_client(scopes=[scope])
+    if "access_token" not in result:
+        raise Exception(f"App token acquisition failed: {result}")
     return result["access_token"]
 
 
