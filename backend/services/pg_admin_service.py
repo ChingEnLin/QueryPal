@@ -10,6 +10,7 @@ Grant creates an Entra LOGIN principal AND grants pg_read_all_data — the
 principal alone has no table privileges, so reads would otherwise fail. Read-only
 tool: no write/DDL privileges are ever granted.
 """
+
 from os import environ as env
 
 import psycopg2
@@ -101,14 +102,12 @@ def list_access(conn) -> list:
     Returns [{"email": str, "write": bool}].
     """
     with conn.cursor() as cur:
-        cur.execute(
-            """
+        cur.execute("""
             SELECT p.rolname,
                    pg_has_role(u.oid, 'pg_write_all_data', 'member')
             FROM pgaadauth_list_principals(false) p
             JOIN pg_roles u ON u.rolname = p.rolname
             WHERE p.principaltype = 'user'
               AND pg_has_role(u.oid, 'pg_read_all_data', 'member')
-            """
-        )
+            """)
         return [{"email": r[0], "write": bool(r[1])} for r in cur.fetchall()]

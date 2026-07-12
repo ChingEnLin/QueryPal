@@ -5,6 +5,7 @@ READ ONLY, so PostgreSQL itself rejects any write — no custom sandbox. Write
 and DDL statements are detected up front and returned for manual review
 instead of being executed (parity with the Cosmos Mongo write-guard).
 """
+
 import datetime
 import decimal
 import uuid

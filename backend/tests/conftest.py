@@ -8,29 +8,35 @@ import pytest
 # Python 3.7 compatibility: add .args/.kwargs properties to _Call class
 from unittest.mock import _Call
 
+
 class _ArgsDescriptor:
     """Descriptor to provide .args attribute for Python 3.7 compatibility."""
+
     def __get__(self, obj, objtype=None):
         if obj is None:
             return self
         return obj[0]
 
+
 class _KwargsDescriptor:
     """Descriptor to provide .kwargs attribute for Python 3.7 compatibility."""
+
     def __get__(self, obj, objtype=None):
         if obj is None:
             return self
         return obj[1]
 
-if not hasattr(_Call, 'args'):
+
+if not hasattr(_Call, "args"):
     _Call.args = _ArgsDescriptor()
-if not hasattr(_Call, 'kwargs'):
+if not hasattr(_Call, "kwargs"):
     _Call.kwargs = _KwargsDescriptor()
 
 try:
     from fastapi.testclient import TestClient
     from main import app
     import services.azure_auth as _azure_auth
+
     _main_loaded = True
 except (ImportError, ModuleNotFoundError):
     _main_loaded = False
@@ -39,6 +45,7 @@ except (ImportError, ModuleNotFoundError):
 
 
 if _main_loaded:
+
     @pytest.fixture
     def client():
         """Create a test client for the FastAPI app."""

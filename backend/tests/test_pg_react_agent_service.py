@@ -14,10 +14,13 @@ def test_read_query_runs_and_validates():
     conn = MagicMock()
     gen = _gen_response("```sql\nSELECT id FROM patients\n```")
     eval_resp = _gen_response('{"is_valid": true, "critique": "looks good"}')
-    with patch.object(
-        agent.client.models, "generate_content", side_effect=[gen, eval_resp]
-    ), patch.object(
-        agent, "execute_sql", return_value={"columns": ["id"], "rows": [[1]]}
+    with (
+        patch.object(
+            agent.client.models, "generate_content", side_effect=[gen, eval_resp]
+        ),
+        patch.object(
+            agent, "execute_sql", return_value={"columns": ["id"], "rows": [[1]]}
+        ),
     ):
         out = agent.run_sql_generator(
             user_input="list patient ids",
@@ -36,9 +39,12 @@ def test_write_sql_is_not_executed():
     conn = MagicMock()
     gen = _gen_response("UPDATE patients SET name='x'")
     eval_resp = _gen_response('{"is_valid": true, "critique": "write looks correct"}')
-    with patch.object(
-        agent.client.models, "generate_content", side_effect=[gen, eval_resp]
-    ), patch.object(agent, "execute_sql") as exec_sql:
+    with (
+        patch.object(
+            agent.client.models, "generate_content", side_effect=[gen, eval_resp]
+        ),
+        patch.object(agent, "execute_sql") as exec_sql,
+    ):
         out = agent.run_sql_generator(
             user_input="rename patient",
             database="appdb",

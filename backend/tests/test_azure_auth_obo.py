@@ -21,9 +21,7 @@ def test_obo_uses_explicit_scope_when_given():
         )
     assert result == "pgtok"
     _, kwargs = fake_app.acquire_token_on_behalf_of.call_args
-    assert kwargs["scopes"] == [
-        "https://ossrdbms-aad.database.windows.net/.default"
-    ]
+    assert kwargs["scopes"] == ["https://ossrdbms-aad.database.windows.net/.default"]
 
 
 def test_obo_raises_when_no_access_token():

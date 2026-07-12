@@ -4,6 +4,7 @@ caller's Entra identity (OBO token as password). No stored secrets.
 Distinct from services/pg_connection.py, which connects to QueryPal's own
 metadata store on GCP Cloud SQL.
 """
+
 import psycopg2
 
 

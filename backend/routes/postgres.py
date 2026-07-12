@@ -84,7 +84,9 @@ def _admin_connect(authorization: str, server_id: str):
     except Exception as e:
         logging.getLogger("querypal.postgres").warning(
             "SP-admin PG connect failed for %s (login=%s): %r",
-            fqdn, os.environ.get("PG_ADMIN_LOGIN"), e
+            fqdn,
+            os.environ.get("PG_ADMIN_LOGIN"),
+            e,
         )
         raise HTTPException(
             status_code=502, detail=f"PostgreSQL connection failed: {e}"
@@ -212,8 +214,15 @@ def rows(
     try:
         allowed, pk_cols = _row_meta(conn, data.schema_name, data.table)
         return pg_row_service.browse(
-            conn, data.schema_name, data.table, allowed, pk_cols,
-            data.filters, data.sort, data.limit, data.offset,
+            conn,
+            data.schema_name,
+            data.table,
+            allowed,
+            pk_cols,
+            data.filters,
+            data.sort,
+            data.limit,
+            data.offset,
         )
     except RowError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -239,14 +248,19 @@ def insert_row(
     try:
         allowed, _ = _row_meta(conn, data.schema_name, data.table)
         result = pg_row_service.insert_row(
-            conn, data.schema_name, data.table, allowed, data.values,
+            conn,
+            data.schema_name,
+            data.table,
+            allowed,
+            data.values,
         )
     except RowError as e:
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         conn.close()
     log_write_operation(
-        user_email=caller.email, operation="insert",
+        user_email=caller.email,
+        operation="insert",
         database_name=data.server_id,
         collection_name=f"{data.schema_name}.{data.table}",
         after_data=_row_dict(result) or data.values,
@@ -264,7 +278,13 @@ def update_row(
     try:
         allowed, pk_cols = _row_meta(conn, data.schema_name, data.table)
         result = pg_row_service.update_row(
-            conn, data.schema_name, data.table, allowed, pk_cols, data.pk, data.values,
+            conn,
+            data.schema_name,
+            data.table,
+            allowed,
+            pk_cols,
+            data.pk,
+            data.values,
         )
     except NoPrimaryKey as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -273,7 +293,8 @@ def update_row(
     finally:
         conn.close()
     log_write_operation(
-        user_email=caller.email, operation="update",
+        user_email=caller.email,
+        operation="update",
         database_name=data.server_id,
         collection_name=f"{data.schema_name}.{data.table}",
         document_id=str(data.pk),
@@ -293,7 +314,11 @@ def delete_row(
     try:
         _, pk_cols = _row_meta(conn, data.schema_name, data.table)
         result = pg_row_service.delete_row(
-            conn, data.schema_name, data.table, pk_cols, data.pk,
+            conn,
+            data.schema_name,
+            data.table,
+            pk_cols,
+            data.pk,
         )
     except NoPrimaryKey as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -302,10 +327,12 @@ def delete_row(
     finally:
         conn.close()
     log_write_operation(
-        user_email=caller.email, operation="delete",
+        user_email=caller.email,
+        operation="delete",
         database_name=data.server_id,
         collection_name=f"{data.schema_name}.{data.table}",
-        document_id=str(data.pk), before_data=_row_dict(result),
+        document_id=str(data.pk),
+        before_data=_row_dict(result),
     )
     return result
 

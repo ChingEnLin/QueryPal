@@ -4,6 +4,7 @@ Same generate -> execute -> evaluate -> loop shape as react_agent_service.py
 (Cosmos), with SQL-specific prompts. Reads are test-executed inside a READ ONLY
 transaction; writes/DDL skip execution and are returned for manual review.
 """
+
 import json
 import logging
 from typing import Any, TypedDict

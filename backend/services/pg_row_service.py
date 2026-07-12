@@ -5,6 +5,7 @@ is validated against the target table's real catalog columns and every value is
 bound as a parameter, closing both the identifier and value injection paths.
 Writes require a primary key so UPDATE/DELETE target exactly one row.
 """
+
 from typing import Iterable, List, Tuple
 
 import psycopg2
@@ -21,8 +22,14 @@ class NoPrimaryKey(RowError):
 
 
 _OPS = {
-    "=": "=", "!=": "<>", "<": "<", ">": ">", "<=": "<=", ">=": ">=",
-    "like": "LIKE", "ilike": "ILIKE",
+    "=": "=",
+    "!=": "<>",
+    "<": "<",
+    ">": ">",
+    "<=": "<=",
+    ">=": ">=",
+    "like": "LIKE",
+    "ilike": "ILIKE",
 }
 _NULLARY = {"isnull": "IS NULL", "isnotnull": "IS NOT NULL"}
 

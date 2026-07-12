@@ -195,13 +195,27 @@ def _fake_conn_with_rows(monkeypatch, patched, rows, columns, total=None):
     """Patch get_table_info + a cursor that returns `rows`/`columns`, and for
     browse a trailing count fetchone()."""
     monkeypatch.setattr(
-        patched, "get_table_info",
+        patched,
+        "get_table_info",
         lambda conn, schema, table: {
             "columns": [
-                {"name": "id", "type": "integer", "nullable": False, "pk": True, "fk": None},
-                {"name": "status", "type": "text", "nullable": True, "pk": False, "fk": None},
+                {
+                    "name": "id",
+                    "type": "integer",
+                    "nullable": False,
+                    "pk": True,
+                    "fk": None,
+                },
+                {
+                    "name": "status",
+                    "type": "text",
+                    "nullable": True,
+                    "pk": False,
+                    "fk": None,
+                },
             ],
-            "indexes": [], "sample": {"columns": [], "rows": []},
+            "indexes": [],
+            "sample": {"columns": [], "rows": []},
         },
     )
     cur = MagicMock()
@@ -218,10 +232,19 @@ def _fake_conn_with_rows(monkeypatch, patched, rows, columns, total=None):
 
 def test_rows_browse(client, mock_auth_header, patched, monkeypatch):
     _fake_conn_with_rows(monkeypatch, patched, [[1, "paid"]], ["id", "status"], total=1)
-    resp = client.post("/postgres/rows", headers=mock_auth_header, json={
-        "server_id": SERVERS[0]["id"], "database": "app", "schema_name": "public",
-        "table": "orders", "filters": [], "limit": 50, "offset": 0,
-    })
+    resp = client.post(
+        "/postgres/rows",
+        headers=mock_auth_header,
+        json={
+            "server_id": SERVERS[0]["id"],
+            "database": "app",
+            "schema_name": "public",
+            "table": "orders",
+            "filters": [],
+            "limit": 50,
+            "offset": 0,
+        },
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["columns"] == ["id", "status"]
@@ -232,64 +255,117 @@ def test_rows_browse(client, mock_auth_header, patched, monkeypatch):
 def test_insert_row(client, mock_auth_header, patched, monkeypatch):
     _fake_conn_with_rows(monkeypatch, patched, [[2, "new"]], ["id", "status"])
     monkeypatch.setattr(patched, "log_write_operation", lambda **k: None)
-    resp = client.post("/postgres/row", headers=mock_auth_header, json={
-        "server_id": SERVERS[0]["id"], "database": "app", "schema_name": "public",
-        "table": "orders", "values": {"status": "new"},
-    })
+    resp = client.post(
+        "/postgres/row",
+        headers=mock_auth_header,
+        json={
+            "server_id": SERVERS[0]["id"],
+            "database": "app",
+            "schema_name": "public",
+            "table": "orders",
+            "values": {"status": "new"},
+        },
+    )
     assert resp.status_code == 200
     assert resp.json()["rows"] == [[2, "new"]]
 
 
 def test_delete_row_without_pk_is_409(client, mock_auth_header, patched, monkeypatch):
     monkeypatch.setattr(
-        patched, "get_table_info",
+        patched,
+        "get_table_info",
         lambda conn, schema, table: {
-            "columns": [{"name": "id", "type": "integer", "nullable": True,
-                         "pk": False, "fk": None}],
-            "indexes": [], "sample": {"columns": [], "rows": []},
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "integer",
+                    "nullable": True,
+                    "pk": False,
+                    "fk": None,
+                }
+            ],
+            "indexes": [],
+            "sample": {"columns": [], "rows": []},
         },
     )
     monkeypatch.setattr(patched, "get_pg_connection", lambda *a, **k: MagicMock())
-    resp = client.request("DELETE", "/postgres/row", headers=mock_auth_header, json={
-        "server_id": SERVERS[0]["id"], "database": "app", "schema_name": "public",
-        "table": "logs", "pk": {"id": 1},
-    })
+    resp = client.request(
+        "DELETE",
+        "/postgres/row",
+        headers=mock_auth_header,
+        json={
+            "server_id": SERVERS[0]["id"],
+            "database": "app",
+            "schema_name": "public",
+            "table": "logs",
+            "pk": {"id": 1},
+        },
+    )
     assert resp.status_code == 409
 
 
 def test_rows_unknown_table_is_404(client, mock_auth_header, patched, monkeypatch):
     monkeypatch.setattr(
-        patched, "get_table_info",
+        patched,
+        "get_table_info",
         lambda conn, schema, table: {
-            "columns": [], "indexes": [], "sample": {"columns": [], "rows": []},
+            "columns": [],
+            "indexes": [],
+            "sample": {"columns": [], "rows": []},
         },
     )
     monkeypatch.setattr(patched, "get_pg_connection", lambda *a, **k: MagicMock())
-    resp = client.post("/postgres/rows", headers=mock_auth_header, json={
-        "server_id": SERVERS[0]["id"], "database": "app", "schema_name": "public",
-        "table": "nonexistent", "filters": [], "limit": 50, "offset": 0,
-    })
+    resp = client.post(
+        "/postgres/rows",
+        headers=mock_auth_header,
+        json={
+            "server_id": SERVERS[0]["id"],
+            "database": "app",
+            "schema_name": "public",
+            "table": "nonexistent",
+            "filters": [],
+            "limit": 50,
+            "offset": 0,
+        },
+    )
     assert resp.status_code == 404
 
 
-def test_writes_are_audited_with_row_data(client, mock_auth_header, patched, monkeypatch):
+def test_writes_are_audited_with_row_data(
+    client, mock_auth_header, patched, monkeypatch
+):
     calls = []
     monkeypatch.setattr(patched, "log_write_operation", lambda **k: calls.append(k))
 
     # insert -> records the RETURNING row as after_data
     _fake_conn_with_rows(monkeypatch, patched, [[2, "new"]], ["id", "status"])
-    r = client.post("/postgres/row", headers=mock_auth_header, json={
-        "server_id": SERVERS[0]["id"], "database": "app", "schema_name": "public",
-        "table": "orders", "values": {"status": "new"},
-    })
+    r = client.post(
+        "/postgres/row",
+        headers=mock_auth_header,
+        json={
+            "server_id": SERVERS[0]["id"],
+            "database": "app",
+            "schema_name": "public",
+            "table": "orders",
+            "values": {"status": "new"},
+        },
+    )
     assert r.status_code == 200
 
     # delete -> records the deleted row as before_data
     _fake_conn_with_rows(monkeypatch, patched, [[7, "old"]], ["id", "status"])
-    r = client.request("DELETE", "/postgres/row", headers=mock_auth_header, json={
-        "server_id": SERVERS[0]["id"], "database": "app", "schema_name": "public",
-        "table": "orders", "pk": {"id": 7},
-    })
+    r = client.request(
+        "DELETE",
+        "/postgres/row",
+        headers=mock_auth_header,
+        json={
+            "server_id": SERVERS[0]["id"],
+            "database": "app",
+            "schema_name": "public",
+            "table": "orders",
+            "pk": {"id": 7},
+        },
+    )
     assert r.status_code == 200
 
     ops = {c["operation"]: c for c in calls}
