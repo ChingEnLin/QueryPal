@@ -73,6 +73,9 @@ jobs:
             ARM_SCOPE=https://management.azure.com/.default
             DB_NAME=querypal
             DB_UNIX_SOCKET=/cloudsql/${{ env.PROJECT_ID }}:${{ env.REGION }}:querypal-db
+            # Entra DISPLAY NAME of the backend SP (a permanent PG Entra admin).
+            # Used for SP-admin grant/revoke/list; PG rejects appId/objectId here.
+            PG_ADMIN_LOGIN=Mongo AI Assistant
           # Sensitive values are read directly from Secret Manager at runtime.
           # Secret must exist before first deploy (created by terraform/secrets.tf).
           secrets: |
