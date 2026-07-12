@@ -1,3 +1,9 @@
+## [2.15.2](https://github.com/ChingEnLin/QueryPal/compare/v2.15.1...v2.15.2) (2026-07-12)
+
+### Bug Fixes
+
+* **ci:** remove inline comments from Cloud Run flags/env_vars blocks ([a84f0ce](https://github.com/ChingEnLin/QueryPal/commit/a84f0ce2c7e7b801e729bacb3d86199e88e176db))
+
 ## [2.15.1](https://github.com/ChingEnLin/QueryPal/compare/v2.15.0...v2.15.1) (2026-07-12)
 
 ### Bug Fixes
