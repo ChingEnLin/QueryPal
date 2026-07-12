@@ -1,3 +1,86 @@
+## [2.15.0](https://github.com/ChingEnLin/QueryPal/compare/v2.14.1...v2.15.0) (2026-07-12)
+
+### Features
+
+* **admin:** friendly IP-whitelist guidance on PG connection timeout ([a0481dd](https://github.com/ChingEnLin/QueryPal/commit/a0481dd41049fa0edcca78ecc01bb7f66aef03a6))
+* **admin:** roles/permissions reference + disable Workspace/Audit nav on /admin ([f2ec3c9](https://github.com/ChingEnLin/QueryPal/commit/f2ec3c9e8a3661056288f74a3c6879867226a3b5))
+* **admin:** self-service PostgreSQL write access (opt-in) ([c759478](https://github.com/ChingEnLin/QueryPal/commit/c75947879fde8cadf509f354b00c51067c87bc00))
+* **audit:** centered loader during initial audit log load ([07c4e38](https://github.com/ChingEnLin/QueryPal/commit/07c4e385cdb61d55519622188356c61dfd06bd38))
+* **audit:** engine-aware Ask tab example question ([209845c](https://github.com/ChingEnLin/QueryPal/commit/209845c42b682fa0b07ea3c27bae5d1f452880c7))
+* **audit:** row/table terminology in PG audit view ([942fea3](https://github.com/ChingEnLin/QueryPal/commit/942fea3d9874cc107116394e29add93ffc9afbda))
+* **auth:** allow explicit OBO scope for PostgreSQL token exchange ([b5d9593](https://github.com/ChingEnLin/QueryPal/commit/b5d95933915d60ea5844f6133ba83c8df2a9dbd3))
+* **explorer:** parse array-column input + type hints in row drawer ([dfc84be](https://github.com/ChingEnLin/QueryPal/commit/dfc84bebf2596f75001fbc4e59560b298973ae8d))
+* **nav+audit:** move Admin to profile menu, add Audit to sidebar, enrich PG audit ([f1e8a5a](https://github.com/ChingEnLin/QueryPal/commit/f1e8a5a965c0230dd4b35c2c2b5b06ac432894db))
+* **pg:** /postgres routes for discovery, explore, nl2sql, execute ([1db9d96](https://github.com/ChingEnLin/QueryPal/commit/1db9d96a05b4bc706df847f9cee81122a3c34b1b))
+* **pg:** admin grant/revoke/list PostgreSQL access endpoints ([58335e7](https://github.com/ChingEnLin/QueryPal/commit/58335e78e510f0c99d5ddf5f4afdfcdbf3803577))
+* **pg:** ARM discovery and schema introspection ([a252e7b](https://github.com/ChingEnLin/QueryPal/commit/a252e7bf7ff14e789f778763741044064b5affe7))
+* **pg:** enable PostgreSQL in hub catalog + engine filter + coherent cards ([3ca2bb8](https://github.com/ChingEnLin/QueryPal/commit/3ca2bb893fddb5d1c80029a8216ee17eb7de9db7))
+* **pg:** Entra OBO psycopg2 connection helper ([fefac87](https://github.com/ChingEnLin/QueryPal/commit/fefac871ff506deaf441c92cb1ffbbe21da96773))
+* **pg:** frontend dbService client for /postgres endpoints ([de3af13](https://github.com/ChingEnLin/QueryPal/commit/de3af137085eaed32d5640ec222f4d7139a785ef))
+* **pg:** grant/revoke PostgreSQL access from the admin page ([eaafb28](https://github.com/ChingEnLin/QueryPal/commit/eaafb28fb4a84d81326fa2a989f8699e6d5945ca))
+* **pg:** multi-table NL2SQL grounding + workspace UX fixes ([931e588](https://github.com/ChingEnLin/QueryPal/commit/931e588ef16cc02b3ddb5b20f83f3c8478d0d915))
+* **pg:** NL->SQL ReAct agent with read-only test execution ([0ebe868](https://github.com/ChingEnLin/QueryPal/commit/0ebe8681e3ac6f79173842e15017ceda63df344a))
+* **pg:** PostgreSQL explorer page reachable from hub and sidebar ([d66e92f](https://github.com/ChingEnLin/QueryPal/commit/d66e92f5235898d92523f7aab77b3ba34112dfe7))
+* **pg:** read-only SQL execution and write/DDL detection ([ea4775c](https://github.com/ChingEnLin/QueryPal/commit/ea4775c78556178fcf41c6d0acc40ceab3b79dc9))
+* **pg:** rebuild Query Workspace to match design + sidebar-native nav ([d1d7b72](https://github.com/ChingEnLin/QueryPal/commit/d1d7b7259ccfa0452592d24263791a5f2446c713))
+* **pg:** request schemas for /postgres routes ([991a13f](https://github.com/ChingEnLin/QueryPal/commit/991a13f844de9381fba037f54080fe0cf15c7fbf))
+* **pg:** saved queries for the PostgreSQL workspace ([efe69df](https://github.com/ChingEnLin/QueryPal/commit/efe69dfce9dea6421251d5bb3d77040e3418f991))
+* **postgres:** add row browse + CRUD routes behind Entra-OBO connection ([cd20653](https://github.com/ChingEnLin/QueryPal/commit/cd20653191d6e493b690071b7c4950aaf564ebf7))
+* **postgres:** data explorer page with grid, filters, and row CRUD drawer ([e593a7d](https://github.com/ChingEnLin/QueryPal/commit/e593a7dbfa36e7f773f57c2aad01fefa889b73b5))
+* **postgres:** dbService client fns for row browse + CRUD ([0d4c464](https://github.com/ChingEnLin/QueryPal/commit/0d4c464ad58b693ebf79f2c460f9f2a7ab4a9bf4))
+* **postgres:** loading spinners for db switch + schema load ([df4b6a1](https://github.com/ChingEnLin/QueryPal/commit/df4b6a12d56c0120b95f3852f187ba21bf1a5f5f))
+* **postgres:** move Database section to the bottom of the connection chip dropdown ([ee4cf22](https://github.com/ChingEnLin/QueryPal/commit/ee4cf22b4aab901674e5844fd309f31e8c579f24))
+* **postgres:** parameterized row CRUD SQL builders ([d3d2a8c](https://github.com/ChingEnLin/QueryPal/commit/d3d2a8c0f897ee5877e1ddf12cc48dfe72d2d247))
+* **postgres:** request schemas for row CRUD endpoints ([f71840f](https://github.com/ChingEnLin/QueryPal/commit/f71840f06d4937f8b291fc87b3bbd7965eca8531))
+* **postgres:** switch database from the connection chip on the data explorer ([9a1733e](https://github.com/ChingEnLin/QueryPal/commit/9a1733eb5f68b92af7bd52a8ee41e60599394467))
+* **query:** always produce three actionable analyze follow-ups ([3b105bb](https://github.com/ChingEnLin/QueryPal/commit/3b105bb2295be00888ed7bd537852177530cf4f7))
+* **query:** analyze returns suggested follow-up questions ([4b31ef4](https://github.com/ChingEnLin/QueryPal/commit/4b31ef4677360909c8bb8d6323f4b85f701d49bc))
+* **query:** clickable analyze follow-up prompts ([6adffe9](https://github.com/ChingEnLin/QueryPal/commit/6adffe95265380ad37151c152b596a4ee241ba9c))
+* **query:** Explain button with plain-English explanation card ([2272349](https://github.com/ChingEnLin/QueryPal/commit/22723498bdcbf3f4d072ead0355339b619472624))
+* **query:** plain-English explain endpoint for Mongo queries ([e692131](https://github.com/ChingEnLin/QueryPal/commit/e6921315d84700e553bb0fc6a8e3dee9f07bef89))
+* **query:** Query collection template button ([0c49d06](https://github.com/ChingEnLin/QueryPal/commit/0c49d06a4278ca739e76a55f35b8cffde4f8e25e))
+* **query:** surface ReAct agent verdict in both workspaces ([d4295e6](https://github.com/ChingEnLin/QueryPal/commit/d4295e63d84ab3db11a035ed505ab3c317768fc2))
+
+### Bug Fixes
+
+* **audit:** allow null document_id in /recent response ([d2ae15a](https://github.com/ChingEnLin/QueryPal/commit/d2ae15a6185f819f4cf530f8158ac014189a051f))
+* **audit:** don't crash on non-CRUD ops in PG audit log ([32349d1](https://github.com/ChingEnLin/QueryPal/commit/32349d14f3d92875cdee9250e7832cbe9e3297a9))
+* **audit:** keep PG connection context on the audit page ([c5d8823](https://github.com/ChingEnLin/QueryPal/commit/c5d8823bb16214a4baa85637328f7e4a8f50a1bf))
+* **audit:** make PG->Cosmos account switch immediate + reliable ([5a4fdd8](https://github.com/ChingEnLin/QueryPal/commit/5a4fdd82cc60631065453a20218222ed28d6b65c))
+* **audit:** record real before/after diff for PG row updates ([dedd54d](https://github.com/ChingEnLin/QueryPal/commit/dedd54dce622e84eea3941d955fb86b06ba2ae24))
+* **audit:** switching PG audit -> Cosmos account stays on the audit page ([8d2868e](https://github.com/ChingEnLin/QueryPal/commit/8d2868e39b6fc12fc095d74ef368faa9a0525e2c))
+* **cors:** allow PATCH so row updates aren't blocked ([c3bc77e](https://github.com/ChingEnLin/QueryPal/commit/c3bc77ee96add0f750bc2f2a6e979ade63e8bb65))
+* **explorer:** let users enter primary key on insert (natural keys) ([bc60a60](https://github.com/ChingEnLin/QueryPal/commit/bc60a6044a71f5fd16c749a18d6914ce08f0d95d))
+* **explorer:** surface row-write errors + omit blank fields on insert ([54730a3](https://github.com/ChingEnLin/QueryPal/commit/54730a33b81936f2e83f01db84a0e062da325dd8))
+* **hub:** consistent Workspace naming + Explorer button on PG card ([7d852c2](https://github.com/ChingEnLin/QueryPal/commit/7d852c2bc86962140fe2f548e279ae24e0c06ed1))
+* **pg:** accurate access status + graceful table sample on no read grant ([2045841](https://github.com/ChingEnLin/QueryPal/commit/2045841473676af688c5af6d676363be927d12aa))
+* **pg:** fail fast on unreachable server with connect_timeout ([19db881](https://github.com/ChingEnLin/QueryPal/commit/19db881e72a7fe2a40dcc58d048dd4d729d3ebf1))
+* **pg:** show unknown row estimate as em dash, not -1 ([a80b82a](https://github.com/ChingEnLin/QueryPal/commit/a80b82a9ca59dd644f5ea7732024b38a0a601e2e))
+* **pg:** stabilize admin page PostgreSQL column UX ([6a38bf8](https://github.com/ChingEnLin/QueryPal/commit/6a38bf8849ed41686ec14344cd285d679296e2f0))
+* **postgres:** parse JSON column values in row drawer on save ([8dddb06](https://github.com/ChingEnLin/QueryPal/commit/8dddb06bf0001d6a2d61c7445c88b91c0135e993))
+* **postgres:** surface DB constraint errors as HTTP 400 in row CRUD ([af76b9d](https://github.com/ChingEnLin/QueryPal/commit/af76b9d2e040f473a81c2f3c9ae18134f1927e2d))
+* **query:** attach auth token to analyze + debug requests ([593f0da](https://github.com/ChingEnLin/QueryPal/commit/593f0da82b223cd620b2233a6c288118e10a7d94))
+* **sidebar:** keep PG Explorer nav enabled without a database ([7cc2a0f](https://github.com/ChingEnLin/QueryPal/commit/7cc2a0f65d92511e2037412af84b1d41344989b3))
+
+### Maintenance
+
+* **admin:** surface + log PostgreSQL access-connection errors ([30946ba](https://github.com/ChingEnLin/QueryPal/commit/30946ba72a9b310b48967cb04cb1a8eafb140a08))
+
+### Documentation
+
+* **postgres:** document _qt caller-validation contract ([dcdf289](https://github.com/ChingEnLin/QueryPal/commit/dcdf2892fdcdab5e6409cf482ba2763a9f33d314))
+* **postgres:** spec PG data explorer + rename workspace page ([2215a34](https://github.com/ChingEnLin/QueryPal/commit/2215a3401b252586c03457693881355cd611a608))
+
+### Styling
+
+* **backend:** apply black formatting (CI check) ([74bfcbd](https://github.com/ChingEnLin/QueryPal/commit/74bfcbd9ef00a57493cdd70b2b959203a02d7db5))
+
+### Refactoring
+
+* **query:** align Cosmos Insights rail with PostgreSQL ([e3c9b4b](https://github.com/ChingEnLin/QueryPal/commit/e3c9b4be28f46f89e6230687407491681d8f4bfe))
+* **query:** move analysis insight + follow-ups to the Insights rail ([9ef862a](https://github.com/ChingEnLin/QueryPal/commit/9ef862a60c96972ff2c95bff356cb64304cee9b9))
+* **query:** move Analyze trigger to the Insights rail (PG parity) ([cf9a2ef](https://github.com/ChingEnLin/QueryPal/commit/cf9a2ef6e2fef6188c82f185e60abbe695c2b28c))
+
 ## [2.14.1](https://github.com/ChingEnLin/QueryPal/compare/v2.14.0...v2.14.1) (2026-06-22)
 
 ### Bug Fixes
