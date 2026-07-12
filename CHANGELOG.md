@@ -1,3 +1,11 @@
+## [2.15.1](https://github.com/ChingEnLin/QueryPal/compare/v2.15.0...v2.15.1) (2026-07-12)
+
+### Bug Fixes
+
+* **admin:** stop role & PG cells from wrapping in the users table ([940b277](https://github.com/ChingEnLin/QueryPal/commit/940b2773132cc4631897d27f5fbe6943ee6621db))
+* **ci:** backend Cloud Run egress all-traffic so PG exits via static IP ([85394f7](https://github.com/ChingEnLin/QueryPal/commit/85394f703b11e9774ba9978811f1e4f7afd8d32c))
+* **ci:** set PG_ADMIN_LOGIN so admin role-management can reach PG ([1fd79ec](https://github.com/ChingEnLin/QueryPal/commit/1fd79ecec09da613811ce9aa36f6aa4395ba1fe8))
+
 ## [2.15.0](https://github.com/ChingEnLin/QueryPal/compare/v2.14.1...v2.15.0) (2026-07-12)
 
 ### Features
