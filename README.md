@@ -56,9 +56,32 @@ QueryPal lets you query, explore, and manage **Azure Cosmos DB (MongoDB API)** u
 
 ## Quick Start
 
+First, fill in your environment:
+
 ```bash
 cp backend/.env.example backend/.env
-# Fill in backend/.env — see docs/DEVELOPMENT.md for all variables
+# Fill in backend/.env — Azure app creds, ARM_SCOPE, GEMINI_API_KEY are required.
+# DB_* are optional; leave blank to run without Postgres-backed features.
+```
+
+For the frontend, create `frontend/.env` with your local redirect URI (must be
+registered as a SPA redirect URI on the Azure app registration):
+
+```bash
+echo 'VITE_AZURE_REDIRECT_URI=http://localhost:5173/' > frontend/.env
+```
+
+Then pick one of the two workflows below.
+
+For dev without Azure, set `USE_MSAL_AUTH = false` in `frontend/app.config.ts` to use mock data (no backend or Azure needed).
+
+### Option A — Docker Compose (production-parity)
+
+Builds the deployable images (nginx-served frontend + uvicorn backend). Use this
+to verify what actually ships to Cloud Run. **There is no hot-reload — every code
+change requires `--build`.**
+
+```bash
 docker-compose up --build
 ```
 
@@ -66,7 +89,45 @@ docker-compose up --build
 - Backend API: http://localhost:8000
 - API docs: http://localhost:8000/docs
 
-For dev without Azure, set `USE_MSAL_AUTH = false` in `frontend/app.config.ts` to use mock data.
+The frontend's `VITE_*` values are baked in at build time via `build.args` in
+`docker-compose.yml`, not read from `frontend/.env`.
+
+### Option B — Hot-reload split workflow (day-to-day dev)
+
+Two terminals, each hot-reloading on save. This is the recommended loop for
+active development.
+
+```bash
+# Terminal 1 — backend (reads backend/.env)
+cd backend
+uvicorn main:app --reload --env-file .env
+
+# Terminal 2 — frontend (reads frontend/.env)
+cd frontend
+npm install
+npm run dev
+```
+
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+
+### Connecting to Postgres (Cloud SQL)
+
+Postgres-backed features (saved queries, audit trails, QueryArgus persistence,
+admin role management) need a connection to the Cloud SQL instance. Run the
+Cloud SQL Auth Proxy in a separate terminal:
+
+```bash
+cloud-sql-proxy \
+  --address 0.0.0.0 \
+  --credentials-file=/path/to/proxy-key.json \
+  <project>:<region>:<instance>
+```
+
+Then set the DB host in `backend/.env`:
+
+- **Hot-reload (Option B):** `DB_HOST=127.0.0.1` — the backend runs on your host, same as the proxy.
+- **Docker Compose (Option A):** `DB_HOST=host.docker.internal` — inside the container `127.0.0.1` is the container itself, so it must reach the proxy on the host via Docker's host alias. This also requires the proxy to bind `--address 0.0.0.0` (the default `127.0.0.1` won't accept connections from the container).
 
 ---
 
