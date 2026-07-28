@@ -14,6 +14,12 @@ from google.genai import types
 from langgraph.graph import StateGraph, END
 
 from services.gemini_service import extract_python_code, thinking_config_for
+from services.pg_react_sql_heuristics import (
+    _enrich_schema_context_from_db,
+    _heuristic_sql,
+    _normalize_categorical_literals,
+    _schema_context_has_columns,
+)
 from services.pg_query_service import execute_sql, is_write_sql
 
 # Configure logger
@@ -82,10 +88,23 @@ class _State(TypedDict, total=False):
 
 
 def _generate(state: _State):
+    schema_context = state["schema_context"]
+    if not _schema_context_has_columns(schema_context):
+        schema_context = _enrich_schema_context_from_db(state.get("conn"), schema_context)
+
+    heuristic_sql = _heuristic_sql(state["user_input"], schema_context)
+    if heuristic_sql:
+        heuristic_sql = _normalize_categorical_literals(heuristic_sql, schema_context)
+        return {
+            "generated_query": heuristic_sql,
+            "is_write_action": is_write_sql(heuristic_sql),
+            "iterations": state.get("iterations", 0) + 1,
+        }
+
     prompt = GENERATE_PROMPT.format(
         user_input=state["user_input"],
         database=state["database"],
-        schema_context=state["schema_context"],
+        schema_context=schema_context,
         previous_query=state.get("generated_query") or "None (first attempt).",
         evaluation=state.get("evaluation", "None"),
     )
@@ -102,6 +121,7 @@ def _generate(state: _State):
         sql = extract_python_code(resp.text).strip()
     except Exception as e:
         sql = f"-- Error generating query: {e}"
+    sql = _normalize_categorical_literals(sql, schema_context)
     return {
         "generated_query": sql,
         "is_write_action": is_write_sql(sql),
