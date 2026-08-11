@@ -18,10 +18,13 @@ def test_read_query_runs_and_validates():
     conn = MagicMock()
     gen = _gen_response("```sql\nSELECT id FROM users\n```")
     eval_resp = _eval_ok_response()
-    with patch.object(
-        agent.client.models, "generate_content", side_effect=[gen, eval_resp]
-    ), patch.object(
-        agent, "execute_sql", return_value={"columns": ["id"], "rows": [[1]]}
+    with (
+        patch.object(
+            agent.client.models, "generate_content", side_effect=[gen, eval_resp]
+        ),
+        patch.object(
+            agent, "execute_sql", return_value={"columns": ["id"], "rows": [[1]]}
+        ),
     ):
         out = agent.run_sql_generator(
             user_input="list user ids",
@@ -41,9 +44,12 @@ def test_write_sql_is_not_executed():
     conn = MagicMock()
     gen = _gen_response("UPDATE users SET name='x'")
     eval_resp = _eval_ok_response()
-    with patch.object(
-        agent.client.models, "generate_content", side_effect=[gen, eval_resp]
-    ), patch.object(agent, "execute_sql") as exec_sql:
+    with (
+        patch.object(
+            agent.client.models, "generate_content", side_effect=[gen, eval_resp]
+        ),
+        patch.object(agent, "execute_sql") as exec_sql,
+    ):
         out = agent.run_sql_generator(
             user_input="rename user",
             database="appdb",
@@ -72,9 +78,12 @@ def _schema_context_accounts_orders():
 
 def test_heuristic_generates_status_years_and_promo_filter_with_join():
     conn = MagicMock()
-    with patch.object(
-        agent.client.models, "generate_content", return_value=_eval_ok_response()
-    ), patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}):
+    with (
+        patch.object(
+            agent.client.models, "generate_content", return_value=_eval_ok_response()
+        ),
+        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+    ):
         out = agent.run_sql_generator(
             user_input=(
                 "Give me all active accounts with tenure years greater than 40 "
@@ -100,9 +109,12 @@ def test_heuristic_generates_status_years_and_promo_filter_with_join():
 def test_heuristic_generates_single_table_filter_without_alias():
     conn = MagicMock()
     schema_context = "public.accounts\n  - account_id integer\n  - account_status text"
-    with patch.object(
-        agent.client.models, "generate_content", return_value=_eval_ok_response()
-    ), patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}):
+    with (
+        patch.object(
+            agent.client.models, "generate_content", return_value=_eval_ok_response()
+        ),
+        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+    ):
         out = agent.run_sql_generator(
             user_input="Give me all active accounts",
             database="appdb",
@@ -112,9 +124,7 @@ def test_heuristic_generates_single_table_filter_without_alias():
         )
 
     assert out["generated_code"] == (
-        "SELECT *\n"
-        "FROM public.accounts\n"
-        "WHERE account_status = 'active';"
+        "SELECT *\n" "FROM public.accounts\n" "WHERE account_status = 'active';"
     )
 
 
@@ -129,9 +139,12 @@ def test_heuristic_generates_item_category_and_amount_projection():
         "  - total_amount numeric"
     )
 
-    with patch.object(
-        agent.client.models, "generate_content", return_value=_eval_ok_response()
-    ), patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}):
+    with (
+        patch.object(
+            agent.client.models, "generate_content", return_value=_eval_ok_response()
+        ),
+        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+    ):
         out = agent.run_sql_generator(
             user_input='Give me all orders with the item category "hardware". Also show the total amount.',
             database="appdb",
@@ -165,11 +178,15 @@ def test_table_only_schema_context_gets_enriched_before_generation():
         "  - tenure_years integer"
     )
 
-    with patch.object(
-        agent, "_enrich_schema_context_from_db", return_value=enriched_context
-    ), patch.object(
-        agent.client.models, "generate_content", return_value=_eval_ok_response()
-    ), patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}):
+    with (
+        patch.object(
+            agent, "_enrich_schema_context_from_db", return_value=enriched_context
+        ),
+        patch.object(
+            agent.client.models, "generate_content", return_value=_eval_ok_response()
+        ),
+        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+    ):
         out = agent.run_sql_generator(
             user_input="Give me all active accounts that are older than 50 years.",
             database="appdb",
@@ -193,9 +210,12 @@ def test_llm_fallback_normalizes_string_like_column_literals():
     gen = _gen_response("SELECT * FROM public.orders WHERE order_status = 'Paid'")
     eval_resp = _eval_ok_response()
 
-    with patch.object(
-        agent.client.models, "generate_content", side_effect=[gen, eval_resp]
-    ), patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}):
+    with (
+        patch.object(
+            agent.client.models, "generate_content", side_effect=[gen, eval_resp]
+        ),
+        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+    ):
         out = agent.run_sql_generator(
             user_input="show all orders",
             database="appdb",
@@ -204,7 +224,10 @@ def test_llm_fallback_normalizes_string_like_column_literals():
             max_iterations=1,
         )
 
-    assert out["generated_code"] == "SELECT * FROM public.orders WHERE order_status = 'paid'"
+    assert (
+        out["generated_code"]
+        == "SELECT * FROM public.orders WHERE order_status = 'paid'"
+    )
 
 
 def test_llm_fallback_does_not_normalize_non_string_columns():
@@ -212,9 +235,12 @@ def test_llm_fallback_does_not_normalize_non_string_columns():
     gen = _gen_response("SELECT * FROM public.orders WHERE total_amount = 'Paid'")
     eval_resp = _eval_ok_response()
 
-    with patch.object(
-        agent.client.models, "generate_content", side_effect=[gen, eval_resp]
-    ), patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}):
+    with (
+        patch.object(
+            agent.client.models, "generate_content", side_effect=[gen, eval_resp]
+        ),
+        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+    ):
         out = agent.run_sql_generator(
             user_input="show all orders",
             database="appdb",
@@ -223,7 +249,10 @@ def test_llm_fallback_does_not_normalize_non_string_columns():
             max_iterations=1,
         )
 
-    assert out["generated_code"] == "SELECT * FROM public.orders WHERE total_amount = 'Paid'"
+    assert (
+        out["generated_code"]
+        == "SELECT * FROM public.orders WHERE total_amount = 'Paid'"
+    )
 
 
 def test_llm_fallback_skips_normalization_without_type_metadata():
@@ -232,11 +261,15 @@ def test_llm_fallback_skips_normalization_without_type_metadata():
     eval_resp = _eval_ok_response()
     table_only_context = "public.orders"
 
-    with patch.object(
-        agent, "_enrich_schema_context_from_db", return_value=table_only_context
-    ), patch.object(
-        agent.client.models, "generate_content", side_effect=[gen, eval_resp]
-    ), patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}):
+    with (
+        patch.object(
+            agent, "_enrich_schema_context_from_db", return_value=table_only_context
+        ),
+        patch.object(
+            agent.client.models, "generate_content", side_effect=[gen, eval_resp]
+        ),
+        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+    ):
         out = agent.run_sql_generator(
             user_input="show all orders",
             database="appdb",
@@ -245,4 +278,41 @@ def test_llm_fallback_skips_normalization_without_type_metadata():
             max_iterations=1,
         )
 
-    assert out["generated_code"] == "SELECT * FROM public.orders WHERE order_status = 'Paid'"
+    assert (
+        out["generated_code"]
+        == "SELECT * FROM public.orders WHERE order_status = 'Paid'"
+    )
+
+
+def test_invalid_heuristic_retries_with_llm_generation():
+    conn = MagicMock()
+    heuristic_context = _schema_context_accounts_orders()
+    eval_invalid = _gen_response(
+        '{"is_valid": false, "critique": "Use accounts only; remove orders join."}'
+    )
+    llm_retry = _gen_response("SELECT * FROM public.accounts WHERE account_status = 'active';")
+    eval_valid = _eval_ok_response()
+
+    with (
+        patch.object(
+            agent.client.models,
+            "generate_content",
+            side_effect=[eval_invalid, llm_retry, eval_valid],
+        ) as gen_content,
+        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+    ):
+        out = agent.run_sql_generator(
+            user_input="Give me all active accounts with tenure years greater than 40 and have a promo code.",
+            database="appdb",
+            schema_context=heuristic_context,
+            conn=conn,
+            max_iterations=2,
+        )
+
+    assert out["generated_code"] == "SELECT * FROM public.accounts WHERE account_status = 'active';"
+    assert out["is_valid"] is True
+    assert gen_content.call_count == 3
+
+    retry_prompt = gen_content.call_args_list[1].kwargs["contents"]
+    assert "Use accounts only; remove orders join." in retry_prompt
+    assert "JOIN public.orders AS b" in retry_prompt

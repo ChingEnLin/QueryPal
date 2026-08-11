@@ -90,7 +90,9 @@ class _State(TypedDict, total=False):
 def _generate(state: _State):
     schema_context = state["schema_context"]
     if not _schema_context_has_columns(schema_context):
-        schema_context = _enrich_schema_context_from_db(state.get("conn"), schema_context)
+        schema_context = _enrich_schema_context_from_db(
+            state.get("conn"), schema_context
+        )
 
     heuristic_sql = _heuristic_sql(state["user_input"], schema_context)
     if heuristic_sql:

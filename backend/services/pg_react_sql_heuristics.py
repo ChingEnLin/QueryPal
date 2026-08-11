@@ -3,7 +3,6 @@
 import re
 from typing import Any
 
-
 _NUMERIC_INTENT_HINTS: list[tuple[str, tuple[str, ...], int]] = [
     (r"\b(older|younger|years old|year old)\b", ("age", "years", "year"), 2),
     (
@@ -188,7 +187,9 @@ def _parse_schema_context(schema_context: str) -> dict[str, dict[str, Any]]:
     return tables
 
 
-def _resolve_table_name(ref_table: str, tables: dict[str, dict[str, Any]]) -> str | None:
+def _resolve_table_name(
+    ref_table: str, tables: dict[str, dict[str, Any]]
+) -> str | None:
     for full, meta in tables.items():
         if meta["table"].lower() == ref_table.lower():
             return full
@@ -218,7 +219,9 @@ def _pick_root_table(
         for variant in _table_variants(tname):
             m = re.search(rf"\b{re.escape(variant)}\b", text)
             if m:
-                first_idx = m.start() if first_idx is None else min(first_idx, m.start())
+                first_idx = (
+                    m.start() if first_idx is None else min(first_idx, m.start())
+                )
         if first_idx is not None:
             cand = (first_idx, full)
             if best is None or cand < best:
@@ -229,7 +232,9 @@ def _pick_root_table(
     return sorted(candidate_tables)[0]
 
 
-def _build_join_edges(tables: dict[str, dict[str, Any]]) -> dict[str, list[dict[str, str]]]:
+def _build_join_edges(
+    tables: dict[str, dict[str, Any]],
+) -> dict[str, list[dict[str, str]]]:
     graph: dict[str, list[dict[str, str]]] = {k: [] for k in tables.keys()}
     for source, meta in tables.items():
         for fk in meta.get("fks", []):
@@ -293,7 +298,9 @@ def _find_mentioned_tables(text: str, tables: dict[str, dict[str, Any]]) -> list
         for variant in _table_variants(meta["table"]):
             m = re.search(rf"\b{re.escape(variant)}\b", text)
             if m:
-                first_idx = m.start() if first_idx is None else min(first_idx, m.start())
+                first_idx = (
+                    m.start() if first_idx is None else min(first_idx, m.start())
+                )
         if first_idx is not None:
             hits.append((first_idx, full))
     hits.sort(key=lambda x: (x[0], x[1]))
@@ -423,10 +430,22 @@ def _extract_numeric_filter(text: str, variant: str, column: str) -> str | None:
         (rf"\b{re.escape(variant)}\s*>\s*{num}\b", ">"),
         (rf"\b{re.escape(variant)}\s*<\s*{num}\b", "<"),
         (rf"\b{re.escape(variant)}\s*=\s*{num}\b", "="),
-        (rf"\b{re.escape(variant)}\s+(?:is\s+)?(?:greater than|more than|over|above)\s+{num}\b", ">"),
-        (rf"\b{re.escape(variant)}\s+(?:is\s+)?(?:at least|greater than or equal to|not less than)\s+{num}\b", ">="),
-        (rf"\b{re.escape(variant)}\s+(?:is\s+)?(?:less than|under|below)\s+{num}\b", "<"),
-        (rf"\b{re.escape(variant)}\s+(?:is\s+)?(?:at most|less than or equal to|not more than)\s+{num}\b", "<="),
+        (
+            rf"\b{re.escape(variant)}\s+(?:is\s+)?(?:greater than|more than|over|above)\s+{num}\b",
+            ">",
+        ),
+        (
+            rf"\b{re.escape(variant)}\s+(?:is\s+)?(?:at least|greater than or equal to|not less than)\s+{num}\b",
+            ">=",
+        ),
+        (
+            rf"\b{re.escape(variant)}\s+(?:is\s+)?(?:less than|under|below)\s+{num}\b",
+            "<",
+        ),
+        (
+            rf"\b{re.escape(variant)}\s+(?:is\s+)?(?:at most|less than or equal to|not more than)\s+{num}\b",
+            "<=",
+        ),
     ]
     for pat, op in patterns:
         m = re.search(pat, text)
@@ -559,7 +578,9 @@ def _choose_numeric_candidate(
     return best[2], best[3]
 
 
-def _extract_filters(user_input: str, tables: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
+def _extract_filters(
+    user_input: str, tables: dict[str, dict[str, Any]]
+) -> list[dict[str, str]]:
     text = user_input.lower()
     filters: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
@@ -602,10 +623,19 @@ def _extract_filters(user_input: str, tables: dict[str, dict[str, Any]]) -> list
 
     if not any(re.search(r"\b(>|<|>=|<=|between)\b", f["sql"]) for f in filters):
         generic_patterns = [
-            (r"\b(?:greater than|more than|over|above|older than)\s+(-?\d+(?:\.\d+)?)\b", ">"),
-            (r"\b(?:at least|greater than or equal to|not less than)\s+(-?\d+(?:\.\d+)?)\b", ">="),
+            (
+                r"\b(?:greater than|more than|over|above|older than)\s+(-?\d+(?:\.\d+)?)\b",
+                ">",
+            ),
+            (
+                r"\b(?:at least|greater than or equal to|not less than)\s+(-?\d+(?:\.\d+)?)\b",
+                ">=",
+            ),
             (r"\b(?:less than|under|below|younger than)\s+(-?\d+(?:\.\d+)?)\b", "<"),
-            (r"\b(?:at most|less than or equal to|not more than)\s+(-?\d+(?:\.\d+)?)\b", "<="),
+            (
+                r"\b(?:at most|less than or equal to|not more than)\s+(-?\d+(?:\.\d+)?)\b",
+                "<=",
+            ),
         ]
         numeric_like_cols = []
         for table_name, meta in tables.items():
@@ -734,7 +764,11 @@ def _heuristic_sql(user_input: str, schema_context: str) -> str | None:
             cols = []
             seen_cols = set()
             for table_name, col in requested_columns:
-                if table_name == root and col in tables[root]["columns"] and col not in seen_cols:
+                if (
+                    table_name == root
+                    and col in tables[root]["columns"]
+                    and col not in seen_cols
+                ):
                     cols.append(col)
                     seen_cols.add(col)
             if cols:
@@ -776,7 +810,9 @@ def _heuristic_sql(user_input: str, schema_context: str) -> str | None:
     frontier = [root]
     while frontier:
         cur = frontier.pop(0)
-        children = sorted([t for t, (p, _) in parent.items() if p == cur and t in included])
+        children = sorted(
+            [t for t, (p, _) in parent.items() if p == cur and t in included]
+        )
         for ch in children:
             if ch not in ordered:
                 ordered.append(ch)
