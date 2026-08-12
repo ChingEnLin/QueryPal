@@ -14,6 +14,11 @@ from google.genai import types
 from langgraph.graph import StateGraph, END
 
 from services.gemini_service import extract_python_code, thinking_config_for
+from services.pg_sql_utils import (
+    _enrich_schema_context_from_db,
+    _normalize_categorical_literals,
+    _schema_context_has_columns,
+)
 from services.pg_query_service import execute_sql, is_write_sql
 
 # Configure logger
@@ -47,6 +52,9 @@ Rules:
 2. Prefer a SELECT. Include a LIMIT (<= 50) unless the user asks for all rows.
 3. Use only schema-listed tables/columns; never invent names.
 4. Standard PostgreSQL syntax. Use schema-qualified names when given.
+5. When joining tables, follow FK relationships listed in the schema; alias tables a, b, c… in join order.
+6. Interpret "with a <column>" as column IS NOT NULL; "without a <column>" as column IS NULL.
+7. Normalize string literal values to lowercase (e.g. status = 'active', not 'Active').
 """
 
 EVALUATE_PROMPT = """You are a database QA reviewer for a generated PostgreSQL query.
@@ -82,10 +90,16 @@ class _State(TypedDict, total=False):
 
 
 def _generate(state: _State):
+    schema_context = state["schema_context"]
+    if not _schema_context_has_columns(schema_context):
+        schema_context = _enrich_schema_context_from_db(
+            state.get("conn"), schema_context
+        )
+
     prompt = GENERATE_PROMPT.format(
         user_input=state["user_input"],
         database=state["database"],
-        schema_context=state["schema_context"],
+        schema_context=schema_context,
         previous_query=state.get("generated_query") or "None (first attempt).",
         evaluation=state.get("evaluation", "None"),
     )
@@ -102,6 +116,7 @@ def _generate(state: _State):
         sql = extract_python_code(resp.text).strip()
     except Exception as e:
         sql = f"-- Error generating query: {e}"
+    sql = _normalize_categorical_literals(sql, schema_context)
     return {
         "generated_query": sql,
         "is_write_action": is_write_sql(sql),
