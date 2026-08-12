@@ -76,95 +76,6 @@ def _schema_context_accounts_orders():
     )
 
 
-def test_heuristic_generates_status_years_and_promo_filter_with_join():
-    conn = MagicMock()
-    with (
-        patch.object(
-            agent.client.models, "generate_content", return_value=_eval_ok_response()
-        ),
-        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
-    ):
-        out = agent.run_sql_generator(
-            user_input=(
-                "Give me all active accounts with tenure years greater than 40 "
-                "and have a promo code."
-            ),
-            database="appdb",
-            schema_context=_schema_context_accounts_orders(),
-            conn=conn,
-            max_iterations=1,
-        )
-
-    assert out["generated_code"] == (
-        "SELECT *\n"
-        "FROM public.accounts AS a\n"
-        "JOIN public.orders AS b\n"
-        "  ON a.account_id = b.account_id\n"
-        "WHERE a.account_status = 'active'\n"
-        "  AND b.tenure_years > 40\n"
-        "  AND b.promo_code IS NOT NULL;"
-    )
-
-
-def test_heuristic_generates_single_table_filter_without_alias():
-    conn = MagicMock()
-    schema_context = "public.accounts\n  - account_id integer\n  - account_status text"
-    with (
-        patch.object(
-            agent.client.models, "generate_content", return_value=_eval_ok_response()
-        ),
-        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
-    ):
-        out = agent.run_sql_generator(
-            user_input="Give me all active accounts",
-            database="appdb",
-            schema_context=schema_context,
-            conn=conn,
-            max_iterations=1,
-        )
-
-    assert out["generated_code"] == (
-        "SELECT *\n" "FROM public.accounts\n" "WHERE account_status = 'active';"
-    )
-
-
-def test_heuristic_generates_item_category_and_amount_projection():
-    conn = MagicMock()
-    schema_context = (
-        "public.order_items\n"
-        "  - order_id integer [PK, NOT NULL, FK -> orders.order_id]\n"
-        "  - item_category text\n\n"
-        "public.orders\n"
-        "  - order_id integer [PK, NOT NULL]\n"
-        "  - total_amount numeric"
-    )
-
-    with (
-        patch.object(
-            agent.client.models, "generate_content", return_value=_eval_ok_response()
-        ),
-        patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
-    ):
-        out = agent.run_sql_generator(
-            user_input='Give me all orders with the item category "hardware". Also show the total amount.',
-            database="appdb",
-            schema_context=schema_context,
-            conn=conn,
-            max_iterations=1,
-        )
-
-    assert out["generated_code"] == (
-        "SELECT\n"
-        "  b.order_id,\n"
-        "  b.item_category,\n"
-        "  a.total_amount\n"
-        "FROM public.orders AS a\n"
-        "JOIN public.order_items AS b\n"
-        "  ON a.order_id = b.order_id\n"
-        "WHERE b.item_category = 'hardware';"
-    )
-
-
 def test_table_only_schema_context_gets_enriched_before_generation():
     conn = MagicMock()
     table_only_context = "public.accounts\npublic.orders"
@@ -181,13 +92,18 @@ def test_table_only_schema_context_gets_enriched_before_generation():
     with (
         patch.object(
             agent, "_enrich_schema_context_from_db", return_value=enriched_context
-        ),
+        ) as enrich,
         patch.object(
-            agent.client.models, "generate_content", return_value=_eval_ok_response()
+            agent.client.models,
+            "generate_content",
+            side_effect=[
+                _gen_response("SELECT * FROM public.accounts"),
+                _eval_ok_response(),
+            ],
         ),
         patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
     ):
-        out = agent.run_sql_generator(
+        agent.run_sql_generator(
             user_input="Give me all active accounts that are older than 50 years.",
             database="appdb",
             schema_context=table_only_context,
@@ -195,14 +111,7 @@ def test_table_only_schema_context_gets_enriched_before_generation():
             max_iterations=1,
         )
 
-    assert out["generated_code"] == (
-        "SELECT *\n"
-        "FROM public.accounts AS a\n"
-        "JOIN public.orders AS b\n"
-        "  ON a.account_id = b.account_id\n"
-        "WHERE a.account_status = 'active'\n"
-        "  AND b.tenure_years > 50;"
-    )
+    enrich.assert_called_once()
 
 
 def test_llm_fallback_normalizes_string_like_column_literals():
@@ -284,35 +193,40 @@ def test_llm_fallback_skips_normalization_without_type_metadata():
     )
 
 
-def test_invalid_heuristic_retries_with_llm_generation():
+def test_invalid_query_retries_with_llm_on_second_iteration():
     conn = MagicMock()
-    heuristic_context = _schema_context_accounts_orders()
+    first_sql = "SELECT * FROM public.accounts AS a JOIN public.orders AS b ON a.account_id = b.account_id WHERE a.account_status = 'active';"
     eval_invalid = _gen_response(
         '{"is_valid": false, "critique": "Use accounts only; remove orders join."}'
     )
-    llm_retry = _gen_response("SELECT * FROM public.accounts WHERE account_status = 'active';")
+    retry_sql = "SELECT * FROM public.accounts WHERE account_status = 'active';"
     eval_valid = _eval_ok_response()
 
     with (
         patch.object(
             agent.client.models,
             "generate_content",
-            side_effect=[eval_invalid, llm_retry, eval_valid],
+            side_effect=[
+                _gen_response(f"```sql\n{first_sql}\n```"),
+                eval_invalid,
+                _gen_response(retry_sql),
+                eval_valid,
+            ],
         ) as gen_content,
         patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
     ):
         out = agent.run_sql_generator(
             user_input="Give me all active accounts with tenure years greater than 40 and have a promo code.",
             database="appdb",
-            schema_context=heuristic_context,
+            schema_context=_schema_context_accounts_orders(),
             conn=conn,
             max_iterations=2,
         )
 
-    assert out["generated_code"] == "SELECT * FROM public.accounts WHERE account_status = 'active';"
+    assert out["generated_code"] == retry_sql
     assert out["is_valid"] is True
-    assert gen_content.call_count == 3
+    assert gen_content.call_count == 4
 
-    retry_prompt = gen_content.call_args_list[1].kwargs["contents"]
+    retry_prompt = gen_content.call_args_list[2].kwargs["contents"]
     assert "Use accounts only; remove orders join." in retry_prompt
-    assert "JOIN public.orders AS b" in retry_prompt
+    assert "JOIN public.orders" in retry_prompt
