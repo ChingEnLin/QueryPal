@@ -1,3 +1,9 @@
+## [2.15.3](https://github.com/ChingEnLin/QueryPal/compare/v2.15.2...v2.15.3) (2026-08-12)
+
+### Documentation
+
+* document local dev workflows and fix compose for local run ([93576a1](https://github.com/ChingEnLin/QueryPal/commit/93576a14bde30b0d4ac89cc91cc50583c592b172))
+
 ## [2.15.2](https://github.com/ChingEnLin/QueryPal/compare/v2.15.1...v2.15.2) (2026-07-12)
 
 ### Bug Fixes
