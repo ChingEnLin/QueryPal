@@ -128,7 +128,7 @@ def test_llm_fallback_normalizes_string_like_column_literals():
         out = agent.run_sql_generator(
             user_input="show all orders",
             database="appdb",
-            schema_context="public.orders",
+            schema_context="public.orders\n  - order_status text",
             conn=conn,
             max_iterations=1,
         )
