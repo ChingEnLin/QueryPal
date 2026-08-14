@@ -19,7 +19,7 @@ const cellText = (v: unknown): string =>
 const KeyBadge: React.FC<{ col: Column }> = ({ col }) =>
   col.pk ? <span className="ws-keybadge pk" title="Primary key">PK</span>
     : col.fk ? <span className="ws-keybadge fk" title={`Foreign key -> ${col.fk}`}>FK</span>
-      : <span className="ws-keybadge none">·</span>;
+      : null;
 
 const PostgresDataExplorerPage: React.FC = () => {
   const { serverId: rawServerId, database: rawDatabase } = useParams<{ serverId: string; database?: string }>();
@@ -282,7 +282,7 @@ const PostgresDataExplorerPage: React.FC = () => {
                           if (meta?.fk) return (
                             <td key={j} onClick={(e) => { e.stopPropagation(); onFkClick(meta.fk!, v); }} style={{ color: 'var(--accent)', cursor: 'pointer' }} title={`Go to ${meta.fk}`}>{cellText(v)} →</td>
                           );
-                          if (typeof v === 'number') return <td key={j} style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{v}</td>;
+                          if (typeof v === 'number') return <td key={j} style={{ fontVariantNumeric: 'tabular-nums' }}>{v}</td>;
                           const text = cellText(v);
                           return <td key={j} title={text} style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }}>{text}</td>;
                         })}
