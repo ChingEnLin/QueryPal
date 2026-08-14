@@ -38,7 +38,7 @@ const PostgresDataExplorerPage: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<PgFilter[]>([]);
-  const [sort, setSort] = useState<PgSort | null>(null);
+  const [sort, setSort] = useState<PgSort | null | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [schemaLoading, setSchemaLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,17 +80,22 @@ const PostgresDataExplorerPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [serverId, database, navigate]);
 
-  // On table change: load column metadata, reset view.
+  // On table change: load column metadata and set default sort before first fetch.
   useEffect(() => {
     if (!activeSchema || !activeTable) return;
     let cancelled = false;
     (async () => {
       try {
         setError(null);
+        setRows([]);
+        setColNames([]);
         const token = await getAuthenticatedToken();
         const info = await getPgTableInfo(token, serverId, database, activeSchema, activeTable) as { columns: Column[] };
         if (cancelled) return;
         setColumns(info.columns);
+        // Default sort by PK
+        const pkCols = info.columns.filter(c => c.pk);
+        setSort(pkCols.length > 0 ? { column: pkCols[0].name, dir: 'asc' } : null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -99,7 +104,7 @@ const PostgresDataExplorerPage: React.FC = () => {
   }, [activeKey, serverId, database]);
 
   const fetchRows = useCallback(async () => {
-    if (!activeSchema || !activeTable) return;
+    if (!activeSchema || !activeTable || sort === undefined) return; // wait for default sort
     try {
       setLoading(true); setError(null);
       const token = await getAuthenticatedToken();
@@ -120,7 +125,7 @@ const PostgresDataExplorerPage: React.FC = () => {
   // Manual table pick clears the view; the column-load effect only loads
   // columns (it must NOT reset filters, or FK-nav filters below get clobbered).
   const onPgTableSelect = useCallback((s: string, t: string) => {
-    setActiveKey(`${s}.${t}`); setFilters([]); setSort(null); setPage(0);
+    setActiveKey(`${s}.${t}`); setFilters([]); setSort(undefined); setPage(0);
   }, []);
 
   // Connection-chip database switcher (parity with the Cosmos explorer). DbInfo
@@ -271,8 +276,8 @@ const PostgresDataExplorerPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {loading && <tr><td colSpan={colNames.length + 1} style={{ padding: 16, color: 'var(--muted)' }}>Loading…</td></tr>}
-                    {!loading && rows.length === 0 && <tr><td colSpan={colNames.length + 1} style={{ padding: 16, color: 'var(--muted)' }}>No rows.</td></tr>}
+                    {(loading || sort === undefined) && <tr><td colSpan={colNames.length + 1} style={{ padding: 16, color: 'var(--muted)' }}>Loading…</td></tr>}
+                    {!loading && sort !== undefined && rows.length === 0 && <tr><td colSpan={colNames.length + 1} style={{ padding: 16, color: 'var(--muted)' }}>No rows.</td></tr>}
                     {!loading && rows.map((r, i) => (
                       <tr key={i} style={{ cursor: 'pointer' }} onClick={() => setDrawer({ mode: 'edit', row: rowToObject(r as unknown[]) })}>
                         <td className="rownum">{from + i}</td>
