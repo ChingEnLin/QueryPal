@@ -118,17 +118,19 @@ def test_llm_fallback_normalizes_string_like_column_literals():
     conn = MagicMock()
     gen = _gen_response("SELECT * FROM public.orders WHERE order_status = 'Paid'")
     eval_resp = _eval_ok_response()
+    schema = "public.orders\n  - order_status text"
 
     with (
         patch.object(
             agent.client.models, "generate_content", side_effect=[gen, eval_resp]
         ),
         patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+        patch.object(agent, "_enrich_schema_context_from_db", return_value=schema),
     ):
         out = agent.run_sql_generator(
             user_input="show all orders",
             database="appdb",
-            schema_context="public.orders\n  - order_status text",
+            schema_context=schema,
             conn=conn,
             max_iterations=1,
         )
@@ -143,17 +145,19 @@ def test_llm_fallback_does_not_normalize_non_string_columns():
     conn = MagicMock()
     gen = _gen_response("SELECT * FROM public.orders WHERE total_amount = 'Paid'")
     eval_resp = _eval_ok_response()
+    schema = "public.orders\n  - total_amount numeric"
 
     with (
         patch.object(
             agent.client.models, "generate_content", side_effect=[gen, eval_resp]
         ),
         patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+        patch.object(agent, "_enrich_schema_context_from_db", return_value=schema),
     ):
         out = agent.run_sql_generator(
             user_input="show all orders",
             database="appdb",
-            schema_context="public.orders\n  - total_amount numeric",
+            schema_context=schema,
             conn=conn,
             max_iterations=1,
         )
