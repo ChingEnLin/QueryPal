@@ -89,11 +89,17 @@ def _enrich_schema_context_from_db(conn, schema_context: str) -> str:
                     lines.append(col_line)
                 blocks.append("\n".join(lines))
     except Exception as e:
-        logger.warning("schema enrichment failed (%s), falling back to raw context: %s", type(e).__name__, e)
+        logger.warning(
+            "schema enrichment failed (%s), falling back to raw context: %s",
+            type(e).__name__,
+            e,
+        )
         return schema_context
 
     enriched = "\n\n".join(blocks) if blocks else schema_context
-    logger.info("schema enrichment complete: %d table(s), %d chars", len(blocks), len(enriched))
+    logger.info(
+        "schema enrichment complete: %d table(s), %d chars", len(blocks), len(enriched)
+    )
     return enriched
 
 
@@ -450,11 +456,7 @@ def _validate_sql_columns(sql: str, schema_context: str) -> str | None:
     suggestions = _suggest_columns_for_unknown_refs(
         unknown_unique, all_columns, value_hints, sql_no_comments
     )
-    suggestion_text = (
-        " " + " ".join(suggestions)
-        if suggestions
-        else ""
-    )
+    suggestion_text = " " + " ".join(suggestions) if suggestions else ""
 
     return (
         f"The SQL references column(s) not present in any schema-listed table: {unknown_unique}. "
@@ -682,7 +684,9 @@ def _normalize_categorical_literals(sql: str, schema_context: str) -> str:
             if any(t in dtype for t in ("json", "[]", "array")):
                 return match.group(0)
         else:
-            guessed = _choose_best_column_candidate(col, literal, all_columns, value_hints)
+            guessed = _choose_best_column_candidate(
+                col, literal, all_columns, value_hints
+            )
             if not guessed:
                 return match.group(0)
             target_col = guessed

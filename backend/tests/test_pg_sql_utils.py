@@ -49,11 +49,16 @@ def test_validate_sql_operators_flags_any_on_scalar_user_defined_column():
 
 def test_normalize_categorical_literals_snake_cases_enum_like_values():
     schema_context = "public.acquisition\n  - heart_failure user-defined"
-    sql = "SELECT * FROM public.acquisition AS a WHERE a.heart_failure = 'Heart Failure'"
+    sql = (
+        "SELECT * FROM public.acquisition AS a WHERE a.heart_failure = 'Heart Failure'"
+    )
 
     normalized = _normalize_categorical_literals(sql, schema_context)
 
-    assert normalized == "SELECT * FROM public.acquisition AS a WHERE a.heart_failure = 'heart_failure'"
+    assert (
+        normalized
+        == "SELECT * FROM public.acquisition AS a WHERE a.heart_failure = 'heart_failure'"
+    )
 
 
 def test_normalize_categorical_literals_snake_cases_enum_like_values_in_any():
@@ -62,7 +67,10 @@ def test_normalize_categorical_literals_snake_cases_enum_like_values_in_any():
 
     normalized = _normalize_categorical_literals(sql, schema_context)
 
-    assert normalized == "SELECT a.human_id FROM public.acquisition AS a WHERE 'heart_failure' = ANY (a.pathology) LIMIT 50"
+    assert (
+        normalized
+        == "SELECT a.human_id FROM public.acquisition AS a WHERE 'heart_failure' = ANY (a.pathology) LIMIT 50"
+    )
 
 
 def test_normalize_categorical_literals_rewrites_unknown_json_bucket_to_enum_column():
@@ -100,7 +108,9 @@ def test_normalize_categorical_literals_rewrites_array_contains_to_any_membershi
 
 
 def test_normalize_categorical_literals_prefers_hinted_value_format_for_scalar_enum():
-    schema_context = "public.acquisition\n  - modality user-defined -- values: 'CT', 'MR'"
+    schema_context = (
+        "public.acquisition\n  - modality user-defined -- values: 'CT', 'MR'"
+    )
     sql = "SELECT * FROM public.acquisition AS a WHERE a.modality = 'ct'"
 
     normalized = _normalize_categorical_literals(sql, schema_context)

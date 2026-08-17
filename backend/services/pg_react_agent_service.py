@@ -98,7 +98,9 @@ def _generate(state: _State):
     schema_context = state["schema_context"]
     # Always enrich on the first call to add sample values; on retries the
     # enriched schema (with values hints) is already in state.
-    if state.get("iterations", 0) == 0 or not _schema_context_has_columns(schema_context):
+    if state.get("iterations", 0) == 0 or not _schema_context_has_columns(
+        schema_context
+    ):
         schema_context = _enrich_schema_context_from_db(
             state.get("conn"), schema_context
         )

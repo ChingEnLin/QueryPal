@@ -285,4 +285,3 @@ def test_hallucinated_table_names_are_caught_and_corrected():
     assert "public.patients" in retry_prompt
     assert "public.diagnoses" in retry_prompt
     assert "patient_pathology" in retry_prompt
-
