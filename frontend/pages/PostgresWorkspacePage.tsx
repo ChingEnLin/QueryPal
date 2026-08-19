@@ -240,7 +240,7 @@ const ResultsGrid: React.FC<{ columns: string[]; rows: any[][] }> = ({ columns, 
           <td className="rownum">{i + 1}</td>
           {r.map((v, j) => {
             if (v === null || v === undefined) return <td key={j} className="null">NULL</td>;
-            if (typeof v === 'number') return <td key={j} style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{v}</td>;
+            if (typeof v === 'number') return <td key={j} style={{ fontVariantNumeric: 'tabular-nums' }}>{v}</td>;
             const text = cellText(v);
             return <td key={j} title={text} style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }}>{text}</td>;
           })}

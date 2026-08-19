@@ -325,11 +325,11 @@ html.dark {
 
 /* results grid */
 .ws-grid { width: 100%; border-collapse: collapse; }
-.ws-grid thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); text-align: left; padding: 7px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 500; white-space: nowrap; border-bottom: 1px solid var(--border); }
-.ws-grid tbody td { padding: 6px 12px; font-family: var(--font-mono); font-size: 11.5px; border-bottom: 1px solid var(--border); white-space: nowrap; color: var(--fg); }
+.ws-grid thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); text-align: center; padding: 7px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 500; white-space: nowrap; border-bottom: 1px solid var(--border); }
+.ws-grid tbody td { padding: 6px 12px; font-family: var(--font-mono); font-size: 11.5px; border-bottom: 1px solid var(--border); white-space: nowrap; color: var(--fg); text-align: center; }
 .ws-grid tbody tr:hover td { background: var(--soft); }
 .ws-grid tbody tr:last-child td { border-bottom: none; }
-.ws-grid .rownum { color: var(--muted); text-align: right; width: 34px; user-select: none; }
+.ws-grid .rownum { color: var(--muted); text-align: center; width: 34px; user-select: none; }
 .ws-grid .null { color: var(--muted); font-style: italic; }
 
 /* query plan */
