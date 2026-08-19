@@ -2,6 +2,7 @@
 
 import logging
 import re
+import difflib
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -35,10 +36,20 @@ _TEXT_SAMPLE_TYPES = frozenset(
 )
 # Maximum distinct values to include as hints; columns with more are skipped
 _MAX_SAMPLE_VALUES = 20
+# Cap on rows scanned per column when sampling distinct values, to bound the
+# cost of probing unindexed text columns on wide/large schemas
+_SAMPLE_SCAN_ROW_CAP = 5000
 
 
-def _enrich_schema_context_from_db(conn, schema_context: str) -> str:
-    """Build detailed schema context using information_schema for listed tables."""
+def _enrich_schema_context_from_db(
+    conn, schema_context: str, failed_flag: list[bool] | None = None
+) -> str:
+    """Build detailed schema context using information_schema for listed tables.
+
+    When enrichment raises and falls back to the raw context, ``failed_flag``
+    (if provided) is appended with True so callers can avoid retrying the
+    (expensive) enrichment on every subsequent iteration.
+    """
     refs = _extract_table_refs(schema_context)
     if not refs:
         return schema_context
@@ -94,6 +105,8 @@ def _enrich_schema_context_from_db(conn, schema_context: str) -> str:
             type(e).__name__,
             e,
         )
+        if failed_flag is not None:
+            failed_flag.append(True)
         return schema_context
 
     enriched = "\n\n".join(blocks) if blocks else schema_context
@@ -108,18 +121,24 @@ def _sample_values_hint(conn, schema: str, table: str, col: str) -> str:
 
     Opens its own cursor per probe. On non-autocommit connections a failed query
     aborts the transaction, so we rollback to keep the enrichment loop running.
+    Distinct-values are sampled from a capped subset of rows (not the whole
+    table) so an unindexed column doesn't force a full scan on every call.
     """
     try:
         with conn.cursor() as cur:
             cur.execute(
-                f'SELECT DISTINCT "{col}" FROM "{schema}"."{table}" '
-                f'WHERE "{col}" IS NOT NULL LIMIT %s',
-                (_MAX_SAMPLE_VALUES + 1,),
+                f'SELECT DISTINCT "{col}" FROM ('
+                f'  SELECT "{col}" FROM "{schema}"."{table}" '
+                f'  WHERE "{col}" IS NOT NULL LIMIT %s'
+                f") sample LIMIT %s",
+                (_SAMPLE_SCAN_ROW_CAP, _MAX_SAMPLE_VALUES + 1),
             )
             vals = [str(r[0]) for r in cur.fetchall()]
         if len(vals) > _MAX_SAMPLE_VALUES:
             return ""
-        vals_str = ", ".join(f"'{v}'" for v in sorted(vals))
+        vals_str = ", ".join(
+            f"'{v.replace(chr(39), chr(39) * 2)}'" for v in sorted(vals)
+        )
         return f" -- values: {vals_str}"
     except Exception:
         if not getattr(conn, "autocommit", True):
@@ -244,7 +263,8 @@ def _extract_values_from_schema_line(line: str) -> set[str]:
     m = re.search(r"--\s*(?:values|enum-values)\s*:\s*(.+)$", line, re.IGNORECASE)
     if not m:
         return set()
-    raw_values = re.findall(r"'([^']*)'", m.group(1))
+    raw_values = re.findall(r"'((?:[^']|'')*)'", m.group(1))
+    raw_values = [v.replace("''", "'") for v in raw_values]
     return {v.strip().lower() for v in raw_values if v.strip()}
 
 
@@ -253,7 +273,8 @@ def _extract_raw_values_from_schema_line(line: str) -> list[str]:
     m = re.search(r"--\s*(?:values|enum-values)\s*:\s*(.+)$", line, re.IGNORECASE)
     if not m:
         return []
-    return [v.strip() for v in re.findall(r"'([^']*)'", m.group(1)) if v.strip()]
+    raw_values = re.findall(r"'((?:[^']|'')*)'", m.group(1))
+    return [v.replace("''", "'").strip() for v in raw_values if v.strip()]
 
 
 def _tokenize_ident(text: str) -> set[str]:
@@ -391,7 +412,7 @@ def _validate_sql_references(sql: str, schema_context: str) -> str | None:
 
     sql_no_comments = re.sub(r"--[^\n]*", "", sql)
     table_matches = re.findall(
-        r"(?:FROM|JOIN)\s+([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)?)",
+        r"(?:FROM|JOIN)\s+(?:LATERAL\s+)?([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)?)",
         sql_no_comments,
         re.IGNORECASE,
     )
