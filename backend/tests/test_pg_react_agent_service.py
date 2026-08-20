@@ -118,17 +118,19 @@ def test_llm_fallback_normalizes_string_like_column_literals():
     conn = MagicMock()
     gen = _gen_response("SELECT * FROM public.orders WHERE order_status = 'Paid'")
     eval_resp = _eval_ok_response()
+    schema = "public.orders\n  - order_status text"
 
     with (
         patch.object(
             agent.client.models, "generate_content", side_effect=[gen, eval_resp]
         ),
         patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+        patch.object(agent, "_enrich_schema_context_from_db", return_value=schema),
     ):
         out = agent.run_sql_generator(
             user_input="show all orders",
             database="appdb",
-            schema_context="public.orders\n  - order_status text",
+            schema_context=schema,
             conn=conn,
             max_iterations=1,
         )
@@ -143,17 +145,19 @@ def test_llm_fallback_does_not_normalize_non_string_columns():
     conn = MagicMock()
     gen = _gen_response("SELECT * FROM public.orders WHERE total_amount = 'Paid'")
     eval_resp = _eval_ok_response()
+    schema = "public.orders\n  - total_amount numeric"
 
     with (
         patch.object(
             agent.client.models, "generate_content", side_effect=[gen, eval_resp]
         ),
         patch.object(agent, "execute_sql", return_value={"columns": [], "rows": []}),
+        patch.object(agent, "_enrich_schema_context_from_db", return_value=schema),
     ):
         out = agent.run_sql_generator(
             user_input="show all orders",
             database="appdb",
-            schema_context="public.orders\n  - total_amount numeric",
+            schema_context=schema,
             conn=conn,
             max_iterations=1,
         )
@@ -230,3 +234,66 @@ def test_invalid_query_retries_with_llm_on_second_iteration():
     retry_prompt = gen_content.call_args_list[2].kwargs["contents"]
     assert "Use accounts only; remove orders join." in retry_prompt
     assert "JOIN public.orders" in retry_prompt
+
+
+def test_hallucinated_table_names_are_caught_and_corrected():
+    """When execution fails, _evaluate short-circuits with a schema-aware
+    correction instead of spending an LLM evaluator call on the raw driver error."""
+    conn = MagicMock()
+    schema_context = (
+        "public.patients\n"
+        "  - patient_id integer [PK, NOT NULL]\n"
+        "  - name text\n\n"
+        "public.diagnoses\n"
+        "  - diagnosis_id integer [PK, NOT NULL]\n"
+        "  - patient_id integer [FK -> patients.patient_id]\n"
+        "  - diagnosis_name text"
+    )
+    hallucinated_sql = (
+        "SELECT a.* FROM patient AS a "
+        "JOIN patient_pathology AS b ON a.patient_id = b.patient_id "
+        "JOIN pathology AS c ON b.pathology_id = c.pathology_id "
+        "WHERE c.pathology_name = 'heart failure' LIMIT 50"
+    )
+    corrected_sql = (
+        "SELECT a.* FROM public.patients AS a "
+        "JOIN public.diagnoses AS b ON a.patient_id = b.patient_id "
+        "WHERE b.diagnosis_name = 'heart failure' LIMIT 50"
+    )
+
+    with (
+        patch.object(
+            agent.client.models,
+            "generate_content",
+            side_effect=[
+                _gen_response(hallucinated_sql),
+                _gen_response(corrected_sql),
+                _eval_ok_response(),
+            ],
+        ) as gen_content,
+        patch.object(
+            agent,
+            "execute_sql",
+            side_effect=[
+                {"error": 'relation "patient" does not exist'},
+                {"columns": [], "rows": []},
+            ],
+        ),
+    ):
+        out = agent.run_sql_generator(
+            user_input="Show me all patients with a heart failure pathology.",
+            database="appdb",
+            schema_context=schema_context,
+            conn=conn,
+            max_iterations=3,
+        )
+
+    assert out["is_valid"] is True
+    assert out["generated_code"] == corrected_sql
+    # 2 generates + 1 evaluate: the failed attempt was rejected statically,
+    # without an LLM evaluator call.
+    assert gen_content.call_count == 3
+    retry_prompt = gen_content.call_args_list[1].kwargs["contents"]
+    assert "public.patients" in retry_prompt
+    assert "public.diagnoses" in retry_prompt
+    assert "patient_pathology" in retry_prompt

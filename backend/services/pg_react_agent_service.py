@@ -17,7 +17,9 @@ from services.gemini_service import extract_python_code, thinking_config_for
 from services.pg_sql_utils import (
     _enrich_schema_context_from_db,
     _normalize_categorical_literals,
-    _schema_context_has_columns,
+    _validate_sql_columns,
+    _validate_sql_operators,
+    _validate_sql_references,
 )
 from services.pg_query_service import execute_sql, is_write_sql
 
@@ -55,6 +57,8 @@ Rules:
 5. When joining tables, follow FK relationships listed in the schema; alias tables a, b, c… in join order.
 6. Interpret "with a <column>" as column IS NOT NULL; "without a <column>" as column IS NULL.
 7. Normalize string literal values to lowercase (e.g. status = 'active', not 'Active').
+8. To match a concept (e.g. 'heart failure'), find the column whose sample values (-- values: ...) contain it and use col = 'value'. For text/varchar columns never use @>, ->, ->> or ARRAY[] — they are not JSON or arrays. Prefer = over LIKE when the value matches a listed sample value; keep LIKE for genuine substring search.
+9. For categorical array columns, prefer 'value' = ANY(col) instead of col @> ARRAY['value'].
 """
 
 EVALUATE_PROMPT = """You are a database QA reviewer for a generated PostgreSQL query.
@@ -91,7 +95,10 @@ class _State(TypedDict, total=False):
 
 def _generate(state: _State):
     schema_context = state["schema_context"]
-    if not _schema_context_has_columns(schema_context):
+    # Enrich once, on the first call, to add sample values. Retries reuse the
+    # result via state — including the raw fallback when enrichment failed, so a
+    # broken connection can't re-trigger the expensive probe every iteration.
+    if state.get("iterations", 0) == 0:
         schema_context = _enrich_schema_context_from_db(
             state.get("conn"), schema_context
         )
@@ -121,6 +128,8 @@ def _generate(state: _State):
         "generated_query": sql,
         "is_write_action": is_write_sql(sql),
         "iterations": state.get("iterations", 0) + 1,
+        # Persist enriched schema so _evaluate can validate table/column refs
+        "schema_context": schema_context,
     }
 
 
@@ -135,6 +144,25 @@ def _execute(state: _State):
 
 def _evaluate(state: _State):
     raw = state.get("query_result")
+
+    # Postgres already rejects hallucinated tables/columns and bad operators when
+    # the query runs, so a successful execution needs no static check — running
+    # one anyway only risks a false positive on valid SQL (CTEs, derived-table
+    # aliases, EXTRACT(... FROM col)). Only check when there is no verdict from
+    # the database: execution errored, or it was skipped for a write/DDL. The
+    # checks add a schema-aware critique the raw driver error doesn't give.
+    if state.get("is_write_action") or (isinstance(raw, dict) and "error" in raw):
+        for check in (
+            _validate_sql_references,
+            _validate_sql_columns,
+            _validate_sql_operators,
+        ):
+            violation = check(
+                state.get("generated_query", ""), state.get("schema_context", "")
+            )
+            if violation:
+                return {"is_valid": False, "evaluation": violation}
+
     result_str = str(raw)[:2000]
     prompt = EVALUATE_PROMPT.format(
         user_input=state["user_input"],
