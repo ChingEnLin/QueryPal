@@ -237,8 +237,8 @@ def test_invalid_query_retries_with_llm_on_second_iteration():
 
 
 def test_hallucinated_table_names_are_caught_and_corrected():
-    """_evaluate short-circuits with a correction when the SQL references tables
-    that are not listed in the schema context."""
+    """When execution fails, _evaluate short-circuits with a schema-aware
+    correction instead of spending an LLM evaluator call on the raw driver error."""
     conn = MagicMock()
     schema_context = (
         "public.patients\n"
@@ -272,8 +272,13 @@ def test_hallucinated_table_names_are_caught_and_corrected():
             ],
         ) as gen_content,
         patch.object(
-            agent, "execute_sql", return_value={"columns": [], "rows": []}
-        ) as exec_sql,
+            agent,
+            "execute_sql",
+            side_effect=[
+                {"error": 'relation "patient" does not exist'},
+                {"columns": [], "rows": []},
+            ],
+        ),
     ):
         out = agent.run_sql_generator(
             user_input="Show me all patients with a heart failure pathology.",
@@ -285,6 +290,9 @@ def test_hallucinated_table_names_are_caught_and_corrected():
 
     assert out["is_valid"] is True
     assert out["generated_code"] == corrected_sql
+    # 2 generates + 1 evaluate: the failed attempt was rejected statically,
+    # without an LLM evaluator call.
+    assert gen_content.call_count == 3
     retry_prompt = gen_content.call_args_list[1].kwargs["contents"]
     assert "public.patients" in retry_prompt
     assert "public.diagnoses" in retry_prompt

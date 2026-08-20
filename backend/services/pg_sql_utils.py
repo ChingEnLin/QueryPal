@@ -2,7 +2,6 @@
 
 import logging
 import re
-import difflib
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -25,11 +24,6 @@ def _extract_table_refs(schema_context: str) -> list[tuple[str, str]]:
     return refs
 
 
-def _schema_context_has_columns(schema_context: str) -> bool:
-    parsed = _parse_schema_context(schema_context)
-    return any(meta.get("columns") for meta in parsed.values())
-
-
 # data_type values from information_schema that warrant sampling distinct values
 _TEXT_SAMPLE_TYPES = frozenset(
     {"character varying", "text", "character", "user-defined", "name", "citext"}
@@ -41,15 +35,8 @@ _MAX_SAMPLE_VALUES = 20
 _SAMPLE_SCAN_ROW_CAP = 5000
 
 
-def _enrich_schema_context_from_db(
-    conn, schema_context: str, failed_flag: list[bool] | None = None
-) -> str:
-    """Build detailed schema context using information_schema for listed tables.
-
-    When enrichment raises and falls back to the raw context, ``failed_flag``
-    (if provided) is appended with True so callers can avoid retrying the
-    (expensive) enrichment on every subsequent iteration.
-    """
+def _enrich_schema_context_from_db(conn, schema_context: str) -> str:
+    """Build detailed schema context using information_schema for listed tables."""
     refs = _extract_table_refs(schema_context)
     if not refs:
         return schema_context
@@ -105,8 +92,6 @@ def _enrich_schema_context_from_db(
             type(e).__name__,
             e,
         )
-        if failed_flag is not None:
-            failed_flag.append(True)
         return schema_context
 
     enriched = "\n\n".join(blocks) if blocks else schema_context
@@ -397,6 +382,25 @@ def _suggest_columns_for_unknown_refs(
     return suggestions
 
 
+# SQL constructs that put a bare keyword inside a function call, e.g.
+# EXTRACT(YEAR FROM col) — the FROM there is not a table reference.
+_KEYWORD_ARG_CALLS = re.compile(
+    r"\b(?:EXTRACT|TRIM|SUBSTRING|POSITION|OVERLAY)\s*\((?:[^()]|\([^()]*\))*\)",
+    re.IGNORECASE,
+)
+# CTEs, derived tables and LATERAL introduce relation scopes that are not in the
+# schema and whose projected columns are unknowable to a regex.
+_OPAQUE_SCOPE = re.compile(r"\bWITH\b|(?:FROM|JOIN)\s*(?:LATERAL\s*)?\(", re.IGNORECASE)
+
+
+def _strip_sql_noise(sql: str) -> str:
+    """Blank comments, string literals and keyword-argument function calls so
+    identifier regexes don't match inside them."""
+    sql = re.sub(r"--[^\n]*", "", sql)
+    sql = re.sub(r"'(?:[^']|'')*'", "''", sql)
+    return _KEYWORD_ARG_CALLS.sub(" ", sql)
+
+
 def _validate_sql_references(sql: str, schema_context: str) -> str | None:
     """Check that every FROM/JOIN table in the SQL exists in schema_context.
 
@@ -407,13 +411,19 @@ def _validate_sql_references(sql: str, schema_context: str) -> str | None:
     if not refs:
         return None
 
+    sql_clean = _strip_sql_noise(sql)
+    # A CTE or derived table is a legal relation that is not in the schema.
+    # Rather than guess at its name and shape, abstain — Postgres still rejects
+    # genuinely bad references when the query runs.
+    if _OPAQUE_SCOPE.search(sql_clean):
+        return None
+
     known_qualified = {f"{s}.{t}".lower() for s, t in refs}
     known_unqualified = {t.lower() for _, t in refs}
 
-    sql_no_comments = re.sub(r"--[^\n]*", "", sql)
     table_matches = re.findall(
-        r"(?:FROM|JOIN)\s+(?:LATERAL\s+)?([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)?)",
-        sql_no_comments,
+        r"(?:FROM|JOIN)\s+([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)?)",
+        sql_clean,
         re.IGNORECASE,
     )
 
@@ -448,6 +458,12 @@ def _validate_sql_columns(sql: str, schema_context: str) -> str | None:
     if not tables:
         return None
 
+    sql_clean = _strip_sql_noise(sql)
+    # A CTE or derived table projects column names of its own choosing, which no
+    # schema lists. Abstain rather than report them as hallucinated.
+    if _OPAQUE_SCOPE.search(sql_clean):
+        return None
+
     all_columns: set[str] = set()
     all_table_names: set[str] = set()
     value_hints: dict[str, set[str]] = {}
@@ -460,10 +476,12 @@ def _validate_sql_columns(sql: str, schema_context: str) -> str | None:
     if not all_columns:
         return None
 
+    # Suggestions need the original literals, so they read the comment-stripped
+    # SQL rather than the fully blanked copy.
     sql_no_comments = re.sub(r"--[^\n]*", "", sql)
     dotted_refs = re.findall(
         r"\b[A-Za-z_][\w]*\.([A-Za-z_][\w]*)\b",
-        sql_no_comments,
+        sql_clean,
     )
     unknown = [
         col
