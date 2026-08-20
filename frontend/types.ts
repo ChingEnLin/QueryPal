@@ -22,6 +22,10 @@ export interface QueryResultData {
     query_result?: any;
     explanation?: string;
     is_valid?: boolean;
+    // Ambiguity gate: when the request is too vague to answer correctly, the
+    // backend returns no query and instead asks for these details.
+    needs_clarification?: boolean;
+    clarifying_questions?: string[];
 }
 
 /**

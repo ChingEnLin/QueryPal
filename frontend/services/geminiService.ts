@@ -1,6 +1,6 @@
 import { QueryResultData, DbInfo, CollectionInfo, DebuggingResult, AnalysisResult, SchemaRelationshipsResponse } from '../types';
 import { USE_MSAL_AUTH, API_BASE_URL } from '../app.config';
-import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery, mockDebuggingResult, mockAnalysisResult } from './mockData';
+import { mockDelay, mockFindUsersQuery, mockUpdateProductsQuery, mockDefaultQuery, mockClarificationQuery, mockDebuggingResult, mockAnalysisResult } from './mockData';
 import { msalInstance, loginRequest } from '../authConfig';
 import { getAuthErrorMessage } from '../utils/authErrorHandler';
 import { getAuthenticatedToken } from './dbService';
@@ -47,6 +47,14 @@ export const generateMongoQuery = async (
         await mockDelay(1500); // Simulate AI thinking time
 
         const lowerInput = userInput.toLowerCase();
+        // Simulate the clarification gate for vague inputs (unless the user has
+        // already supplied details, which we append under "additional details").
+        if (
+            (lowerInput.includes('stuff') || lowerInput.includes('things') || lowerInput.includes('important')) &&
+            !lowerInput.includes('additional details')
+        ) {
+            return Promise.resolve(mockClarificationQuery);
+        }
         if (lowerInput.includes('user')) {
             return Promise.resolve(mockFindUsersQuery);
         }

@@ -131,6 +131,15 @@ export const mockDefaultQuery: QueryResultData = {
     generated_code: 'db[\'your_collection\'].find({})',
 };
 
+export const mockClarificationQuery: QueryResultData = {
+    generated_code: '',
+    needs_clarification: true,
+    clarifying_questions: [
+        'What defines an "active" record — is it based on a status field, and which value indicates active?',
+        'What time frame does "recent" refer to (e.g. the last 7 or 30 days)?',
+    ],
+};
+
 // --- Mock AI Debugging ---
 export const mockDebuggingResult: DebuggingResult = {
     suggestion: `It looks like there's a typo in your query.\n\nThe error message "pymongo.errors.OperationFailure: Message: {\\"Errors\\":[\\"Unknown operator: '$sor'\\"]}" suggests that the operator \`$sor\` is not recognized.\n\nThe correct operator for sorting in MongoDB is \`$sort\`.\n\n**Suggestion:**\nChange \`{ '$sor': { 'name': 1 } }\` to \`{ '$sort': { 'name': 1 } }\` in your query code.`
