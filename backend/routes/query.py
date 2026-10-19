@@ -139,6 +139,7 @@ def nl2query(
         max_iterations=prompt.max_iterations,
         model=prompt.model,
         relationship_context=relationship_context,
+        enable_clarification=prompt.enable_clarification,
     )
 
 

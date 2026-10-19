@@ -42,6 +42,9 @@ class QueryPrompt(BaseModel):
         default=3, ge=1, le=10
     )  # Server-enforced agent iteration cap
     model: str = "gemini-2.5-flash"
+    enable_clarification: bool = (
+        True  # Triage gate: ask for detail when the request is too vague
+    )
 
 
 class GeneratedCode(BaseModel):
