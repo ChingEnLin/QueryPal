@@ -1,4 +1,8 @@
+import json
+
 import pytest
+from psycopg2.extensions import adapt
+from psycopg2.extras import Json
 
 from services import pg_row_service as s
 
@@ -92,6 +96,34 @@ def test_update_binds_set_then_pk():
         'UPDATE "public"."orders" SET "status" = %s WHERE "id" = %s RETURNING *'
     )
     assert params == ["refunded", 7]
+
+
+@pytest.mark.parametrize("column_type", ["json", "jsonb"])
+@pytest.mark.parametrize(
+    "value", [{"items": [1, 2]}, [{"value": 3}], "text", "", 3, False, None]
+)
+@pytest.mark.parametrize("operation", ["insert", "update"])
+def test_writes_adapt_json_values_without_changing_enums_or_arrays(
+    column_type, value, operation
+):
+    allowed = {"status": "USER-DEFINED", "meta": column_type, "tags": "ARRAY"}
+    values = {"status": "approved", "meta": value, "tags": ["a", "b"]}
+    if operation == "insert":
+        _, params = s.build_insert("public", "records", allowed, values)
+    else:
+        _, params = s.build_update(
+            "public", "records", allowed, ["id"], {"id": 7}, values
+        )
+        assert params[-1] == 7
+    assert params[0] == "approved"
+    assert params[2] == ["a", "b"]
+    assert adapt(params[2]).getquoted() == b"ARRAY['a','b']"
+    if value is None:
+        assert params[1] is None
+    else:
+        assert isinstance(params[1], Json)
+        assert json.loads(params[1].dumps(params[1].adapted)) == value
+        assert adapt(params[1]).getquoted()
 
 
 def test_delete_binds_pk():

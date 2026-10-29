@@ -99,7 +99,7 @@ def _row_meta(conn, schema_name: str, table: str):
     info = get_table_info(conn, schema_name, table)
     if not info["columns"]:
         raise HTTPException(status_code=404, detail="Table not found")
-    allowed = {c["name"] for c in info["columns"]}
+    allowed = {c["name"]: c["type"] for c in info["columns"]}
     pk_cols = [c["name"] for c in info["columns"] if c.get("pk")]
     return allowed, pk_cols
 
