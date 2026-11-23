@@ -48,7 +48,7 @@ const PgRowDrawer: React.FC<{
   const [form, setForm] = useState<Record<string, string>>(() =>
     Object.fromEntries(editable.map((c) => {
       const v = row?.[c.name];
-      return [c.name, v === null || v === undefined ? '' : String(v)];
+      return [c.name, v === null || v === undefined ? '' : isJson(c.type) ? JSON.stringify(v, null, 2) : String(v)];
     })));
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
