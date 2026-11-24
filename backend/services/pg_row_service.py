@@ -9,6 +9,7 @@ Writes require a primary key so UPDATE/DELETE target exactly one row.
 from typing import Iterable, List, Tuple
 
 import psycopg2
+from psycopg2.extras import Json
 
 from services.pg_query_service import _json_safe
 
@@ -87,6 +88,15 @@ def build_count(schema, table, allowed, filters):
     return f"SELECT count(*) FROM {_qt(schema, table)}{where}", params
 
 
+def _write_value(column, value, allowed):
+    column_type = allowed.get(column, "") if isinstance(allowed, dict) else ""
+    if value is not None and (
+        column_type.lower() in {"json", "jsonb"} or isinstance(value, dict)
+    ):
+        return Json(value)
+    return value
+
+
 def build_insert(schema, table, allowed, values):
     if not values:
         raise RowError("No values to insert.")
@@ -95,7 +105,7 @@ def build_insert(schema, table, allowed, values):
     placeholders = ", ".join(["%s"] * len(cols))
     collist = ", ".join(_qi(c) for c in cols)
     q = f"INSERT INTO {_qt(schema, table)} ({collist}) VALUES ({placeholders}) RETURNING *"
-    return q, [values[c] for c in cols]
+    return q, [_write_value(c, values[c], allowed) for c in cols]
 
 
 def _pk_where(pk, pk_cols):
@@ -115,7 +125,7 @@ def build_update(schema, table, allowed, pk_cols, pk, values):
     cols = list(values)
     setlist = ", ".join(f"{_qi(c)} = %s" for c in cols)
     q = f"UPDATE {_qt(schema, table)} SET {setlist} WHERE {where} RETURNING *"
-    return q, [values[c] for c in cols] + wparams
+    return q, [_write_value(c, values[c], allowed) for c in cols] + wparams
 
 
 def build_delete(schema, table, pk_cols, pk):
