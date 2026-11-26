@@ -13,6 +13,7 @@ import QueryDisplay from '../components/QueryDisplay';
 import AgentVerdict from '../components/AgentVerdict';
 import { useRoles } from '../hooks/useRoles';
 import QueryResult from '../components/QueryResult';
+import ClarificationCard from '../components/ClarificationCard';
 import Loader from '../components/Loader';
 import Tutorial from '../components/Tutorial';
 import JsonDisplay from '../components/JsonDisplay';
@@ -887,6 +888,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
         selectedModel
       );
       setQueryResult(result);
+
+      // The agent judged the request too vague — surface its clarifying
+      // questions and stop here, before any history/code/result handling.
+      if (result.needs_clarification) {
+        return;
+      }
+
       setIntermediateContext(null); // Clear context after use
 
       // Add to history
@@ -936,6 +944,14 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
     const primaryContext = selectedCollections.length > 0 ? collectionDetailsMap[selectedCollections[0]] : undefined;
     handleGenerateQuery(userInput, primaryContext);
   }, [userInput, intermediateContext, selectedCollections, collectionDetailsMap, handleGenerateQuery]);
+
+  // Re-run generation with the user's clarification answers appended, so the
+  // triage gate can proceed instead of asking again.
+  const handleSubmitClarification = useCallback((answers: string) => {
+    const primaryContext = selectedCollections.length > 0 ? collectionDetailsMap[selectedCollections[0]] : undefined;
+    const combinedPrompt = `${userInput}\n\nAdditional details:\n${answers}`;
+    handleGenerateQuery(combinedPrompt, primaryContext);
+  }, [userInput, selectedCollections, collectionDetailsMap, handleGenerateQuery]);
 
   const executeCode = useCallback(async (code: string) => {
     if (!code.trim() || !connectedDbInfo || !connectedResource) {
@@ -2076,7 +2092,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
               {/* Real results */}
               {(!isLoading && !error && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep && !isDemoModeForSaveStep) && (
                 <div className="space-y-8">
-                  {editableCode ? (
+                  {_queryResult?.needs_clarification ? (
+                    <ClarificationCard
+                      questions={_queryResult.clarifying_questions ?? []}
+                      onSubmit={handleSubmitClarification}
+                      isLoading={isLoading}
+                    />
+                  ) : editableCode ? (
                     <>
                       <QueryDisplay
                         code={editableCode}
@@ -2639,7 +2661,13 @@ const QueryGeneratorPage: React.FC<QueryGeneratorPageProps> = ({ name, email, on
 
           {/* Real results */}
           {(!isLoading && !error && !isDemoModeForResultsStep && !isDemoModeForDebugStep && !isDemoModeForContextActiveStep && !isDemoModeForRunStep && !isDemoModeForSaveStep) && (
-            editableCode ? (
+            _queryResult?.needs_clarification ? (
+              <ClarificationCard
+                questions={_queryResult.clarifying_questions ?? []}
+                onSubmit={handleSubmitClarification}
+                isLoading={isLoading}
+              />
+            ) : editableCode ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <QueryDisplay code={editableCode} onCodeChange={setEditableCode} onRunQuery={handleRunQuery} onSaveQuery={handleOpenSaveDialog} isExecuting={isExecuting} historyCount={codeHistory.length} historyIndex={historyIndex} onNavigateHistory={handleNavigateHistory} isTransferable={!!handover} onOpenInExplorer={handleOpenInExplorer} canWrite={can('data:write')} onExplain={handleExplainQuery} isExplaining={isExplaining} />
                 <AgentVerdict isValid={_queryResult?.is_valid} explanation={_queryResult?.explanation} />
